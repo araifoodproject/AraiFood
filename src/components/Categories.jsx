@@ -1,11 +1,13 @@
+import { Link } from 'react-router-dom'
+
 function Categories() {
   const categories = [
-    { icon: '🍔', name: 'Burger' },
-    { icon: '🍕', name: 'Pizza' },
-    { icon: '🍛', name: 'Biryani' },
-    { icon: '🍗', name: 'Chicken' },
-    { icon: '🥤', name: 'Drinks' },
-    { icon: '🍰', name: 'Dessert' },
+    { icon: '🍔', name: 'Burger', link: '/restaurants' },
+    { icon: '🍕', name: 'Pizza', link: '/restaurants' },
+    { icon: '🍛', name: 'Biryani', link: '/restaurants' },
+    { icon: '🍗', name: 'Chicken', link: '/restaurants' },
+    { icon: '🥤', name: 'Drinks', link: '/restaurants' },
+    { icon: '🍰', name: 'Dessert', link: '/restaurants' },
   ]
 
   return (
@@ -17,19 +19,21 @@ function Categories() {
           <p>Choose your favourite food category</p>
         </div>
 
-        <button className="view-all">View All →</button>
+        <button className="view-all" onClick={() => { window.location.href = '/restaurants' }}>
+          View All →
+        </button>
       </div>
 
       <div className="category-grid">
         {categories.map((category) => (
-          <div className="category-card" key={category.name}>
+          <Link to={category.link} className="category-card" key={category.name}>
             <div className="category-icon">
               {category.icon}
             </div>
 
             <h3>{category.name}</h3>
             <p>Explore food</p>
-          </div>
+          </Link>
         ))}
       </div>
     </section>

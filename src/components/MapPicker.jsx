@@ -1,233 +1,126 @@
-import { useState, useEffect } from 'react'
-import {
-  MapContainer,
-  TileLayer,
-  CircleMarker,
-  Polygon,
-  useMap,
-  useMapEvents,
-} from 'react-leaflet'
-import 'leaflet/dist/leaflet.css'
+import { GoogleMap, Marker, useJsApiLoader, Polygon } from '@react-google-maps/api'
+import { toast } from 'react-toastify'
 
-function FixMapSize() {
-  const map = useMap()
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      map.invalidateSize()
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [map])
-
-  return null
+const containerStyle = {
+  width: '100%',
+  height: '350px',
+  borderRadius: '16px',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)'
 }
 
-function LocationPicker({ onLocationSelect }) {
-  const [position, setPosition] = useState(null)
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
-  useMapEvents({
-    click(e) {
-      const selectedPosition = {
-        lat: e.latlng.lat,
-        lng: e.latlng.lng,
-      }
+// আপনার নতুন ৬টি পয়েন্ট
+const deliveryZone = [
+  { lat: 23.7681, lng: 90.6170 },  // 1
+  { lat: 23.7923, lng: 90.6089 },  // 2
+  { lat: 23.8120, lng: 90.6606 },  // 3
+  { lat: 23.7976, lng: 90.6923 },  // 4
+  { lat: 23.7762, lng: 90.6594 },  // 5
+  { lat: 23.7598, lng: 90.6300 },  // 6
+  { lat: 23.7681, lng: 90.6170 }   // 7 (বন্ধ)
+]
 
-      setPosition(selectedPosition)
-      onLocationSelect(selectedPosition)
-    },
+// Point in Polygon চেক করার ফাংশন
+const isInsideDeliveryZone = (point) => {
+  let isInside = false
+  const lat = point.lat
+  const lng = point.lng
+
+  for (let i = 0, j = deliveryZone.length - 1; i < deliveryZone.length; j = i++) {
+    const xi = deliveryZone[i].lat
+    const yi = deliveryZone[i].lng
+    const xj = deliveryZone[j].lat
+    const yj = deliveryZone[j].lng
+
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi)
+
+    if (intersect) {
+      isInside = !isInside
+    }
+  }
+
+  return isInside
+}
+
+function MapPicker({ position, setPosition }) {
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: API_KEY
   })
 
-  return position ? (
-    <CircleMarker
-      center={[position.lat, position.lng]}
-      radius={10}
-      pathOptions={{
-        color: '#13a89e',
-        fillColor: '#13a89e',
-        fillOpacity: 0.9,
-        weight: 3,
-      }}
-    />
-  ) : null
-}
+  const defaultCenter = { lat: 23.78, lng: 90.64 }
 
-function MapPicker({ onClose, onLocationSelect }) {
-  const araihazarCenter = [23.7925, 90.6535]
+  // Map-এ ক্লিক করলে (Polygon-এর বাইরে)
+  const onMapClick = (e) => {
+    if (e.latLng) {
+      const clickedLocation = { lat: e.latLng.lat(), lng: e.latLng.lng() }
 
-  const [selectedPosition, setSelectedPosition] = useState(null)
-
-  const handleLocationSelect = (location) => {
-    setSelectedPosition(location)
-    onLocationSelect(location)
-  }
-
-  const handleConfirm = () => {
-    if (!selectedPosition) {
-      alert('Please select a location on the map first.')
-      return
+      if (isInsideDeliveryZone(clickedLocation)) {
+        setPosition(clickedLocation)
+      } else {
+        toast.error('Location is outside our delivery area. Please select within Araihazar!', {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        })
+      }
     }
-
-    onClose()
   }
 
-  // Araihazar delivery zone
-  const araihazarZone = [
-    [23.855, 90.585],
-    [23.865, 90.635],
-    [23.850, 90.700],
-    [23.815, 90.735],
-    [23.755, 90.735],
-    [23.720, 90.690],
-    [23.710, 90.625],
-    [23.735, 90.580],
-    [23.795, 90.565],
-    [23.855, 90.585],
-  ]
+  // Polygon-এর ভেতরে ক্লিক করলে সরাসরি Pin বসবে
+  const onPolygonClick = (e) => {
+    if (e.latLng) {
+      setPosition({ lat: e.latLng.lat(), lng: e.latLng.lng() })
+    }
+  }
+
+  if (!isLoaded) return <div className="loading-map">Loading Google Maps...</div>
 
   return (
-    <div className="map-picker-overlay">
-
-      <div className="map-picker">
-
-        {/* Header */}
-
-        <div className="map-picker-header">
-
-          <div>
-            <span className="section-label">
-              DELIVERY LOCATION
-            </span>
-
-            <h2>Select Your Location</h2>
-
-            <p>
-              Tap on the satellite map to choose your
-              delivery location.
-            </p>
-          </div>
-
-          <button
-            className="map-close-button"
-            onClick={onClose}
-          >
-            ×
-          </button>
-
-        </div>
-
-
-        {/* MAP */}
-
-        <div
-          className="map-container"
-          style={{
-            width: '100%',
-            height: '400px',
-            minHeight: '400px',
-            position: 'relative',
-            overflow: 'hidden',
-            borderRadius: '14px',
+    <>
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={position || defaultCenter}
+        zoom={13}
+        onClick={onMapClick}
+        options={{
+          mapTypeControl: true,
+          mapTypeControlOptions: { style: 2 },
+          streetViewControl: false,
+          fullscreenControl: false,
+          zoomControl: true
+        }}
+      >
+        {/* Araihazar Thana-র Delivery Zone Polygon */}
+        <Polygon
+          paths={deliveryZone}
+          onClick={onPolygonClick}
+          options={{
+            strokeColor: '#13a89e',
+            strokeOpacity: 0.8,
+            strokeWeight: 3,
+            fillColor: '#13a89e',
+            fillOpacity: 0.15
           }}
-        >
+        />
 
-          <MapContainer
-            center={araihazarCenter}
-            zoom={13}
-            scrollWheelZoom={true}
-            style={{
-              width: '100%',
-              height: '100%',
-            }}
-          >
+        {/* Selected Location Marker */}
+        {position && <Marker position={position} />}
+      </GoogleMap>
 
-            {/* 1. SATELLITE IMAGE */}
-
-            <TileLayer
-              attribution="Sources: Esri, Maxar, Earthstar Geographics"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-            />
-
-
-            {/* 2. ROAD + PLACE LABELS */}
-
-            <TileLayer
-              attribution="Esri"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-              opacity={1}
-            />
-
-
-            {/* 3. TRANSPORTATION / ROAD INFORMATION */}
-
-            <TileLayer
-              attribution="Esri"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-              opacity={0.9}
-            />
-
-
-            <FixMapSize />
-
-
-            {/* DELIVERY ZONE */}
-
-            <Polygon
-              positions={araihazarZone}
-              pathOptions={{
-                color: '#13a89e',
-                weight: 3,
-                fillColor: '#13a89e',
-                fillOpacity: 0.06,
-              }}
-            />
-
-
-            {/* LOCATION MARKER */}
-
-            <LocationPicker
-              onLocationSelect={handleLocationSelect}
-            />
-
-          </MapContainer>
-
+      {position && (
+        <div className="selected-location-box">
+          <strong>📍 Selected Location:</strong>
+          <span>Lat: {position.lat.toFixed(4)}, Lng: {position.lng.toFixed(4)}</span>
         </div>
-
-
-        {/* FOOTER */}
-
-        <div className="map-picker-footer">
-
-          <p>
-            📍 Select your location inside the
-            Araihazar delivery area.
-          </p>
-
-          {selectedPosition && (
-            <small>
-              📌 Selected location:{' '}
-              {selectedPosition.lat.toFixed(5)},
-              {' '}
-              {selectedPosition.lng.toFixed(5)}
-            </small>
-          )}
-
-          <button
-            type="button"
-            className="map-confirm-button"
-            onClick={handleConfirm}
-          >
-            Confirm Location
-          </button>
-
-        </div>
-
-      </div>
-
-    </div>
+      )}
+    </>
   )
 }
 
