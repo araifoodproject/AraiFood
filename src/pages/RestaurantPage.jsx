@@ -1,79 +1,165 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import Cart from '../components/Cart'
-import { restaurantsData } from '../data/restaurantsData'
+import { db } from '../firebase'
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore'
 
 function RestaurantPage() {
   const params = new URLSearchParams(window.location.search)
-  const restaurantId = Number(params.get('id')) || 1
-  const restaurant = restaurantsData.find((item) => item.id === restaurantId) || restaurantsData[0]
+  const restaurantId = params.get('id') || ''
 
+  const [restaurant, setRestaurant] = useState(null)
+  const [menuItems, setMenuItems] = useState([])
+  const [loading, setLoading] = useState(true)
   const [menuSearch, setMenuSearch] = useState('')
 
   const savedCart = JSON.parse(localStorage.getItem('cartItems') || '[]')
   const [cartItems, setCartItems] = useState(savedCart)
   const [cartOpen, setCartOpen] = useState(false)
 
+  const [showConflictModal, setShowConflictModal] = useState(false)
+  const [pendingFood, setPendingFood] = useState(null)
+
+  useEffect(() => {
+    const fetchRestaurant = async () => {
+      if (!restaurantId) { setLoading(false); return }
+      try {
+        const restaurantDoc = await getDoc(doc(db, 'restaurants', restaurantId))
+        if (restaurantDoc.exists()) {
+          setRestaurant({ firebaseId: restaurantDoc.id, ...restaurantDoc.data() })
+        } else {
+          toast.error('Restaurant not found!')
+        }
+      } catch (error) { console.error(error) }
+      setLoading(false)
+    }
+    fetchRestaurant()
+  }, [restaurantId])
+
+  useEffect(() => {
+    if (!restaurantId) return
+    const menuQuery = query(collection(db, 'foods'), where('restaurantId', '==', restaurantId))
+    const unsubscribe = onSnapshot(menuQuery, (snapshot) => {
+      const menuList = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+      setMenuItems(menuList)
+    })
+    return () => unsubscribe()
+  }, [restaurantId])
+
   const saveCart = (items) => {
     localStorage.setItem('cartItems', JSON.stringify(items))
+    setCartItems(items)
     window.dispatchEvent(new Event('cartUpdated'))
     return items
   }
 
-  const addToCart = (food) => {
-    setCartItems((currentItems) => {
-      const existingItem = currentItems.find((item) => item.id === food.id)
-      const updatedItems = existingItem
-        ? currentItems.map((item) => item.id === food.id ? { ...item, quantity: item.quantity + 1 } : item)
-        : [...currentItems, { ...food, quantity: 1 }]
+  const checkCartConflict = (food) => {
+    if (cartItems.length === 0) {
+      addToCartDirect(food)
+      return
+    }
+    const existingRestaurantId = cartItems[0].restaurantId
+    if (existingRestaurantId === restaurant.firebaseId) {
+      addToCartDirect(food)
+    } else {
+      setPendingFood(food)
+      setShowConflictModal(true)
+    }
+  }
 
-      toast.success(`${food.name} added to cart!`, {
-        position: "top-right",
-        autoClose: 2000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      })
+  const addToCartDirect = (food) => {
+    const existingItem = cartItems.find((item) => item.id === food.firebaseId)
+    const updatedItems = existingItem
+      ? cartItems.map((item) => item.id === food.firebaseId ? { ...item, quantity: item.quantity + 1 } : item)
+      : [...cartItems, {
+          id: food.firebaseId,
+          name: food.name,
+          price: food.discountPrice || food.price,
+          emoji: food.emoji || '🍽️',
+          image: food.image || '',
+          quantity: 1,
+          restaurantId: restaurant.firebaseId,
+          restaurantName: restaurant.restaurantName,
+          restaurantLogo: restaurant.logo || '',
+          deliveryFee: restaurant.deliveryFee || 30,
+          minimumOrder: restaurant.minimumOrder || 100,
+        }]
 
-      return saveCart(updatedItems)
+    saveCart(updatedItems)
+    toast.success(`${food.name} added to cart!`, {
+      position: "top-right",
+      autoClose: 2000,
     })
+  }
+
+  const handleClearAndAdd = () => {
+    if (!pendingFood) return
+    const newItem = {
+      id: pendingFood.firebaseId,
+      name: pendingFood.name,
+      price: pendingFood.discountPrice || pendingFood.price,
+      emoji: pendingFood.emoji || '🍽️',
+      image: pendingFood.image || '',
+      quantity: 1,
+      restaurantId: restaurant.firebaseId,
+      restaurantName: restaurant.restaurantName,
+      restaurantLogo: restaurant.logo || '',
+      deliveryFee: restaurant.deliveryFee || 30,
+      minimumOrder: restaurant.minimumOrder || 100,
+    }
+    saveCart([newItem])
+    toast.success(`Cart cleared! ${pendingFood.name} added.`)
+    setShowConflictModal(false)
+    setPendingFood(null)
   }
 
   const increaseQuantity = (id) => {
-    setCartItems((currentItems) => {
-      const updatedItems = currentItems.map((item) => item.id === id ? { ...item, quantity: item.quantity + 1 } : item)
-      return saveCart(updatedItems)
-    })
+    const updatedItems = cartItems.map((item) =>
+      item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+    )
+    saveCart(updatedItems)
   }
 
   const decreaseQuantity = (id) => {
-    setCartItems((currentItems) => {
-      const updatedItems = currentItems.map((item) => item.id === id ? { ...item, quantity: item.quantity - 1 } : item).filter((item) => item.quantity > 0)
-      return saveCart(updatedItems)
-    })
+    const updatedItems = cartItems
+      .map((item) => (item.id === id ? { ...item, quantity: item.quantity - 1 } : item))
+      .filter((item) => item.quantity > 0)
+    saveCart(updatedItems)
   }
 
-  const menuItems = [
-    { id: `${restaurantId}-1`, name: 'Chicken Biryani', price: 180, emoji: '🍛', description: 'Fragrant rice with tender chicken and special spices.' },
-    { id: `${restaurantId}-2`, name: 'Chicken Roast', price: 150, emoji: '🍗', description: 'Juicy chicken roast with rich local spices.' },
-    { id: `${restaurantId}-3`, name: 'Plain Rice & Curry', price: 120, emoji: '🍚', description: 'Fresh rice served with delicious homemade curry.' },
-    { id: `${restaurantId}-4`, name: 'Cold Drinks', price: 40, emoji: '🥤', description: 'Refreshing chilled drinks to complete your meal.' },
-  ]
-
   const filteredMenu = menuItems.filter((item) =>
-    item.name.toLowerCase().includes(menuSearch.toLowerCase())
+    item.name?.toLowerCase().includes(menuSearch.toLowerCase())
   )
+  const availableItems = filteredMenu.filter(item => item.available !== false)
+
+  if (loading) return <div className="restaurant-page"><p style={{ padding: 40, textAlign: 'center' }}>Loading...</p></div>
+  if (!restaurant) return <div className="restaurant-page"><div className="restaurant-page-header"><button onClick={() => window.history.back()}>← Back</button><div><h1>Restaurant Not Found</h1></div></div></div>
 
   return (
     <div className="restaurant-page">
+      {/* Restaurant Header */}
       <div className="restaurant-page-header">
-        <button onClick={() => window.history.back()}>← Back</button>
-        <div>
-          <h1>{restaurant.name}</h1>
-          <p>{restaurant.emoji} {restaurant.cuisine}</p>
-          <span>⭐ {restaurant.rating} • 🚴 {restaurant.delivery}</span>
+        <button className="restaurant-back-btn" onClick={() => window.history.back()}>← Back</button>
+
+        <div className="restaurant-header-with-logo">
+          <div className="restaurant-header-logo">
+            {restaurant.logo ? (
+              <img src={restaurant.logo} alt={restaurant.restaurantName} />
+            ) : (
+              <span>🏪</span>
+            )}
+          </div>
+          <div className="restaurant-header-info">
+            <h1>{restaurant.restaurantName}</h1>
+            <p>🍽️ {restaurant.cuisine}</p>
+            <span>⭐ {restaurant.rating || '4.5'} • 🚴 30-40 min</span>
+          </div>
+        </div>
+
+        <div className="restaurant-status-badge">
+          <span className={`restaurant-status-dot ${restaurant.restaurantStatus}`}></span>
+          {restaurant.restaurantStatus === 'online' ? 'Open' :
+           restaurant.restaurantStatus === 'busy' ? 'Busy' : 'Closed'}
         </div>
       </div>
 
@@ -81,50 +167,75 @@ function RestaurantPage() {
         <div className="menu-heading">
           <span className="section-label">MENU</span>
           <h2>Popular Items</h2>
-          <p>Choose something delicious from {restaurant.name}.</p>
+          <p>Choose something delicious from {restaurant.restaurantName}.</p>
         </div>
 
-        {/* Menu Search */}
         <div className="menu-search-bar">
           <span>🔎</span>
-          <input
-            type="text"
-            placeholder="Search food items..."
-            value={menuSearch}
-            onChange={(e) => setMenuSearch(e.target.value)}
-          />
+          <input type="text" placeholder="Search food items..." value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} />
           {menuSearch && <button type="button" onClick={() => setMenuSearch('')} className="clear-search">×</button>}
         </div>
 
-        <div className="food-grid">
-          {filteredMenu.length === 0 ? (
-            <p className="no-menu-items">No food items found. Try another search.</p>
-          ) : (
-            filteredMenu.map((item) => (
-              <div className="food-card" key={item.id}>
-                <div className="food-image">{item.emoji}</div>
+        {availableItems.length === 0 ? (
+          <div className="restaurant-empty-state">
+            <div className="empty-icon">🍽️</div>
+            <h2>No Food Items Found</h2>
+            <p>This restaurant hasn't added any food items yet.</p>
+          </div>
+        ) : (
+          <div className="food-grid">
+            {availableItems.map((item) => (
+              <div className="food-card" key={item.firebaseId}>
+                <div className="food-image">
+                  {item.image ? <img src={item.image} alt={item.name} /> : <span style={{ fontSize: '40px' }}>{item.emoji || '🍽️'}</span>}
+                </div>
                 <div className="food-info">
                   <h3>{item.name}</h3>
-                  <p>{item.description}</p>
+                  <p>{item.description || 'Delicious food item'}</p>
                   <div className="food-bottom">
-                    <strong>৳{item.price}</strong>
-                    <button onClick={() => addToCart(item)}>+ Add</button>
+                    <div className="food-price-box">
+                      {item.discountPrice ? <><strong>৳{item.discountPrice}</strong><del>৳{item.price}</del></> : <strong>৳{item.price}</strong>}
+                    </div>
+                    <button onClick={() => checkCartConflict(item)}>+ Add</button>
                   </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {cartItems.length > 0 && (
-        <button className="floating-cart-button" onClick={() => setCartOpen(true)}>
-          🛒 Cart ({cartItems.reduce((total, item) => total + item.quantity, 0)})
-        </button>
+      {/* Cart Modal */}
+      {cartOpen && (
+        <Cart
+          items={cartItems}
+          onClose={() => setCartOpen(false)}
+          onIncrease={increaseQuantity}
+          onDecrease={decreaseQuantity}
+        />
       )}
 
-      {cartOpen && (
-        <Cart items={cartItems} onClose={() => setCartOpen(false)} onIncrease={increaseQuantity} onDecrease={decreaseQuantity} />
+      {/* Cart Conflict Modal */}
+      {showConflictModal && (
+        <div className="outside-area-modal">
+          <div className="outside-area-modal-content">
+            <div className="outside-area-icon">⚠️</div>
+            <h2>Clear Your Cart?</h2>
+            <p>
+              Your cart has items from <strong>{cartItems[0]?.restaurantName}</strong>.
+              <br /><br />
+              Do you want to clear the cart and add items from <strong>{restaurant.restaurantName}</strong>?
+            </p>
+            <div className="conflict-modal-buttons">
+              <button className="cancel-btn" onClick={() => { setShowConflictModal(false); setPendingFood(null) }}>
+                Cancel
+              </button>
+              <button className="confirm-btn" onClick={handleClearAndAdd}>
+                Yes, Clear & Add
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

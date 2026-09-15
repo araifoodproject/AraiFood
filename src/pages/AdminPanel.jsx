@@ -1,200 +1,323 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { auth } from '../firebase'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { auth, db } from '../firebase'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+import AdminSidebar from '../components/AdminSidebar'
+import {
+  Menu,
+  Bell,
+  Search,
+  TrendingUp,
+  ShoppingBag,
+  Store,
+  Bike,
+  DollarSign,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Star,
+  ArrowUpRight,
+  Users,
+} from 'lucide-react'
 
 function AdminPanel() {
   const [orders, setOrders] = useState([])
-  const [view, setView] = useState('dashboard') // dashboard or orders
+  const [restaurants, setRestaurants] = useState([])
+  const [riders, setRiders] = useState([])
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
-    const savedOrders = JSON.parse(localStorage.getItem('orderHistory') || '[]')
-    setOrders(savedOrders)
+    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      setOrders(snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() })))
+    })
+    return () => unsubscribe()
   }, [])
 
-  const updateOrderStatus = (orderId, newStatus) => {
-    const updatedOrders = orders.map((order) => 
-      order.id === orderId ? { ...order, status: newStatus } : order
-    )
-    setOrders(updatedOrders)
-    localStorage.setItem('orderHistory', JSON.stringify(updatedOrders))
-  }
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'restaurants'), (snapshot) => {
+      setRestaurants(snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() })))
+    })
+    return () => unsubscribe()
+  }, [])
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth)
-      window.location.href = '/login'
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'riders'), (snapshot) => {
+      setRiders(snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() })))
+    })
+    return () => unsubscribe()
+  }, [])
 
-  // Dashboard Data
-  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0)
   const totalOrders = orders.length
-  const deliveredOrders = orders.filter(o => o.status === 'delivered').length
-  const preparingOrders = orders.filter(o => o.status === 'preparing').length
-  const activeOrders = orders.filter(o => o.status === 'delivering').length
+  const today = new Date().toLocaleDateString()
+  const todayOrders = orders.filter((o) => o.createdAt?.toDate?.()?.toLocaleDateString() === today).length
+  const pendingOrders = orders.filter((o) => o.status === 'pending' || !o.status).length
+  const preparingOrders = orders.filter((o) => o.status === 'preparing').length
+  const deliveringOrders = orders.filter((o) => o.status === 'delivering').length
+  const deliveredOrders = orders.filter((o) => o.status === 'delivered').length
+  const cancelledOrders = orders.filter((o) => o.status === 'cancelled').length
 
-  // Chart Data
-  const chartData = [
-    { name: 'Day 1', orders: 5 },
-    { name: 'Day 2', orders: 8 },
-    { name: 'Day 3', orders: 12 },
-    { name: 'Day 4', orders: 7 },
-    { name: 'Day 5', orders: 15 },
-    { name: 'Day 6', orders: 10 },
-    { name: 'Day 7', orders: 18 },
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0)
+
+  const approvedRestaurants = restaurants.filter((r) => r.status === 'approved').length
+  const pendingRestaurants = restaurants.filter((r) => r.status === 'pending').length
+
+  const approvedRiders = riders.filter((r) => r.status === 'approved').length
+  const pendingRiders = riders.filter((r) => r.status === 'pending').length
+
+  const salesChartData = [
+    { name: 'Mon', sales: 4500 },
+    { name: 'Tue', sales: 6200 },
+    { name: 'Wed', sales: 5100 },
+    { name: 'Thu', sales: 7800 },
+    { name: 'Fri', sales: 9200 },
+    { name: 'Sat', sales: 11500 },
+    { name: 'Sun', sales: 8900 },
   ]
 
+  const orderStatusData = [
+    { name: 'Delivered', value: deliveredOrders || 1, color: '#10B981' },
+    { name: 'Preparing', value: preparingOrders || 1, color: '#F59E0B' },
+    { name: 'Delivering', value: deliveringOrders || 1, color: '#3B82F6' },
+    { name: 'Cancelled', value: cancelledOrders || 1, color: '#EF4444' },
+  ]
+
+  const topRestaurants = restaurants
+    .map((r) => ({
+      ...r,
+      orderCount: orders.filter((o) => o.restaurantId === r.firebaseId).length,
+    }))
+    .sort((a, b) => b.orderCount - a.orderCount)
+    .slice(0, 5)
+
   return (
-    <div className="admin-panel">
-      <div className="admin-header">
-        <div className="admin-header-left">
-          <div className="admin-logo">👨‍🍳</div>
-          <div>
-            <h1>Admin Panel</h1>
-            <p>Manage all orders</p>
-          </div>
-        </div>
-        <div className="admin-header-right">
-          <Link to="/" className="admin-home-btn">← Home</Link>
-          <button className="admin-logout-btn" onClick={handleLogout}>Logout</button>
-        </div>
-      </div>
+    <div className="admin-layout">
+      <AdminSidebar
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
 
-      {/* Dashboard / Orders Toggle Button */}
-      <div className="admin-view-toggle">
-        <button 
-          className={view === 'dashboard' ? 'view-btn active' : 'view-btn'}
-          onClick={() => setView('dashboard')}
-        >
-          📊 Dashboard
-        </button>
-        <button 
-          className={view === 'orders' ? 'view-btn active' : 'view-btn'}
-          onClick={() => setView('orders')}
-        >
-          📋 All Orders
-        </button>
-      </div>
+      <main className="admin-main-content">
 
-      {view === 'dashboard' ? (
-        <div className="admin-dashboard">
-          {/* Stats Cards */}
-          <div className="admin-stats">
-            <div className="admin-stat">
-              <strong>৳{totalRevenue.toFixed(2)}</strong>
-              <span>Total Revenue</span>
-            </div>
-            <div className="admin-stat">
-              <strong>{totalOrders}</strong>
-              <span>Total Orders</span>
-            </div>
-            <div className="admin-stat">
-              <strong>{deliveredOrders}</strong>
-              <span>Delivered</span>
-            </div>
-            <div className="admin-stat">
-              <strong>{preparingOrders + activeOrders}</strong>
-              <span>Active Orders</span>
-            </div>
+        {/* Top Bar */}
+        <header className="admin-topbar">
+          <button
+            className="admin-topbar-menu-btn"
+            onClick={() => setMobileSidebarOpen(true)}
+          >
+            <Menu size={22} strokeWidth={2} />
+          </button>
+
+          <div className="admin-topbar-search">
+            <Search size={18} strokeWidth={2} />
+            <input type="text" placeholder="Search orders, restaurants, riders..." />
           </div>
 
-          {/* Charts Section */}
-          <div className="admin-charts">
-            <div className="chart-card">
-              <h3>Weekly Orders</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={chartData}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="orders" fill="#13a89e" radius={[5, 5, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="chart-card">
-              <h3>Delivery Status</h3>
-              <div className="delivery-status-bars">
-                <div className="status-bar-row">
-                  <span>Delivered</span>
-                  <div className="status-bar-container">
-                    <div className="status-bar delivered" style={{ width: `${totalOrders > 0 ? (deliveredOrders / totalOrders) * 100 : 0}%` }}></div>
-                  </div>
-                  <strong>{deliveredOrders}</strong>
-                </div>
-                <div className="status-bar-row">
-                  <span>Preparing</span>
-                  <div className="status-bar-container">
-                    <div className="status-bar preparing" style={{ width: `${totalOrders > 0 ? (preparingOrders / totalOrders) * 100 : 0}%` }}></div>
-                  </div>
-                  <strong>{preparingOrders}</strong>
-                </div>
-                <div className="status-bar-row">
-                  <span>Delivering</span>
-                  <div className="status-bar-container">
-                    <div className="status-bar delivering" style={{ width: `${totalOrders > 0 ? (activeOrders / totalOrders) * 100 : 0}%` }}></div>
-                  </div>
-                  <strong>{activeOrders}</strong>
-                </div>
+          <div className="admin-topbar-actions">
+            <button className="admin-topbar-icon-btn" title="Notifications">
+              <Bell size={20} strokeWidth={2} />
+              <span className="admin-topbar-badge">3</span>
+            </button>
+            <div className="admin-topbar-profile">
+              <div className="admin-topbar-avatar">👑</div>
+              <div className="admin-topbar-profile-info">
+                <strong>Admin</strong>
+                <small>Super Admin</small>
               </div>
             </div>
           </div>
+        </header>
+
+        {/* Page Header */}
+        <div className="admin-page-header">
+          <div>
+            <span className="admin-page-label">DASHBOARD</span>
+            <h1 className="admin-page-title">Welcome back, Admin! 👑</h1>
+            <p className="admin-page-sub">Here's what's happening with AraiFood today.</p>
+          </div>
+          <button className="admin-page-action">
+            <TrendingUp size={16} strokeWidth={2.5} />
+            View Report
+          </button>
         </div>
-      ) : (
-        <div className="admin-orders">
-          <h2>All Orders</h2>
-          {orders.length === 0 ? (
-            <p className="no-orders">No orders yet.</p>
-          ) : (
-            <div className="admin-order-list">
-              {orders.map((order) => (
-                <div className="admin-order-card" key={order.id}>
-                  <div className="admin-order-header">
-                    <strong>Order ID: {order.id}</strong>
-                    <span>{order.date}</span>
+
+        {/* Primary Stats */}
+        <div className="admin-stats-grid">
+
+          <div className="admin-stat-card glass-stat green">
+            <div className="admin-stat-icon">
+              <DollarSign size={24} strokeWidth={2.2} />
+            </div>
+            <div className="admin-stat-content">
+              <span className="admin-stat-label">Total Revenue</span>
+              <strong className="admin-stat-value">৳{totalRevenue.toFixed(0)}</strong>
+              <span className="admin-stat-trend up">
+                <ArrowUpRight size={14} strokeWidth={2.5} />
+                +12.5% today
+              </span>
+            </div>
+          </div>
+
+          <div className="admin-stat-card glass-stat blue">
+            <div className="admin-stat-icon">
+              <ShoppingBag size={24} strokeWidth={2.2} />
+            </div>
+            <div className="admin-stat-content">
+              <span className="admin-stat-label">Total Orders</span>
+              <strong className="admin-stat-value">{totalOrders}</strong>
+              <span className="admin-stat-trend up">
+                <ArrowUpRight size={14} strokeWidth={2.5} />
+                +{todayOrders} today
+              </span>
+            </div>
+          </div>
+
+          <div className="admin-stat-card glass-stat orange">
+            <div className="admin-stat-icon">
+              <Store size={24} strokeWidth={2.2} />
+            </div>
+            <div className="admin-stat-content">
+              <span className="admin-stat-label">Restaurants</span>
+              <strong className="admin-stat-value">{approvedRestaurants}</strong>
+              <span className="admin-stat-trend">
+                {pendingRestaurants > 0 ? `${pendingRestaurants} pending` : 'All approved'}
+              </span>
+            </div>
+          </div>
+
+          <div className="admin-stat-card glass-stat pink">
+            <div className="admin-stat-icon">
+              <Bike size={24} strokeWidth={2.2} />
+            </div>
+            <div className="admin-stat-content">
+              <span className="admin-stat-label">Riders</span>
+              <strong className="admin-stat-value">{approvedRiders}</strong>
+              <span className="admin-stat-trend">
+                {pendingRiders > 0 ? `${pendingRiders} pending` : 'All approved'}
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Mini Stats */}
+        <div className="admin-stats-grid-small">
+          <div className="admin-stat-mini">
+            <Clock size={18} strokeWidth={2.2} />
+            <div>
+              <strong>{pendingOrders}</strong>
+              <span>Pending</span>
+            </div>
+          </div>
+          <div className="admin-stat-mini">
+            <CheckCircle2 size={18} strokeWidth={2.2} />
+            <div>
+              <strong>{deliveredOrders}</strong>
+              <span>Delivered</span>
+            </div>
+          </div>
+          <div className="admin-stat-mini">
+            <XCircle size={18} strokeWidth={2.2} />
+            <div>
+              <strong>{cancelledOrders}</strong>
+              <span>Cancelled</span>
+            </div>
+          </div>
+          <div className="admin-stat-mini">
+            <Star size={18} strokeWidth={2.2} />
+            <div>
+              <strong>4.8</strong>
+              <span>Rating</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Charts */}
+        <div className="admin-charts-grid">
+
+          <div className="admin-chart-card">
+            <div className="admin-chart-header">
+              <div>
+                <h3>Weekly Sales</h3>
+                <p>Revenue overview for the past 7 days</p>
+              </div>
+              <span className="admin-chart-badge">৳{totalRevenue.toFixed(0)}</span>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={salesChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                <Tooltip cursor={{ fill: 'rgba(16, 185, 129, 0.08)' }} />
+                <Bar dataKey="sales" radius={[8, 8, 0, 0]} fill="url(#salesGradient)" />
+                <defs>
+                  <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10B981" />
+                    <stop offset="100%" stopColor="#F97316" />
+                  </linearGradient>
+                </defs>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="admin-chart-card">
+            <div className="admin-chart-header">
+              <div>
+                <h3>Order Status</h3>
+                <p>Distribution of all orders</p>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie data={orderStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={95} paddingAngle={4} dataKey="value">
+                  {orderStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 600 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+        </div>
+
+        {/* Top Restaurants */}
+        <div className="admin-section">
+          <div className="admin-section-header">
+            <div>
+              <h2>Top Restaurants</h2>
+              <p>Best performing restaurants this week</p>
+            </div>
+          </div>
+          <div className="admin-top-list">
+            {topRestaurants.length === 0 ? (
+              <p style={{ color: 'var(--text-tertiary)', padding: '20px' }}>No data yet</p>
+            ) : (
+              topRestaurants.map((r, idx) => (
+                <div className="admin-top-item" key={r.firebaseId}>
+                  <div className="admin-top-rank">#{idx + 1}</div>
+                  <div className="admin-top-logo">🏪</div>
+                  <div className="admin-top-info">
+                    <strong>{r.restaurantName}</strong>
+                    <span>{r.cuisine}</span>
                   </div>
-                  <div className="admin-order-items">
-                    {order.items.map((item) => (
-                      <div key={item.id}>
-                        <span>{item.emoji} {item.name}</span>
-                        <span>× {item.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="admin-order-total">
-                    <span>Total:</span>
-                    <strong>৳{order.total}</strong>
-                  </div>
-                  <div className="admin-order-actions">
-                    <button 
-                      className={order.status === 'preparing' ? 'status-btn active' : 'status-btn'}
-                      onClick={() => updateOrderStatus(order.id, 'preparing')}
-                    >
-                      Preparing
-                    </button>
-                    <button 
-                      className={order.status === 'delivering' ? 'status-btn active' : 'status-btn'}
-                      onClick={() => updateOrderStatus(order.id, 'delivering')}
-                    >
-                      Delivering
-                    </button>
-                    <button 
-                      className={order.status === 'delivered' ? 'status-btn active' : 'status-btn'}
-                      onClick={() => updateOrderStatus(order.id, 'delivered')}
-                    >
-                      Delivered
-                    </button>
+                  <div className="admin-top-stats">
+                    <div className="admin-top-stat">
+                      <strong>{r.orderCount}</strong>
+                      <span>Orders</span>
+                    </div>
+                    <div className="admin-top-stat">
+                      <strong>⭐ {r.rating || 4.5}</strong>
+                      <span>Rating</span>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
-      )}
+
+      </main>
     </div>
   )
 }

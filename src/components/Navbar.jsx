@@ -1,19 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import NotificationPanel from './NotificationPanel'
+import {
+  Search,
+  Heart,
+  Package,
+  ShoppingBag,
+  User,
+  Moon,
+  Sun,
+  Menu,
+  X,
+} from 'lucide-react'
 
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [cartCount, setCartCount] = useState(0)
+  const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
 
-  // Dark Mode State
+  // Dark Mode
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme')
     return saved === 'dark'
   })
 
-  // Dark Mode Effect
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark')
@@ -24,86 +35,170 @@ function Navbar() {
     }
   }, [darkMode])
 
-  // Cart Count আপডেট করার ফাংশন
+  // Cart Count
   const updateCartCount = () => {
     const cartItems = JSON.parse(localStorage.getItem('cartItems') || '[]')
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
     setCartCount(totalItems)
   }
 
-  // Cart Count লোড এবং ইভেন্ট শোনা
   useEffect(() => {
     updateCartCount()
     window.addEventListener('cartUpdated', updateCartCount)
     window.addEventListener('storage', updateCartCount)
-    updateCartCount()
-
     return () => {
       window.removeEventListener('cartUpdated', updateCartCount)
       window.removeEventListener('storage', updateCartCount)
     }
   }, [location.pathname])
 
+  // Scroll Effect
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20)
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  const currentPath = location.pathname
+
+  const navLinks = [
+    { path: '/', label: 'Home' },
+    { path: '/restaurants', label: 'Restaurants' },
+    { path: '/pharmacy', label: 'Pharmacy' },
+    { path: '/offers', label: 'Offers' },
+    { path: '/about', label: 'About' },
+  ]
+
   return (
-    <header className="arai-navbar">
-      <div className="arai-navbar-inner">
-
-        {/* Logo */}
-        <Link to="/" className="arai-logo">
-          <div className="arai-logo-icon">
-            <span className="logo-ring"></span>
-            <span className="logo-main">👨‍🍳</span>
-          </div>
-          <div className="arai-logo-text">
-            <span className="logo-title">ARAIFOOD</span>
-            <small className="logo-subtitle">Good Food, Good Mood</small>
-          </div>
-        </Link>
-
-        {/* Desktop Navigation */}
-        <nav className="arai-nav-links">
-          <Link to="/" className="active">Home</Link>
-          <Link to="/restaurants">Restaurants</Link>
-          <Link to="/pharmacy">Pharmacy</Link>
-          <Link to="/offers">Offers</Link>
-          <Link to="/about">About Us</Link>
-        </nav>
-
-        {/* Right Side - সব button আছে */}
-        <div className="arai-nav-actions">
-          <Link to="/restaurants" className="arai-nav-icon" title="Search">🔍</Link>
-          <Link to="/favorites" className="arai-nav-icon" title="Favorites">❤️</Link>
-          <Link to="/order-history" className="arai-nav-icon" title="Order History">📦</Link>
-          <Link to="/cart" className="arai-cart-button" title="Cart">
-            🛒
-            <span className="arai-cart-badge">{cartCount}</span>
+    <>
+      <header className={`glass-navbar ${scrolled ? 'scrolled' : ''}`}>
+        <div className="glass-navbar-inner">
+          
+          {/* Logo */}
+          <Link to="/" className="glass-logo">
+            <div className="glass-logo-icon">
+              <img src="/araifood-logo.png" alt="AraiFood" />
+            </div>
+            <div className="glass-logo-text">
+              <span className="glass-logo-title">ARAIFOOD</span>
+              <small className="glass-logo-sub">Good Food, Good Mood</small>
+            </div>
           </Link>
-          <NotificationPanel />
-          <Link to="/account" className="arai-account-button">
-            <span className="arai-account-icon">👤</span>
-            <span className="arai-account-text">Account</span>
-          </Link>
-          <button className="arai-menu-button" onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? '✕' : '☰'}
-          </button>
+
+          {/* Desktop Nav Links */}
+          <nav className="glass-nav-links">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`glass-nav-link ${currentPath === link.path ? 'active' : ''}`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Right Actions */}
+          <div className="glass-nav-actions">
+            
+            {/* Search */}
+            <Link to="/restaurants" className="glass-icon-btn" title="Search">
+              <Search size={20} strokeWidth={1.8} />
+            </Link>
+
+            {/* Dark Mode Toggle */}
+            <button
+              className="glass-icon-btn dark-toggle"
+              onClick={() => setDarkMode(!darkMode)}
+              title="Toggle Theme"
+            >
+              {darkMode ? <Sun size={20} strokeWidth={1.8} /> : <Moon size={20} strokeWidth={1.8} />}
+            </button>
+
+            {/* Favorites */}
+            <Link to="/favorites" className="glass-icon-btn" title="Favorites">
+              <Heart size={20} strokeWidth={1.8} />
+            </Link>
+
+            {/* Order History */}
+            <Link to="/order-history" className="glass-icon-btn" title="Orders">
+              <Package size={20} strokeWidth={1.8} />
+            </Link>
+
+            {/* Notification */}
+            <NotificationPanel />
+
+            {/* Cart */}
+            <Link to="/cart" className="glass-cart-btn" title="Cart">
+              <ShoppingBag size={20} strokeWidth={1.8} />
+              {cartCount > 0 && (
+                <span className="glass-cart-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+              )}
+            </Link>
+
+            {/* Account */}
+            <Link to="/account" className="glass-account-btn">
+              <User size={18} strokeWidth={2} />
+              <span>Account</span>
+            </Link>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="glass-menu-btn"
+              onClick={() => setMenuOpen(!menuOpen)}
+              title="Menu"
+            >
+              {menuOpen ? <X size={22} strokeWidth={2} /> : <Menu size={22} strokeWidth={2} />}
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Mobile Navigation */}
+      {/* Mobile Menu Overlay */}
       {menuOpen && (
-        <div className="arai-mobile-menu">
-          <Link to="/" onClick={() => setMenuOpen(false)}>🏠 Home</Link>
-          <Link to="/restaurants" onClick={() => setMenuOpen(false)}>🍽️ Restaurants</Link>
-          <Link to="/pharmacy" onClick={() => setMenuOpen(false)}>💊 Pharmacy</Link>
-          <Link to="/offers" onClick={() => setMenuOpen(false)}>🎁 Offers</Link>
-          <Link to="/about" onClick={() => setMenuOpen(false)}>ℹ️ About Us</Link>
-          <Link to="/favorites" onClick={() => setMenuOpen(false)}>❤️ My Favorites</Link>
-          <Link to="/order-history" onClick={() => setMenuOpen(false)}>📦 My Orders</Link>
-          <Link to="/account" onClick={() => setMenuOpen(false)}>👤 My Account</Link>
-          <Link to="/cart" onClick={() => setMenuOpen(false)}>🛒 My Cart</Link>
+        <div className="glass-mobile-overlay" onClick={() => setMenuOpen(false)}>
+          <div className="glass-mobile-menu" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="glass-mobile-header">
+              <span className="glass-mobile-title">Menu</span>
+              <button className="glass-icon-btn" onClick={() => setMenuOpen(false)}>
+                <X size={20} strokeWidth={2} />
+              </button>
+            </div>
+
+            <div className="glass-mobile-links">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`glass-mobile-link ${currentPath === link.path ? 'active' : ''}`}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              
+              <div className="glass-mobile-divider"></div>
+
+              <Link to="/favorites" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+                My Favorites
+              </Link>
+              <Link to="/order-history" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+                My Orders
+              </Link>
+              <Link to="/account" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+                My Account
+              </Link>
+              <Link to="/cart" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+                My Cart {cartCount > 0 && `(${cartCount})`}
+              </Link>
+            </div>
+          </div>
         </div>
       )}
-    </header>
+    </>
   )
 }
 

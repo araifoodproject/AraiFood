@@ -1,65 +1,74 @@
 import { useState, useEffect } from 'react'
+import { Star, Truck, Heart } from 'lucide-react'
 
 function RestaurantCard({ restaurant }) {
-  // Favorites State
   const [isFavorite, setIsFavorite] = useState(false)
 
-  // Check if this restaurant is in favorites
   useEffect(() => {
     const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
     setIsFavorite(favorites.includes(restaurant.id))
   }, [restaurant.id])
 
-  // Toggle Favorite
   const toggleFavorite = (e) => {
-    e.stopPropagation() // Card এ ক্লিক না হওয়ার জন্য
+    e.stopPropagation()
     const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
-    
+
     if (favorites.includes(restaurant.id)) {
-      // Remove from favorites
-      const updatedFavorites = favorites.filter((id) => id !== restaurant.id)
-      localStorage.setItem('favorites', JSON.stringify(updatedFavorites))
+      const updated = favorites.filter((id) => id !== restaurant.id)
+      localStorage.setItem('favorites', JSON.stringify(updated))
       setIsFavorite(false)
-      // Toast Notification
-      if (window.toast) window.toast(`${restaurant.name} removed from favorites`)
     } else {
-      // Add to favorites
-      const updatedFavorites = [...favorites, restaurant.id]
-      localStorage.setItem('favorites', JSON.stringify(updatedFavorites))
+      const updated = [...favorites, restaurant.id]
+      localStorage.setItem('favorites', JSON.stringify(updated))
       setIsFavorite(true)
-      // Toast Notification
-      if (window.toast) window.toast(`${restaurant.name} added to favorites`)
     }
   }
 
   return (
     <div
-      className="restaurant-card"
+      className="glass-restaurant-card"
       onClick={() => {
         window.location.href = `/restaurant?id=${restaurant.id}`
       }}
     >
-      <div className="restaurant-image">
-        <span>{restaurant.emoji}</span>
-        <div className="restaurant-rating">⭐ {restaurant.rating}</div>
-        
-        {/* Favorite Heart Button */}
-        <button 
-          className={`favorite-button ${isFavorite ? 'active' : ''}`}
-          onClick={toggleFavorite}
-        >
-          {isFavorite ? '❤️' : '🤍'}
-        </button>
+      {/* Image Area */}
+      <div className="glass-restaurant-image">
+        <span className="glass-restaurant-emoji">{restaurant.emoji}</span>
 
+        {restaurant.badge && (
+          <div className="glass-restaurant-badge">{restaurant.badge}</div>
+        )}
+
+        <div className="glass-restaurant-rating">
+          <Star size={12} strokeWidth={0} fill="#F59E0B" />
+          {restaurant.rating}
+        </div>
+
+        <button
+          className={`glass-restaurant-fav ${isFavorite ? 'active' : ''}`}
+          onClick={toggleFavorite}
+          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          <Heart
+            size={16}
+            strokeWidth={2.2}
+            fill={isFavorite ? '#EF4444' : 'transparent'}
+            color={isFavorite ? '#EF4444' : '#6B7280'}
+          />
+        </button>
       </div>
 
-      <div className="restaurant-info">
-        <h3>{restaurant.name}</h3>
-        <p>{restaurant.cuisine}</p>
+      {/* Info Area */}
+      <div className="glass-restaurant-info">
+        <h3 className="glass-restaurant-name">{restaurant.name}</h3>
+        <p className="glass-restaurant-cuisine">{restaurant.cuisine}</p>
 
-        <div className="restaurant-meta">
-          <span>🚴 {restaurant.delivery}</span>
-          <span>৳ {restaurant.price}</span>
+        <div className="glass-restaurant-meta">
+          <span className="glass-restaurant-meta-item">
+            <Truck size={13} strokeWidth={2.2} />
+            {restaurant.delivery}
+          </span>
+          <span className="glass-restaurant-price">{restaurant.price}</span>
         </div>
       </div>
     </div>

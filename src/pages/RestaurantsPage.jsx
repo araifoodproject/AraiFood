@@ -1,73 +1,76 @@
-import { useMemo, useState } from 'react'
-import { restaurantsData } from '../data/restaurantsData'
+import { useState, useEffect, useMemo } from 'react'
+import { db } from '../firebase'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 
 function RestaurantsPage() {
+  const [restaurants, setRestaurants] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('recommended')
-  const [isListening, setIsListening] = useState(false)
 
-  // Voice Search
-  const handleVoiceSearch = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice search is not supported in this browser.')
-      return
-    }
+  // Firebase Live Restaurants (শুধু Approved)
+  useEffect(() => {
+    const restaurantQuery = query(
+      collection(db, 'restaurants'),
+      where('status', '==', 'approved')
+    )
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-US'
-    recognition.continuous = false
-    recognition.interimResults = false
+    const unsubscribe = onSnapshot(restaurantQuery, (snapshot) => {
+      const restaurantList = snapshot.docs.map((d) => ({
+        firebaseId: d.id,
+        ...d.data()
+      }))
+      setRestaurants(restaurantList)
+      setLoading(false)
+    })
 
-    recognition.onstart = () => setIsListening(true)
-    recognition.onend = () => setIsListening(false)
-    recognition.onerror = () => setIsListening(false)
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript
-      setSearch(transcript)
-    }
-
-    recognition.start()
-  }
+    return () => unsubscribe()
+  }, [])
 
   const filteredRestaurants = useMemo(() => {
-    let result = [...restaurantsData]
+    let result = [...restaurants]
 
+    // Search
     if (search.trim()) {
-      const query = search.toLowerCase()
-      result = result.filter((restaurant) =>
-        `${restaurant.name} ${restaurant.cuisine}`.toLowerCase().includes(query)
+      const q = search.toLowerCase()
+      result = result.filter((r) =>
+        `${r.restaurantName} ${r.cuisine}`.toLowerCase().includes(q)
       )
     }
 
+    // Filter
     if (filter === 'top-rated') {
-      result = result.filter((restaurant) => restaurant.rating >= 4.8)
+      result = result.filter((r) => (r.rating || 0) >= 4.8)
     }
 
     if (filter === 'fast-delivery') {
-      result = result.filter((restaurant) => restaurant.deliveryMin <= 25)
+      result = result.filter((r) => r.restaurantStatus === 'online')
     }
 
     if (filter === 'budget') {
-      result = result.filter((restaurant) => restaurant.price === '৳')
+      result = result.filter((r) => (r.deliveryFee || 0) <= 30)
     }
 
+    // Sort
     if (sort === 'rating') {
-      result.sort((a, b) => b.rating - a.rating)
-    }
-
-    if (sort === 'fastest') {
-      result.sort((a, b) => a.deliveryMin - b.deliveryMin)
+      result.sort((a, b) => (b.rating || 0) - (a.rating || 0))
     }
 
     if (sort === 'name') {
-      result.sort((a, b) => a.name.localeCompare(b.name))
+      result.sort((a, b) => (a.restaurantName || '').localeCompare(b.restaurantName || ''))
     }
 
     return result
-  }, [search, filter, sort])
+  }, [restaurants, search, filter, sort])
+
+  if (loading) {
+    return (
+      <div className="restaurants-page">
+        <p style={{ padding: 40, textAlign: 'center' }}>Loading restaurants...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="restaurants-page">
@@ -79,7 +82,7 @@ function RestaurantsPage() {
         </div>
 
         <div className="restaurant-page-stats">
-          <div className="restaurant-stat"><strong>20+</strong><span>Local Restaurants</span></div>
+          <div className="restaurant-stat"><strong>{restaurants.length}+</strong><span>Local Restaurants</span></div>
           <div className="restaurant-stat"><strong>100+</strong><span>Food Items</span></div>
           <div className="restaurant-stat"><strong>4.8 ⭐</strong><span>Average Rating</span></div>
           <div className="restaurant-stat"><strong>30 min</strong><span>Average Delivery</span></div>
@@ -94,17 +97,13 @@ function RestaurantsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {isListening && <span className="listening-indicator">🎤</span>}
             {search && <button type="button" onClick={() => setSearch('')} className="clear-search">×</button>}
-            <button type="button" className="voice-search-button" onClick={handleVoiceSearch}>
-              🎤
-            </button>
           </div>
 
           <div className="restaurant-filter-row">
             <button className={filter === 'all' ? 'restaurant-filter active' : 'restaurant-filter'} onClick={() => setFilter('all')}>All</button>
             <button className={filter === 'top-rated' ? 'restaurant-filter active' : 'restaurant-filter'} onClick={() => setFilter('top-rated')}>⭐ Top Rated</button>
-            <button className={filter === 'fast-delivery' ? 'restaurant-filter active' : 'restaurant-filter'} onClick={() => setFilter('fast-delivery')}>🚴 Fast Delivery</button>
+            <button className={filter === 'fast-delivery' ? 'restaurant-filter active' : 'restaurant-filter'} onClick={() => setFilter('fast-delivery')}>🟢 Open Now</button>
             <button className={filter === 'budget' ? 'restaurant-filter active' : 'restaurant-filter'} onClick={() => setFilter('budget')}>💰 Budget</button>
           </div>
 
@@ -113,7 +112,6 @@ function RestaurantsPage() {
             <select id="restaurant-sort" value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="recommended">Recommended</option>
               <option value="rating">Highest Rated</option>
-              <option value="fastest">Fastest Delivery</option>
               <option value="name">Name A–Z</option>
             </select>
           </div>
@@ -130,23 +128,32 @@ function RestaurantsPage() {
         {filteredRestaurants.length > 0 ? (
           <div className="all-restaurants-grid">
             {filteredRestaurants.map((restaurant) => (
-              <div className="all-restaurant-card" key={restaurant.id}>
+              <div className="all-restaurant-card" key={restaurant.firebaseId}>
                 <div className="all-restaurant-image">
-                  <span className="restaurant-main-emoji">{restaurant.emoji}</span>
-                  <div className="restaurant-badge">{restaurant.badge}</div>
-                  <div className="all-restaurant-rating">⭐ {restaurant.rating}</div>
+                  {restaurant.logo ? (
+                    <img src={restaurant.logo} alt={restaurant.restaurantName} className="restaurant-logo-img" />
+                  ) : (
+                    <span className="restaurant-main-emoji">🏪</span>
+                  )}
+                  {restaurant.restaurantStatus === 'online' && (
+                    <div className="restaurant-badge online-badge">🟢 Open</div>
+                  )}
+                  {restaurant.restaurantStatus === 'busy' && (
+                    <div className="restaurant-badge busy-badge">🟡 Busy</div>
+                  )}
+                  <div className="all-restaurant-rating">⭐ {restaurant.rating || '4.5'}</div>
                 </div>
                 <div className="all-restaurant-info">
                   <div className="restaurant-title-row">
-                    <h2>{restaurant.name}</h2>
-                    <span className="restaurant-price">{restaurant.price}</span>
+                    <h2>{restaurant.restaurantName}</h2>
+                    <span className="restaurant-price">৳{restaurant.deliveryFee || 30}</span>
                   </div>
                   <p className="restaurant-cuisine">{restaurant.cuisine}</p>
                   <div className="all-restaurant-meta">
-                    <span>🚴 {restaurant.delivery}</span>
-                    <span>⚡ Fast Delivery</span>
+                    <span>🕒 {restaurant.openingTime} - {restaurant.closingTime}</span>
+                    <span>📦 Min ৳{restaurant.minimumOrder || 100}</span>
                   </div>
-                  <button className="restaurant-menu-button" onClick={() => { window.location.href = `/restaurant?id=${restaurant.id}` }}>
+                  <button className="restaurant-menu-button" onClick={() => { window.location.href = `/restaurant?id=${restaurant.firebaseId}` }}>
                     <span>View Menu</span>
                     <span>→</span>
                   </button>

@@ -3,25 +3,23 @@ import { toast } from 'react-toastify'
 
 const containerStyle = {
   width: '100%',
-  height: '350px',
+  height: '400px',
   borderRadius: '16px',
   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)'
 }
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
-// আপনার নতুন ৬টি পয়েন্ট
 const deliveryZone = [
-  { lat: 23.7681, lng: 90.6170 },  // 1
-  { lat: 23.7923, lng: 90.6089 },  // 2
-  { lat: 23.8120, lng: 90.6606 },  // 3
-  { lat: 23.7976, lng: 90.6923 },  // 4
-  { lat: 23.7762, lng: 90.6594 },  // 5
-  { lat: 23.7598, lng: 90.6300 },  // 6
-  { lat: 23.7681, lng: 90.6170 }   // 7 (বন্ধ)
+  { lat: 23.7681, lng: 90.6170 },
+  { lat: 23.7923, lng: 90.6089 },
+  { lat: 23.8120, lng: 90.6606 },
+  { lat: 23.7976, lng: 90.6923 },
+  { lat: 23.7762, lng: 90.6594 },
+  { lat: 23.7598, lng: 90.6300 },
+  { lat: 23.7681, lng: 90.6170 }
 ]
 
-// Point in Polygon চেক করার ফাংশন
 const isInsideDeliveryZone = (point) => {
   let isInside = false
   const lat = point.lat
@@ -45,14 +43,14 @@ const isInsideDeliveryZone = (point) => {
 }
 
 function MapPicker({ position, setPosition }) {
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: API_KEY
+    googleMapsApiKey: API_KEY,
+    libraries: ['places']
   })
 
   const defaultCenter = { lat: 23.78, lng: 90.64 }
 
-  // Map-এ ক্লিক করলে (Polygon-এর বাইরে)
   const onMapClick = (e) => {
     if (e.latLng) {
       const clickedLocation = { lat: e.latLng.lat(), lng: e.latLng.lng() }
@@ -61,26 +59,30 @@ function MapPicker({ position, setPosition }) {
         setPosition(clickedLocation)
       } else {
         toast.error('Location is outside our delivery area. Please select within Araihazar!', {
-          position: "top-right",
+          position: 'top-right',
           autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
         })
       }
     }
   }
 
-  // Polygon-এর ভেতরে ক্লিক করলে সরাসরি Pin বসবে
-  const onPolygonClick = (e) => {
-    if (e.latLng) {
-      setPosition({ lat: e.latLng.lat(), lng: e.latLng.lng() })
-    }
+  // Loading Skeleton
+  if (!isLoaded && !loadError) {
+    return (
+      <div className="map-loading-skeleton">
+        <div className="map-loading-spinner"></div>
+        <p>🗺️ Loading Map...</p>
+      </div>
+    )
   }
 
-  if (!isLoaded) return <div className="loading-map">Loading Google Maps...</div>
+  if (loadError) {
+    return (
+      <div className="map-loading-skeleton error">
+        <p>⚠️ Failed to load map. Please refresh.</p>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -97,10 +99,8 @@ function MapPicker({ position, setPosition }) {
           zoomControl: true
         }}
       >
-        {/* Araihazar Thana-র Delivery Zone Polygon */}
         <Polygon
           paths={deliveryZone}
-          onClick={onPolygonClick}
           options={{
             strokeColor: '#13a89e',
             strokeOpacity: 0.8,
@@ -110,7 +110,6 @@ function MapPicker({ position, setPosition }) {
           }}
         />
 
-        {/* Selected Location Marker */}
         {position && <Marker position={position} />}
       </GoogleMap>
 

@@ -42,14 +42,11 @@ function LoginPage() {
   const handlePasswordReset = async () => {
     setError('')
     setMessage('')
-
     if (!email.trim()) {
       setError('Enter your email address first.')
       return
     }
-
     setResetLoading(true)
-
     try {
       await sendPasswordResetEmail(auth, email.trim())
       setMessage('Password reset email sent. Please check your inbox.')
@@ -68,21 +65,17 @@ function LoginPage() {
 
   return (
     <div className="premium-login-page">
-      {/* Animated Background Elements */}
       <div className="premium-bg-circle circle-one"></div>
       <div className="premium-bg-circle circle-two"></div>
       <div className="premium-bg-circle circle-three"></div>
-      
-      {/* Floating Food Emojis */}
       <div className="floating-food food-one">🍕</div>
       <div className="floating-food food-two">🍔</div>
       <div className="floating-food food-three">🍛</div>
       <div className="floating-food food-four">🍗</div>
 
-      {/* Glass Card */}
       <div className="premium-login-card">
         <div className="premium-login-logo">
-          <span className="premium-logo-icon">👨‍🍳</span>
+          <img src="/araifood-logo.png" alt="AraiFood Logo" className="premium-logo-image" />
           <h1>ARAIFOOD</h1>
           <p>Good Food, Good Mood</p>
         </div>
@@ -125,7 +118,6 @@ function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
                 style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '18px', padding: '5px' }}
               >
                 {showPassword ? '🙈' : '👁️'}
@@ -163,11 +155,7 @@ function LoginPage() {
           {error && <p className="login-error" style={{ marginBottom: '12px' }}>{error}</p>}
           {message && <p style={{ marginBottom: '12px', color: '#13a89e', fontWeight: '600', fontSize: '14px', lineHeight: 1.5 }}>{message}</p>}
 
-          <button
-            type="submit"
-            className="login-submit-button"
-            disabled={loading}
-          >
+          <button type="submit" className="login-submit-button" disabled={loading}>
             {loading ? 'Logging in...' : 'Login →'}
           </button>
         </form>

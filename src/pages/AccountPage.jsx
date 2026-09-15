@@ -3,7 +3,14 @@ import {
   onAuthStateChanged,
   signOut,
 } from 'firebase/auth'
-import { auth } from '../firebase'
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  arrayUnion,
+} from 'firebase/firestore'
+import { auth, db } from '../firebase'
 
 function AccountPage() {
   const [user, setUser] = useState(null)
@@ -17,12 +24,13 @@ function AccountPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  // Loyalty Points & Wallet State
+  // Firebase Data
   const [loyaltyPoints, setLoyaltyPoints] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTransactions, setWalletTransactions] = useState([])
   const [pointsHistory, setPointsHistory] = useState([])
 
+  // Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser)
@@ -30,29 +38,38 @@ function AccountPage() {
       if (currentUser) {
         const savedRole = localStorage.getItem('userRole') || 'customer'
         setRole(savedRole)
-        
-        const savedProfile = JSON.parse(localStorage.getItem('userProfile') || 'null')
-        if (savedProfile) {
-          setFullName(savedProfile.fullName || '')
-          setPhone(savedProfile.phone || '')
-          setAddress(savedProfile.address || '')
+
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const data = userDoc.data()
+            setFullName(data.fullName || '')
+            setPhone(data.phone || '')
+            setAddress(data.address || '')
+            setLoyaltyPoints(data.loyaltyPoints || 0)
+            setWalletBalance(data.walletBalance || 0)
+            setWalletTransactions(data.walletTransactions || [])
+            setPointsHistory(data.pointsHistory || [])
+          } else {
+            // Create new user document
+            await setDoc(userDocRef, {
+              email: currentUser.email,
+              fullName: '',
+              phone: '',
+              address: '',
+              role: savedRole,
+              loyaltyPoints: 0,
+              walletBalance: 0,
+              walletTransactions: [],
+              pointsHistory: [],
+              createdAt: new Date(),
+            })
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error)
         }
-
-        // Load Loyalty Points
-        const savedPoints = parseInt(localStorage.getItem('loyaltyPoints') || '0', 10)
-        setLoyaltyPoints(savedPoints)
-
-        // Load Wallet Balance
-        const savedWallet = parseFloat(localStorage.getItem('walletBalance') || '0')
-        setWalletBalance(savedWallet)
-
-        // Load Wallet Transactions
-        const savedTransactions = JSON.parse(localStorage.getItem('walletTransactions') || '[]')
-        setWalletTransactions(savedTransactions)
-
-        // Load Points History
-        const savedPointsHistory = JSON.parse(localStorage.getItem('pointsHistory') || '[]')
-        setPointsHistory(savedPointsHistory)
       }
 
       setLoading(false)
@@ -61,7 +78,8 @@ function AccountPage() {
     return () => unsubscribe()
   }, [])
 
-  const saveProfile = () => {
+  // Save Profile
+  const saveProfile = async () => {
     if (!fullName.trim()) {
       setMessage('Please enter your full name.')
       return
@@ -70,22 +88,33 @@ function AccountPage() {
     setSaving(true)
     setMessage('')
 
-    const profileData = {
-      fullName: fullName.trim(),
-      phone: phone.trim(),
-      address: address.trim(),
-      email: user?.email,
-      role: role,
-      updatedAt: new Date().toISOString()
-    }
+    try {
+      const userDocRef = doc(db, 'users', user.uid)
+      await setDoc(
+        userDocRef,
+        {
+          fullName: fullName.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
+          email: user.email,
+          role: role,
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      )
 
-    localStorage.setItem('userProfile', JSON.stringify(profileData))
-    setSaving(false)
-    setMessage('Profile saved successfully!')
+      setMessage('Profile saved successfully!')
+    } catch (error) {
+      console.error('Save error:', error)
+      setMessage('Could not save profile. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const addMoneyToWallet = () => {
-    const amount = prompt('Enter amount to add to wallet (minimum ৳50):')
+  // Add Money to Wallet
+  const addMoneyToWallet = async () => {
+    const amount = prompt('Enter amount to add (minimum ৳50):')
     if (!amount) return
 
     const numAmount = parseFloat(amount)
@@ -94,28 +123,37 @@ function AccountPage() {
       return
     }
 
-    const newBalance = walletBalance + numAmount
-    setWalletBalance(newBalance)
-    localStorage.setItem('walletBalance', JSON.stringify(newBalance))
+    try {
+      const newBalance = walletBalance + numAmount
+      const transaction = {
+        id: Date.now().toString(),
+        type: 'credit',
+        amount: numAmount,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+      }
 
-    // Add transaction to history
-    const newTransaction = {
-      id: Date.now(),
-      type: 'credit',
-      amount: numAmount,
-      date: new Date().toLocaleDateString()
+      const userDocRef = doc(db, 'users', user.uid)
+      await updateDoc(userDocRef, {
+        walletBalance: newBalance,
+        walletTransactions: arrayUnion(transaction),
+      })
+
+      setWalletBalance(newBalance)
+      setWalletTransactions([transaction, ...walletTransactions])
+
+      alert(`৳${numAmount} added to wallet!`)
+    } catch (error) {
+      console.error('Add money error:', error)
+      alert('Failed to add money. Please try again.')
     }
-    const updatedTransactions = [newTransaction, ...walletTransactions]
-    setWalletTransactions(updatedTransactions)
-    localStorage.setItem('walletTransactions', JSON.stringify(updatedTransactions))
-
-    alert(`৳${numAmount} added to your wallet successfully!`)
   }
 
   if (loading) {
     return (
       <div className="account-page">
-        <div className="account-card">
+        <div className="panel-loading">
+          <div className="panel-loading-spinner"></div>
           <p>Loading account...</p>
         </div>
       </div>
@@ -140,28 +178,23 @@ function AccountPage() {
   return (
     <div className="account-page">
       <div className="account-container">
+        {/* Header */}
         <div className="account-header">
           <div className="account-header-top">
             <button className="account-home-button" onClick={() => { window.location.href = '/' }}>
               ← Home
             </button>
-            <span className="account-header-badge">
-              ARAIFOOD ACCOUNT
-            </span>
+            <span className="account-header-badge">ARAIFOOD ACCOUNT</span>
           </div>
 
           <h1>
-            Welcome back,
-            <span> {fullName || 'Food Lover'}!</span>
+            Welcome back,<span> {fullName || 'Food Lover'}!</span>
           </h1>
-          <p>
-            Manage your profile, delivery details,
-            and account settings all in one place.
-          </p>
+          <p>Manage your profile, wallet, and rewards all in one place.</p>
         </div>
 
         <div className="account-card">
-          {/* Profile Section */}
+          {/* Profile */}
           <div className="account-profile">
             <div className="profile-avatar-wrapper">
               <div className="account-avatar">
@@ -182,7 +215,7 @@ function AccountPage() {
 
           <div className="account-divider"></div>
 
-          {/* Loyalty Points & Wallet Section */}
+          {/* Rewards */}
           <div className="rewards-section">
             <div className="rewards-header">
               <span className="section-label">YOUR REWARDS</span>
@@ -197,7 +230,7 @@ function AccountPage() {
                   <small>Loyalty Points</small>
                 </div>
                 <div className="reward-action">
-                  <span>৳{loyaltyPoints / 10} value</span>
+                  <span>৳{(loyaltyPoints / 10).toFixed(0)} value</span>
                 </div>
               </div>
 
@@ -228,7 +261,7 @@ function AccountPage() {
               {walletTransactions.length === 0 ? (
                 <p className="no-transactions">No wallet transactions yet. Add money to your wallet!</p>
               ) : (
-                walletTransactions.map((transaction) => (
+                walletTransactions.slice(0, 5).map((transaction) => (
                   <div className="wallet-transaction-card" key={transaction.id}>
                     <div className="transaction-icon">
                       {transaction.type === 'credit' ? '⬇️' : '⬆️'}
@@ -246,7 +279,7 @@ function AccountPage() {
             </div>
           </div>
 
-          {/* Loyalty Points History */}
+          {/* Points History */}
           <div className="points-history-section">
             <div className="account-section-title">
               <div className="account-section-icon">⭐</div>
@@ -260,7 +293,7 @@ function AccountPage() {
               {pointsHistory.length === 0 ? (
                 <p className="no-transactions">No points history yet. Order food to earn points!</p>
               ) : (
-                pointsHistory.map((point) => (
+                pointsHistory.slice(0, 5).map((point) => (
                   <div className="points-history-card" key={point.id}>
                     <div className="points-icon">⭐</div>
                     <div className="points-info">
@@ -278,7 +311,7 @@ function AccountPage() {
 
           <div className="account-divider"></div>
 
-          {/* Personal Information */}
+          {/* Personal Info */}
           <div className="account-section-title">
             <div className="account-section-icon">👤</div>
             <div>
@@ -288,11 +321,10 @@ function AccountPage() {
           </div>
 
           <div className="form-group account-form-group">
-            <label htmlFor="account-full-name">Full Name</label>
+            <label>Full Name</label>
             <div className="account-input-wrapper">
               <span className="account-input-icon">👤</span>
               <input
-                id="account-full-name"
                 type="text"
                 placeholder="Enter your full name"
                 value={fullName}
@@ -301,13 +333,11 @@ function AccountPage() {
             </div>
           </div>
 
-          {/* Phone Number */}
           <div className="form-group account-form-group">
-            <label htmlFor="account-phone">Mobile Number</label>
+            <label>Mobile Number</label>
             <div className="account-input-wrapper">
               <span className="account-input-icon">📱</span>
               <input
-                id="account-phone"
                 type="tel"
                 placeholder="01XXXXXXXXX"
                 value={phone}
@@ -316,13 +346,11 @@ function AccountPage() {
             </div>
           </div>
 
-          {/* Delivery Address */}
           <div className="form-group account-form-group">
-            <label htmlFor="account-address">Delivery Address</label>
+            <label>Delivery Address</label>
             <div className="account-textarea-wrapper">
               <span className="account-textarea-icon">📍</span>
               <textarea
-                id="account-address"
                 placeholder="House / Road / Area / Union / Upazila..."
                 rows="4"
                 value={address}
@@ -331,7 +359,6 @@ function AccountPage() {
             </div>
           </div>
 
-          {/* Save Profile */}
           <div className="save-profile-section">
             <button className="account-save-button" onClick={saveProfile} disabled={saving}>
               {saving ? (
@@ -349,9 +376,7 @@ function AccountPage() {
 
             {message && (
               <div className={`account-message ${message.includes('successfully') ? 'success' : 'error'}`}>
-                <span className="message-icon">
-                  {message.includes('successfully') ? '✓' : '⚠️'}
-                </span>
+                <span className="message-icon">{message.includes('successfully') ? '✓' : '⚠️'}</span>
                 <span>{message}</span>
               </div>
             )}
@@ -359,7 +384,7 @@ function AccountPage() {
 
           <div className="account-divider"></div>
 
-          {/* Account Information */}
+          {/* Account Info */}
           <div className="account-information-card">
             <div className="account-section-title">
               <div className="account-section-icon">🛡️</div>
@@ -373,7 +398,7 @@ function AccountPage() {
               <div className="account-info-item">
                 <div className="account-info-icon">📧</div>
                 <div className="account-info-content">
-                  <span>Email Address</span>
+                  <span>Email</span>
                   <strong>{user.email}</strong>
                 </div>
               </div>
@@ -408,7 +433,7 @@ function AccountPage() {
             </div>
           </div>
 
-          {/* Account Actions */}
+          {/* Actions */}
           <div className="account-actions">
             <button
               className="account-logout-button"
@@ -416,9 +441,7 @@ function AccountPage() {
                 try {
                   await signOut(auth)
                   window.location.href = '/login'
-                } catch (error) {
-                  console.error('Logout error:', error)
-                }
+                } catch (error) { console.error(error) }
               }}
             >
               <span className="account-action-icon">🚪</span>
