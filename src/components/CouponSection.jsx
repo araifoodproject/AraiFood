@@ -1,21 +1,58 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Copy, Check, Ticket } from 'lucide-react'
 import { toast } from 'react-toastify'
+import { db } from '../firebase'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 
 function CouponSection() {
   const [copied, setCopied] = useState(null)
+  const [coupons, setCoupons] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const coupons = [
-    { id: 1, code: 'SAVE10', discount: '10% OFF', description: 'On your first order', color: 'green' },
-    { id: 2, code: 'WELCOME20', discount: '20% OFF', description: 'On orders above ৳300', color: 'orange' },
-    { id: 3, code: 'FREEDEL', discount: 'FREE Delivery', description: 'On orders above ৳500', color: 'pink' },
-  ]
+  useEffect(() => {
+    const q = query(
+      collection(db, 'coupons'),
+      where('active', '==', true)
+    )
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          firebaseId: d.id,
+          ...d.data(),
+        }))
+        setCoupons(list.slice(0, 3))
+        setLoading(false)
+      },
+      (err) => {
+        console.error('Coupons load error:', err)
+        setLoading(false)
+      }
+    )
+    return () => unsub()
+  }, [])
 
   const copyCoupon = (code) => {
     navigator.clipboard.writeText(code)
     setCopied(code)
-    toast.success(`${code} copied to clipboard!`)
+    toast.success(`${code} copied to clipboard!`, { autoClose: 1500 })
     setTimeout(() => setCopied(null), 2000)
+  }
+
+  const getColorClass = (index) => {
+    const colors = ['green', 'orange', 'pink']
+    return colors[index % colors.length]
+  }
+
+  const formatDiscount = (coupon) => {
+    if (coupon.discountType === 'percent') {
+      return `${coupon.discountValue}% OFF`
+    }
+    return `৳${coupon.discountValue} OFF`
+  }
+
+  if (loading || coupons.length === 0) {
+    return null // Don't show section if no coupons
   }
 
   return (
@@ -29,15 +66,25 @@ function CouponSection() {
       </div>
 
       <div className="glass-coupon-grid">
-        {coupons.map((coupon) => (
-          <div className={`glass-coupon-card glass-coupon-${coupon.color}`} key={coupon.id}>
+        {coupons.map((coupon, idx) => (
+          <div
+            className={`glass-coupon-card glass-coupon-${getColorClass(idx)}`}
+            key={coupon.firebaseId}
+          >
             <div className="glass-coupon-ticket">
               <Ticket size={20} strokeWidth={2} />
             </div>
 
             <div className="glass-coupon-content">
-              <span className="glass-coupon-discount">{coupon.discount}</span>
-              <span className="glass-coupon-desc">{coupon.description}</span>
+              <span className="glass-coupon-discount">
+                {formatDiscount(coupon)}
+              </span>
+              <span className="glass-coupon-desc">
+                {coupon.description ||
+                  (coupon.minOrder
+                    ? `On orders above ৳${coupon.minOrder}`
+                    : 'Limited time offer')}
+              </span>
 
               <button
                 className="glass-coupon-code"

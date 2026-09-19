@@ -1,8 +1,8 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   MapPin,
   Search,
-  ArrowRight,
   Rocket,
   Star,
   ShieldCheck,
@@ -11,13 +11,29 @@ import {
 } from 'lucide-react'
 
 function Hero() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const navigate = useNavigate()
+
+  const handleSearch = () => {
+    const q = searchQuery.trim()
+    if (!q) {
+      navigate('/restaurants')
+      return
+    }
+    navigate(`/restaurants?search=${encodeURIComponent(q)}`)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
   return (
     <section className="glass-hero">
       <div className="glass-hero-container">
-
         {/* Left Content */}
         <div className="glass-hero-content">
-
           <div className="glass-hero-badge">
             <span className="glass-hero-badge-icon">
               <Rocket size={14} strokeWidth={2.5} />
@@ -28,11 +44,15 @@ function Hero() {
           <h1 className="glass-hero-title">
             Delicious Food.
             <br />
-            <span className="glass-hero-title-highlight">Delivered With Love.</span>
+            <span className="glass-hero-title-highlight">
+              Delivered With Love.
+            </span>
           </h1>
 
           <p className="glass-hero-description">
-            Discover the best restaurants and local food around <strong>Araihazar</strong>. Order your favourite meals and enjoy fast delivery at your doorstep.
+            Discover the best restaurants and local food around{' '}
+            <strong>Araihazar</strong>. Order your favourite meals and enjoy
+            fast delivery at your doorstep.
           </p>
 
           {/* Search Bar */}
@@ -43,9 +63,12 @@ function Hero() {
             <input
               type="text"
               placeholder="What are you craving today?"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
             <button
-              onClick={() => { window.location.href = '/restaurants' }}
+              onClick={handleSearch}
               className="glass-hero-search-btn"
             >
               <Search size={16} strokeWidth={2.5} />
@@ -55,7 +78,6 @@ function Hero() {
 
           {/* Features */}
           <div className="glass-hero-features">
-
             <div className="glass-hero-feature">
               <div className="glass-hero-feature-icon green">
                 <Rocket size={18} strokeWidth={2} />
@@ -89,13 +111,11 @@ function Hero() {
                 <small>Secure ordering</small>
               </div>
             </div>
-
           </div>
         </div>
 
         {/* Right Visual */}
         <div className="glass-hero-visual">
-
           <div className="glass-hero-visual-shape shape-1"></div>
           <div className="glass-hero-visual-shape shape-2"></div>
 
@@ -103,9 +123,7 @@ function Hero() {
           <div className="glass-food-card">
             <div className="glass-food-card-glow"></div>
 
-            <div className="glass-food-image">
-              🍛
-            </div>
+            <div className="glass-food-image">🍛</div>
 
             <div className="glass-food-info">
               <span className="glass-food-category">CUSTOMER FAVOURITE</span>
@@ -121,7 +139,7 @@ function Hero() {
             </div>
           </div>
 
-          {/* Floating Card 1 - Delivery */}
+          {/* Floating Card 1 */}
           <div className="glass-floating-card glass-floating-delivery">
             <div className="glass-floating-icon green">
               <Bike size={20} strokeWidth={2} />
@@ -132,7 +150,7 @@ function Hero() {
             </div>
           </div>
 
-          {/* Floating Card 2 - Rating */}
+          {/* Floating Card 2 */}
           <div className="glass-floating-card glass-floating-rating">
             <div className="glass-floating-stars">
               <Star size={12} strokeWidth={0} fill="#F59E0B" />
@@ -145,7 +163,7 @@ function Hero() {
             <small>Happy customers</small>
           </div>
 
-          {/* Floating Food Bubbles */}
+          {/* Food Bubbles */}
           <div className="glass-food-bubble bubble-1">🍕</div>
           <div className="glass-food-bubble bubble-2">🍔</div>
           <div className="glass-food-bubble bubble-3">🍗</div>
@@ -156,7 +174,6 @@ function Hero() {
             <span>#1 in Araihazar</span>
           </div>
         </div>
-
       </div>
     </section>
   )

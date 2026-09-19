@@ -1,8 +1,5 @@
-import { useState, useEffect } from 'react'
-import {
-  onAuthStateChanged,
-  signOut,
-} from 'firebase/auth'
+import { useState, useEffect, useRef } from 'react'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc,
   getDoc,
@@ -11,6 +8,9 @@ import {
   arrayUnion,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import PageBackButton from '../components/PageBackButton'
+import { toast } from 'react-toastify'
+import { Camera, X } from 'lucide-react'
 
 function AccountPage() {
   const [user, setUser] = useState(null)
@@ -20,52 +20,58 @@ function AccountPage() {
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [role, setRole] = useState('customer')
+  const [profileImage, setProfileImage] = useState('')
 
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  // Firebase Data
   const [loyaltyPoints, setLoyaltyPoints] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTransactions, setWalletTransactions] = useState([])
   const [pointsHistory, setPointsHistory] = useState([])
 
-  // Auth
+  const fileInputRef = useRef(null)
+
+  // ============ AUTH + LOAD ============
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser)
 
       if (currentUser) {
-        const savedRole = localStorage.getItem('userRole') || 'customer'
-        setRole(savedRole)
-
         try {
           const userDocRef = doc(db, 'users', currentUser.uid)
           const userDoc = await getDoc(userDocRef)
 
           if (userDoc.exists()) {
             const data = userDoc.data()
+            const dbRole = 'customer'
+            setRole(dbRole)
+            localStorage.setItem('userRole', dbRole)
+
             setFullName(data.fullName || '')
             setPhone(data.phone || '')
             setAddress(data.address || '')
+            setProfileImage(data.profileImage || '')
             setLoyaltyPoints(data.loyaltyPoints || 0)
             setWalletBalance(data.walletBalance || 0)
             setWalletTransactions(data.walletTransactions || [])
             setPointsHistory(data.pointsHistory || [])
           } else {
-            // Create new user document
             await setDoc(userDocRef, {
               email: currentUser.email,
               fullName: '',
               phone: '',
               address: '',
-              role: savedRole,
+              profileImage: '',
+              role: 'customer',
               loyaltyPoints: 0,
               walletBalance: 0,
               walletTransactions: [],
               pointsHistory: [],
               createdAt: new Date(),
             })
+            localStorage.setItem('userRole', 'customer')
+            setRole('customer')
           }
         } catch (error) {
           console.error('Error loading user data:', error)
@@ -78,7 +84,65 @@ function AccountPage() {
     return () => unsubscribe()
   }, [])
 
-  // Save Profile
+  // ============ IMAGE UPLOAD ============
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be under 5MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        const MAX_SIZE = 400
+        let width = img.width
+        let height = img.height
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width)
+            width = MAX_SIZE
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height)
+            height = MAX_SIZE
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, width, height)
+        ctx.drawImage(img, 0, 0, width, height)
+
+        const compressed = canvas.toDataURL('image/jpeg', 0.8)
+        setProfileImage(compressed)
+        toast.success('📷 Profile photo ready! Click "Save Profile".')
+      }
+      img.src = event.target.result
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removeImage = () => {
+    setProfileImage('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // ============ SAVE PROFILE ============
   const saveProfile = async () => {
     if (!fullName.trim()) {
       setMessage('Please enter your full name.')
@@ -96,14 +160,15 @@ function AccountPage() {
           fullName: fullName.trim(),
           phone: phone.trim(),
           address: address.trim(),
+          profileImage: profileImage || '',
           email: user.email,
-          role: role,
+          role: 'customer',
           updatedAt: new Date(),
         },
         { merge: true }
       )
-
       setMessage('Profile saved successfully!')
+      toast.success('✅ Profile saved!')
     } catch (error) {
       console.error('Save error:', error)
       setMessage('Could not save profile. Please try again.')
@@ -112,7 +177,7 @@ function AccountPage() {
     }
   }
 
-  // Add Money to Wallet
+  // ============ ADD MONEY ============
   const addMoneyToWallet = async () => {
     const amount = prompt('Enter amount to add (minimum ৳50):')
     if (!amount) return
@@ -141,11 +206,21 @@ function AccountPage() {
 
       setWalletBalance(newBalance)
       setWalletTransactions([transaction, ...walletTransactions])
-
       alert(`৳${numAmount} added to wallet!`)
     } catch (error) {
       console.error('Add money error:', error)
       alert('Failed to add money. Please try again.')
+    }
+  }
+
+  // ============ LOGOUT ============
+  const handleLogout = async () => {
+    try {
+      await signOut(auth)
+      localStorage.removeItem('userRole')
+      window.location.href = '/login'
+    } catch (error) {
+      console.error(error)
     }
   }
 
@@ -167,7 +242,12 @@ function AccountPage() {
           <div className="account-icon">👤</div>
           <h1>Please Login</h1>
           <p>You need to login to view your account.</p>
-          <button className="account-primary-button" onClick={() => { window.location.href = '/login' }}>
+          <button
+            className="account-primary-button"
+            onClick={() => {
+              window.location.href = '/login'
+            }}
+          >
             Login →
           </button>
         </div>
@@ -178,17 +258,16 @@ function AccountPage() {
   return (
     <div className="account-page">
       <div className="account-container">
-        {/* Header */}
+        <PageBackButton label="Back" fallback="/" />
+
         <div className="account-header">
           <div className="account-header-top">
-            <button className="account-home-button" onClick={() => { window.location.href = '/' }}>
-              ← Home
-            </button>
             <span className="account-header-badge">ARAIFOOD ACCOUNT</span>
           </div>
 
           <h1>
-            Welcome back,<span> {fullName || 'Food Lover'}!</span>
+            Welcome back,
+            <span> {fullName || 'Food Lover'}!</span>
           </h1>
           <p>Manage your profile, wallet, and rewards all in one place.</p>
         </div>
@@ -197,8 +276,23 @@ function AccountPage() {
           {/* Profile */}
           <div className="account-profile">
             <div className="profile-avatar-wrapper">
-              <div className="account-avatar">
-                {role === 'rider' ? '🛵' : role === 'restaurant' ? '🏪' : '👤'}
+              <div
+                className="account-avatar"
+                style={{ overflow: 'hidden', padding: 0 }}
+              >
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt="Profile"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  '👤'
+                )}
               </div>
               <div className="profile-online-dot"></div>
             </div>
@@ -208,8 +302,66 @@ function AccountPage() {
               <p>{user.email}</p>
               <div className="profile-status">
                 <span className="profile-status-dot"></span>
-                Active {role === 'rider' ? 'Rider' : role === 'restaurant' ? 'Restaurant' : 'Customer'} Account
+                Active Customer Account
               </div>
+            </div>
+
+            {/* Image Upload Buttons */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={{ display: 'none' }}
+                id="customer-profile-upload"
+              />
+              <label
+                htmlFor="customer-profile-upload"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '999px',
+                  background: 'linear-gradient(135deg, #059669, #047857)',
+                  color: '#FFFFFF',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
+                }}
+              >
+                <Camera size={14} />
+                {profileImage ? 'Change Photo' : 'Add Photo'}
+              </label>
+              {profileImage && (
+                <button
+                  onClick={removeImage}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    background: 'rgba(220,38,38,0.12)',
+                    border: '1px solid rgba(220,38,38,0.3)',
+                    color: '#dc2626',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  title="Remove Photo"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -259,18 +411,31 @@ function AccountPage() {
 
             <div className="wallet-transaction-list">
               {walletTransactions.length === 0 ? (
-                <p className="no-transactions">No wallet transactions yet. Add money to your wallet!</p>
+                <p className="no-transactions">
+                  No wallet transactions yet.
+                </p>
               ) : (
                 walletTransactions.slice(0, 5).map((transaction) => (
-                  <div className="wallet-transaction-card" key={transaction.id}>
+                  <div
+                    className="wallet-transaction-card"
+                    key={transaction.id}
+                  >
                     <div className="transaction-icon">
                       {transaction.type === 'credit' ? '⬇️' : '⬆️'}
                     </div>
                     <div className="transaction-info">
-                      <strong>{transaction.type === 'credit' ? 'Money Added' : 'Payment Made'}</strong>
+                      <strong>
+                        {transaction.type === 'credit'
+                          ? 'Money Added'
+                          : 'Payment Made'}
+                      </strong>
                       <small>{transaction.date}</small>
                     </div>
-                    <div className={`transaction-amount ${transaction.type === 'credit' ? 'credit' : 'debit'}`}>
+                    <div
+                      className={`transaction-amount ${
+                        transaction.type === 'credit' ? 'credit' : 'debit'
+                      }`}
+                    >
                       <strong>৳{transaction.amount.toFixed(2)}</strong>
                     </div>
                   </div>
@@ -291,7 +456,9 @@ function AccountPage() {
 
             <div className="points-history-list">
               {pointsHistory.length === 0 ? (
-                <p className="no-transactions">No points history yet. Order food to earn points!</p>
+                <p className="no-transactions">
+                  No points history yet. Order food to earn points!
+                </p>
               ) : (
                 pointsHistory.slice(0, 5).map((point) => (
                   <div className="points-history-card" key={point.id}>
@@ -328,7 +495,10 @@ function AccountPage() {
                 type="text"
                 placeholder="Enter your full name"
                 value={fullName}
-                onChange={(e) => { setFullName(e.target.value); setMessage('') }}
+                onChange={(e) => {
+                  setFullName(e.target.value)
+                  setMessage('')
+                }}
               />
             </div>
           </div>
@@ -341,7 +511,10 @@ function AccountPage() {
                 type="tel"
                 placeholder="01XXXXXXXXX"
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); setMessage('') }}
+                onChange={(e) => {
+                  setPhone(e.target.value)
+                  setMessage('')
+                }}
               />
             </div>
           </div>
@@ -354,13 +527,20 @@ function AccountPage() {
                 placeholder="House / Road / Area / Union / Upazila..."
                 rows="4"
                 value={address}
-                onChange={(e) => { setAddress(e.target.value); setMessage('') }}
+                onChange={(e) => {
+                  setAddress(e.target.value)
+                  setMessage('')
+                }}
               ></textarea>
             </div>
           </div>
 
           <div className="save-profile-section">
-            <button className="account-save-button" onClick={saveProfile} disabled={saving}>
+            <button
+              className="account-save-button"
+              onClick={saveProfile}
+              disabled={saving}
+            >
               {saving ? (
                 <>
                   <span className="save-spinner">⏳</span>
@@ -375,8 +555,14 @@ function AccountPage() {
             </button>
 
             {message && (
-              <div className={`account-message ${message.includes('successfully') ? 'success' : 'error'}`}>
-                <span className="message-icon">{message.includes('successfully') ? '✓' : '⚠️'}</span>
+              <div
+                className={`account-message ${
+                  message.includes('successfully') ? 'success' : 'error'
+                }`}
+              >
+                <span className="message-icon">
+                  {message.includes('successfully') ? '✓' : '⚠️'}
+                </span>
                 <span>{message}</span>
               </div>
             )}
@@ -404,10 +590,10 @@ function AccountPage() {
               </div>
 
               <div className="account-info-item">
-                <div className="account-info-icon">🛵</div>
+                <div className="account-info-icon">👤</div>
                 <div className="account-info-content">
                   <span>Account Type</span>
-                  <strong>{role === 'rider' ? 'Delivery Rider' : role === 'restaurant' ? 'Restaurant' : 'Customer'}</strong>
+                  <strong>Customer</strong>
                 </div>
               </div>
 
@@ -435,22 +621,16 @@ function AccountPage() {
 
           {/* Actions */}
           <div className="account-actions">
-            <button
-              className="account-logout-button"
-              onClick={async () => {
-                try {
-                  await signOut(auth)
-                  window.location.href = '/login'
-                } catch (error) { console.error(error) }
-              }}
-            >
+            <button className="account-logout-button" onClick={handleLogout}>
               <span className="account-action-icon">🚪</span>
               <span>Logout</span>
             </button>
 
             <button
               className="account-home-button-large"
-              onClick={() => { window.location.href = '/' }}
+              onClick={() => {
+                window.location.href = '/'
+              }}
             >
               <span className="account-action-icon">🏠</span>
               <span>Back to Home</span>

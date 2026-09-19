@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '../firebase'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import PageBackButton from '../components/PageBackButton'
 
 function OrderHistoryPage() {
   const [user, setUser] = useState(null)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Auth State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
@@ -18,7 +18,6 @@ function OrderHistoryPage() {
     return () => unsubscribe()
   }, [])
 
-  // Live Orders from Firebase (only current user)
   useEffect(() => {
     if (!user) return
 
@@ -30,10 +29,9 @@ function OrderHistoryPage() {
     const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
       const list = snapshot.docs.map((d) => ({
         firebaseId: d.id,
-        ...d.data()
+        ...d.data(),
       }))
 
-      // Sort: Latest First
       list.sort((a, b) => {
         const aTime = a.createdAt?.toDate?.()?.getTime() || 0
         const bTime = b.createdAt?.toDate?.()?.getTime() || 0
@@ -50,17 +48,27 @@ function OrderHistoryPage() {
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Just now'
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-    return date.toLocaleDateString() + ' • ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return (
+      date.toLocaleDateString() +
+      ' • ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    )
   }
 
   const getStatusInfo = (status) => {
     switch (status) {
-      case 'pending': return { label: 'Pending', color: '#f59e0b', icon: '⏳' }
-      case 'preparing': return { label: 'Preparing', color: '#3b82f6', icon: '👨‍🍳' }
-      case 'delivering': return { label: 'On the Way', color: '#13a89e', icon: '🛵' }
-      case 'delivered': return { label: 'Delivered', color: '#16a34a', icon: '✅' }
-      case 'cancelled': return { label: 'Cancelled', color: '#dc2626', icon: '❌' }
-      default: return { label: status || 'Pending', color: '#6b7280', icon: '📦' }
+      case 'pending':
+        return { label: 'Pending', color: '#f59e0b', icon: '⏳' }
+      case 'preparing':
+        return { label: 'Preparing', color: '#3b82f6', icon: '👨‍🍳' }
+      case 'delivering':
+        return { label: 'On the Way', color: '#13a89e', icon: '🛵' }
+      case 'delivered':
+        return { label: 'Delivered', color: '#16a34a', icon: '✅' }
+      case 'cancelled':
+        return { label: 'Cancelled', color: '#dc2626', icon: '❌' }
+      default:
+        return { label: status || 'Pending', color: '#6b7280', icon: '📦' }
     }
   }
 
@@ -78,8 +86,10 @@ function OrderHistoryPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
+        <PageBackButton label="Back" fallback="/" />
+
         <div className="restaurants-page-header">
-          <span className="section-label">YOUR ORDERS</span>
+          <span className="glass-section-label">YOUR ORDERS</span>
           <h1>Order History</h1>
           <p>Review your past orders and track them live.</p>
         </div>
@@ -89,7 +99,11 @@ function OrderHistoryPage() {
             <div className="empty-icon">🔒</div>
             <h2>Please Login</h2>
             <p>You need to login to see your order history.</p>
-            <Link to="/login" className="checkout-button" style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}>
+            <Link
+              to="/login"
+              className="checkout-button"
+              style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}
+            >
               Login →
             </Link>
           </div>
@@ -98,7 +112,11 @@ function OrderHistoryPage() {
             <div className="empty-icon">📦</div>
             <h2>No orders yet!</h2>
             <p>Place your first order to see it here.</p>
-            <Link to="/restaurants" className="checkout-button" style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}>
+            <Link
+              to="/restaurants"
+              className="checkout-button"
+              style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}
+            >
               Browse Restaurants
             </Link>
           </div>
@@ -115,13 +133,15 @@ function OrderHistoryPage() {
                     </div>
                     <span
                       className="order-status-badge"
-                      style={{ background: statusInfo.color + '20', color: statusInfo.color }}
+                      style={{
+                        background: statusInfo.color + '20',
+                        color: statusInfo.color,
+                      }}
                     >
                       {statusInfo.icon} {statusInfo.label}
                     </span>
                   </div>
 
-                  {/* Restaurant Info */}
                   <div className="order-history-restaurant">
                     <div className="order-history-logo">
                       {order.restaurantLogo ? (
@@ -136,25 +156,27 @@ function OrderHistoryPage() {
                     </div>
                   </div>
 
-                  {/* Items */}
                   <div className="order-history-items">
                     {order.items?.map((item, idx) => (
                       <div className="history-item" key={idx}>
-                        <span>{item.emoji} {item.name}</span>
+                        <span>
+                          {item.emoji} {item.name}
+                        </span>
                         <span className="history-quantity">× {item.quantity}</span>
                       </div>
                     ))}
                   </div>
 
-                  {/* Total */}
                   <div className="order-history-total">
                     <span>Total:</span>
                     <strong>৳{order.total}</strong>
                   </div>
 
-                  {/* Actions */}
                   <div className="order-history-actions">
-                    <Link to={`/track-order?id=${order.orderId}`} className="track-order-button">
+                    <Link
+                      to={`/track-order?id=${order.orderId}`}
+                      className="track-order-button"
+                    >
                       🛵 Track Order
                     </Link>
                   </div>

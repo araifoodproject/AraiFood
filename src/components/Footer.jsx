@@ -1,43 +1,63 @@
 import { Link } from 'react-router-dom'
-import {
-  Mail,
-  Phone,
-  MapPin,
-  Heart,
-} from 'lucide-react'
-import {
-  FaFacebookF,
-  FaInstagram,
-  FaWhatsapp,
-} from 'react-icons/fa'
+import { Mail, Phone, MapPin, Heart } from 'lucide-react'
+import { FaFacebookF, FaInstagram, FaWhatsapp } from 'react-icons/fa'
+import useSettings from '../hooks/useSettings'
 
 function Footer() {
+  const { settings } = useSettings()
+
   return (
     <footer className="glass-footer">
       <div className="glass-footer-content">
-
         {/* Brand */}
         <div className="glass-footer-brand">
           <Link to="/" className="glass-footer-logo">
             <img src="/araifood-logo.png" alt="AraiFood" />
             <div>
-              <span className="glass-footer-title">ARAIFOOD</span>
-              <small className="glass-footer-sub">Good Food, Good Mood</small>
+              <span className="glass-footer-title">
+                {(settings.siteName || 'ARAIFOOD').toUpperCase()}
+              </span>
+              <small className="glass-footer-sub">
+                {settings.tagline || 'Good Food, Good Mood'}
+              </small>
             </div>
           </Link>
 
           <p className="glass-footer-desc">
-            Your local food delivery platform for Araihazar. Discover great food from your favourite local restaurants.
+            Your local food delivery platform for Araihazar. Discover great
+            food from your favourite local restaurants.
           </p>
 
           <div className="glass-footer-social">
-            <a href="#" className="glass-footer-social-btn" title="Facebook">
+            <a
+              href={settings.facebookUrl || '#'}
+              target={settings.facebookUrl ? '_blank' : undefined}
+              rel="noreferrer"
+              className="glass-footer-social-btn"
+              title="Facebook"
+            >
               <FaFacebookF size={16} />
             </a>
-            <a href="#" className="glass-footer-social-btn" title="Instagram">
+            <a
+              href={settings.instagramUrl || '#'}
+              target={settings.instagramUrl ? '_blank' : undefined}
+              rel="noreferrer"
+              className="glass-footer-social-btn"
+              title="Instagram"
+            >
               <FaInstagram size={18} />
             </a>
-            <a href="#" className="glass-footer-social-btn" title="WhatsApp">
+            <a
+              href={
+                settings.whatsappNumber
+                  ? `https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`
+                  : '#'
+              }
+              target={settings.whatsappNumber ? '_blank' : undefined}
+              rel="noreferrer"
+              className="glass-footer-social-btn"
+              title="WhatsApp"
+            >
               <FaWhatsapp size={18} />
             </a>
           </div>
@@ -64,25 +84,38 @@ function Footer() {
         {/* Contact */}
         <div className="glass-footer-column">
           <h3>Contact</h3>
-          <a href="#" className="glass-footer-contact">
+          <a
+            href={`mailto:${settings.contactEmail}`}
+            className="glass-footer-contact"
+          >
             <Mail size={14} strokeWidth={2} />
-            hello@araifood.com
+            {settings.contactEmail}
           </a>
-          <a href="#" className="glass-footer-contact">
+          <a
+            href={`tel:${settings.contactPhone?.replace(/\s/g, '')}`}
+            className="glass-footer-contact"
+          >
             <Phone size={14} strokeWidth={2} />
-            +880 1700-000000
+            {settings.contactPhone}
           </a>
           <a href="#" className="glass-footer-contact">
             <MapPin size={14} strokeWidth={2} />
-            Araihazar, Narayanganj
+            {settings.address}
           </a>
         </div>
-
       </div>
 
       <div className="glass-footer-bottom">
         <p>
-          © 2026 AraiFood. Made with <Heart size={12} strokeWidth={0} fill="#EF4444" style={{ display: 'inline', verticalAlign: 'middle' }} /> for Araihazar.
+          © {new Date().getFullYear()}{' '}
+          {settings.siteName || 'AraiFood'}. Made with{' '}
+          <Heart
+            size={12}
+            strokeWidth={0}
+            fill="#EF4444"
+            style={{ display: 'inline', verticalAlign: 'middle' }}
+          />{' '}
+          for Araihazar.
         </p>
       </div>
     </footer>

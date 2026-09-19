@@ -4,12 +4,13 @@ import { db } from '../firebase'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
 import { restaurantLocations } from '../utils/locationTracker'
+import PageBackButton from '../components/PageBackButton'
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
 const containerStyle = {
   width: '100%',
-  height: '400px',
+  height: '420px',
   borderRadius: '16px',
   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
 }
@@ -34,7 +35,6 @@ function TrackOrderPage() {
     libraries: ['places'],
   })
 
-  // ============ LOAD ORDER FROM FIREBASE ============
   useEffect(() => {
     if (!orderIdParam) {
       setNotFound(true)
@@ -58,13 +58,13 @@ function TrackOrderPage() {
       const orderData = { firebaseId: orderDoc.id, ...orderDoc.data() }
       setOrder(orderData)
 
-      // Restaurant Location
       if (orderData.restaurantName) {
-        const restLoc = restaurantLocations[orderData.restaurantName] || restaurantLocations.default
+        const restLoc =
+          restaurantLocations[orderData.restaurantName] ||
+          restaurantLocations.default
         setRestaurantLocation(restLoc)
       }
 
-      // Rider Location
       if (orderData.riderLocation) {
         setRiderLocation(orderData.riderLocation)
       } else {
@@ -78,47 +78,49 @@ function TrackOrderPage() {
     return () => unsubscribe()
   }, [orderIdParam])
 
-  // ============ TRACKING STAGE ============
   const getTrackingStage = (order) => {
     if (!order) return 0
-
-    // Stage 2: Delivered
     if (order.status === 'delivered' || order.riderStatus === 'delivered') {
       return 2
     }
-
-    // Stage 1: On the Way (Rider Order Accept করলে)
-    if ([
-      'accepted',
-      'going_to_restaurant',
-      'arrived_at_restaurant',
-      'picked_up',
-      'going_to_customer'
-    ].includes(order.riderStatus)) {
+    if (
+      [
+        'accepted',
+        'going_to_restaurant',
+        'arrived_at_restaurant',
+        'picked_up',
+        'going_to_customer',
+      ].includes(order.riderStatus)
+    ) {
       return 1
     }
-
-    // Stage 0: Preparing
     return 0
   }
 
-  // ============ STATUS LABEL ============
   const getStatusLabel = (order) => {
     if (!order) return '⏳ Waiting for order...'
 
-    // Rider Stage Priority
-    if (order.riderStatus === 'delivered') return '✅ Your food has been delivered. Enjoy!'
-    if (order.riderStatus === 'going_to_customer') return '🛵 Rider is on the way to you!'
-    if (order.riderStatus === 'picked_up') return '📦 Food picked up. Heading to you!'
-    if (order.riderStatus === 'arrived_at_restaurant') return '📍 Rider arrived at restaurant.'
-    if (order.riderStatus === 'going_to_restaurant') return '🛵 Rider is going to the restaurant.'
-    if (order.riderStatus === 'accepted') return '👤 Rider assigned. Waiting for food pickup.'
+    if (order.riderStatus === 'delivered')
+      return '✅ Your food has been delivered. Enjoy!'
+    if (order.riderStatus === 'going_to_customer')
+      return '🛵 Rider is on the way to you!'
+    if (order.riderStatus === 'picked_up')
+      return '📦 Food picked up. Heading to you!'
+    if (order.riderStatus === 'arrived_at_restaurant')
+      return '📍 Rider arrived at restaurant.'
+    if (order.riderStatus === 'going_to_restaurant')
+      return '🛵 Rider is going to the restaurant.'
+    if (order.riderStatus === 'accepted')
+      return '👤 Rider assigned. Waiting for food pickup.'
 
-    // Restaurant Stage
-    if (order.status === 'delivered') return '✅ Your food has been delivered. Enjoy!'
-    if (order.status === 'delivering') return '🛵 Food is ready! Waiting for rider.'
-    if (order.status === 'preparing') return '👨‍🍳 Restaurant is preparing your order...'
-    if (order.status === 'pending') return '⏳ Waiting for restaurant confirmation...'
+    if (order.status === 'delivered')
+      return '✅ Your food has been delivered. Enjoy!'
+    if (order.status === 'delivering')
+      return '🛵 Food is ready! Waiting for rider.'
+    if (order.status === 'preparing')
+      return '👨‍🍳 Restaurant is preparing your order...'
+    if (order.status === 'pending')
+      return '⏳ Waiting for restaurant confirmation...'
     if (order.status === 'cancelled') return '❌ This order was cancelled.'
 
     return '⏳ Processing your order...'
@@ -127,7 +129,6 @@ function TrackOrderPage() {
   const trackingStage = getTrackingStage(order)
   const customerLoc = order?.location
 
-  // ============ LOADING ============
   if (loading) {
     return (
       <div className="restaurants-page">
@@ -139,16 +140,23 @@ function TrackOrderPage() {
     )
   }
 
-  // ============ NOT FOUND ============
   if (notFound || !order) {
     return (
       <div className="restaurants-page">
         <div className="restaurants-page-container">
+          <PageBackButton label="Back" fallback="/order-history" />
+
           <div className="restaurant-empty-state">
             <div className="empty-icon">📦</div>
             <h2>Order not found!</h2>
-            <p>The order you're looking for doesn't exist or has been removed.</p>
-            <Link to="/order-history" className="checkout-button" style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}>
+            <p>
+              The order you're looking for doesn't exist or has been removed.
+            </p>
+            <Link
+              to="/order-history"
+              className="checkout-button"
+              style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}
+            >
               Back to Orders
             </Link>
           </div>
@@ -160,10 +168,14 @@ function TrackOrderPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
+        <PageBackButton label="Back" fallback="/order-history" />
+
         <div className="restaurants-page-header">
-          <span className="section-label">ORDER TRACKING</span>
+          <span className="glass-section-label">ORDER TRACKING</span>
           <h1>Track Your Order</h1>
-          <p>Order ID: <strong>{order.orderId}</strong></p>
+          <p>
+            Order ID: <strong>{order.orderId}</strong>
+          </p>
         </div>
 
         <div className="order-success-container">
@@ -171,15 +183,19 @@ function TrackOrderPage() {
             {trackingStage === 2 ? '✅' : trackingStage === 1 ? '🛵' : '👨‍🍳'}
           </div>
           <h1>
-            {trackingStage === 2 ? 'Delivered!' :
-             trackingStage === 1 ? 'On The Way!' :
-             'Preparing Your Food!'}
+            {trackingStage === 2
+              ? 'Delivered!'
+              : trackingStage === 1
+              ? 'On The Way!'
+              : 'Preparing Your Food!'}
           </h1>
-          <p>From <strong>{order.restaurantName}</strong></p>
+          <p>
+            From <strong>{order.restaurantName}</strong>
+          </p>
 
-          {/* LIVE MAP */}
+          {/* MAP */}
           <div className="track-map-section">
-            <h2 style={{ marginBottom: '15px', marginTop: '25px', textAlign: 'center' }}>📍 Live Map</h2>
+            <h2>📍 Live Map</h2>
 
             {!isLoaded && !loadError && (
               <div className="map-loading-skeleton">
@@ -198,21 +214,27 @@ function TrackOrderPage() {
               <>
                 <GoogleMap
                   mapContainerStyle={containerStyle}
-                  center={riderLocation || customerLoc || { lat: 23.78, lng: 90.64 }}
-                  zoom={13}
+                  center={
+                    riderLocation || customerLoc || { lat: 23.78, lng: 90.64 }
+                  }
+                  zoom={14}
                   options={{
                     mapTypeControl: true,
-                    mapTypeControlOptions: { style: 2 },
+                    mapTypeControlOptions: { style: 2, position: 3 },
                     streetViewControl: false,
-                    fullscreenControl: false,
+                    fullscreenControl: true,
                     zoomControl: true,
+                    gestureHandling: 'greedy',
+                    clickableIcons: false,
                   }}
                 >
                   {customerLoc && (
                     <Marker
                       position={customerLoc}
                       icon={{
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(customerIconSvg),
+                        url:
+                          'data:image/svg+xml;charset=UTF-8,' +
+                          encodeURIComponent(customerIconSvg),
                         scaledSize: { width: 55, height: 55 },
                       }}
                     />
@@ -222,7 +244,9 @@ function TrackOrderPage() {
                     <Marker
                       position={restaurantLocation}
                       icon={{
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(restaurantIconSvg),
+                        url:
+                          'data:image/svg+xml;charset=UTF-8,' +
+                          encodeURIComponent(restaurantIconSvg),
                         scaledSize: { width: 55, height: 55 },
                       }}
                     />
@@ -232,7 +256,9 @@ function TrackOrderPage() {
                     <Marker
                       position={riderLocation}
                       icon={{
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(riderIconSvg),
+                        url:
+                          'data:image/svg+xml;charset=UTF-8,' +
+                          encodeURIComponent(riderIconSvg),
                         scaledSize: { width: 60, height: 60 },
                       }}
                     />
@@ -246,7 +272,9 @@ function TrackOrderPage() {
                   </div>
                   <div className="map-legend-item">
                     <span className="map-legend-icon">🛵</span>
-                    <span>Rider {riderLocation ? '(Live)' : '(Waiting...)'}</span>
+                    <span>
+                      Rider {riderLocation ? '(Live)' : '(Waiting...)'}
+                    </span>
                   </div>
                   <div className="map-legend-item">
                     <span className="map-legend-icon">🏠</span>
@@ -263,26 +291,46 @@ function TrackOrderPage() {
 
           {/* TRACKING PROGRESS */}
           <div className="order-tracking-section">
-            <h2 style={{ marginBottom: '20px', marginTop: '25px' }}>Live Status</h2>
+            <h2>Live Status</h2>
 
             <div className="tracking-progress">
-              <div className={`tracking-step ${trackingStage >= 0 ? 'active' : ''}`}>
+              <div
+                className={`tracking-step ${
+                  trackingStage >= 0 ? 'active' : ''
+                }`}
+              >
                 <div className="tracking-icon">👨‍🍳</div>
                 <div className="tracking-text">
                   <strong>Preparing</strong>
                   <small>Restaurant</small>
                 </div>
               </div>
-              <div className={`tracking-line ${trackingStage >= 1 ? 'active' : ''}`}></div>
-              <div className={`tracking-step ${trackingStage >= 1 ? 'active' : ''}`}>
+              <div
+                className={`tracking-line ${
+                  trackingStage >= 1 ? 'active' : ''
+                }`}
+              ></div>
+              <div
+                className={`tracking-step ${
+                  trackingStage >= 1 ? 'active' : ''
+                }`}
+              >
                 <div className="tracking-icon">🛵</div>
                 <div className="tracking-text">
                   <strong>On the Way</strong>
                   <small>Rider</small>
                 </div>
               </div>
-              <div className={`tracking-line ${trackingStage >= 2 ? 'active' : ''}`}></div>
-              <div className={`tracking-step ${trackingStage >= 2 ? 'active' : ''}`}>
+              <div
+                className={`tracking-line ${
+                  trackingStage >= 2 ? 'active' : ''
+                }`}
+              ></div>
+              <div
+                className={`tracking-step ${
+                  trackingStage >= 2 ? 'active' : ''
+                }`}
+              >
                 <div className="tracking-icon">🏠</div>
                 <div className="tracking-text">
                   <strong>Delivered</strong>
@@ -300,10 +348,17 @@ function TrackOrderPage() {
               <div className="rider-avatar">🛵</div>
               <div className="rider-info">
                 <strong>Rider: {order.riderName || 'Assigning...'}</strong>
-                <small>{order.riderPhone ? `📞 ${order.riderPhone}` : '⏳ Waiting for rider'}</small>
+                <small>
+                  {order.riderPhone
+                    ? `📞 ${order.riderPhone}`
+                    : '⏳ Waiting for rider'}
+                </small>
               </div>
               {order.riderPhone && (
-                <button className="call-rider-button" onClick={() => window.location.href = `tel:${order.riderPhone}`}>
+                <button
+                  className="call-rider-button"
+                  onClick={() => (window.location.href = `tel:${order.riderPhone}`)}
+                >
                   📞 Call
                 </button>
               )}
@@ -323,7 +378,9 @@ function TrackOrderPage() {
               <h3>📦 Items</h3>
               {order.items?.map((item, idx) => (
                 <div className="track-detail-row" key={idx}>
-                  <span>{item.emoji} {item.name}</span>
+                  <span>
+                    {item.emoji} {item.name}
+                  </span>
                   <span>× {item.quantity}</span>
                 </div>
               ))}
@@ -357,7 +414,11 @@ function TrackOrderPage() {
           </div>
 
           <div className="order-success-buttons">
-            <Link to="/order-history" className="checkout-button" style={{ textDecoration: 'none' }}>
+            <Link
+              to="/order-history"
+              className="checkout-button"
+              style={{ textDecoration: 'none' }}
+            >
               ← Back to Orders
             </Link>
           </div>

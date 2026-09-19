@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import NotificationPanel from './NotificationPanel'
+import useSettings from '../hooks/useSettings'
 import {
   Search,
   Heart,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react'
 
 function Navbar() {
+  const { settings } = useSettings()
   const [menuOpen, setMenuOpen] = useState(false)
   const [cartCount, setCartCount] = useState(0)
   const [scrolled, setScrolled] = useState(false)
@@ -67,6 +69,7 @@ function Navbar() {
     { path: '/', label: 'Home' },
     { path: '/restaurants', label: 'Restaurants' },
     { path: '/pharmacy', label: 'Pharmacy' },
+    { path: '/gaming', label: 'Gaming' },
     { path: '/offers', label: 'Offers' },
     { path: '/about', label: 'About' },
   ]
@@ -75,15 +78,21 @@ function Navbar() {
     <>
       <header className={`glass-navbar ${scrolled ? 'scrolled' : ''}`}>
         <div className="glass-navbar-inner">
-          
           {/* Logo */}
           <Link to="/" className="glass-logo">
             <div className="glass-logo-icon">
-              <img src="/araifood-logo.png" alt="AraiFood" />
+              <img
+                src="/araifood-logo.png"
+                alt={settings.siteName || 'AraiFood'}
+              />
             </div>
             <div className="glass-logo-text">
-              <span className="glass-logo-title">ARAIFOOD</span>
-              <small className="glass-logo-sub">Good Food, Good Mood</small>
+              <span className="glass-logo-title">
+                {(settings.siteName || 'AraiFood').toUpperCase()}
+              </span>
+              <small className="glass-logo-sub">
+                {settings.tagline || 'Good Food, Good Mood'}
+              </small>
             </div>
           </Link>
 
@@ -93,7 +102,9 @@ function Navbar() {
               <Link
                 key={link.path}
                 to={link.path}
-                className={`glass-nav-link ${currentPath === link.path ? 'active' : ''}`}
+                className={`glass-nav-link ${
+                  currentPath === link.path ? 'active' : ''
+                }`}
               >
                 {link.label}
               </Link>
@@ -102,7 +113,6 @@ function Navbar() {
 
           {/* Right Actions */}
           <div className="glass-nav-actions">
-            
             {/* Search */}
             <Link to="/restaurants" className="glass-icon-btn" title="Search">
               <Search size={20} strokeWidth={1.8} />
@@ -114,7 +124,11 @@ function Navbar() {
               onClick={() => setDarkMode(!darkMode)}
               title="Toggle Theme"
             >
-              {darkMode ? <Sun size={20} strokeWidth={1.8} /> : <Moon size={20} strokeWidth={1.8} />}
+              {darkMode ? (
+                <Sun size={20} strokeWidth={1.8} />
+              ) : (
+                <Moon size={20} strokeWidth={1.8} />
+              )}
             </button>
 
             {/* Favorites */}
@@ -123,7 +137,11 @@ function Navbar() {
             </Link>
 
             {/* Order History */}
-            <Link to="/order-history" className="glass-icon-btn" title="Orders">
+            <Link
+              to="/order-history"
+              className="glass-icon-btn"
+              title="Orders"
+            >
               <Package size={20} strokeWidth={1.8} />
             </Link>
 
@@ -134,7 +152,9 @@ function Navbar() {
             <Link to="/cart" className="glass-cart-btn" title="Cart">
               <ShoppingBag size={20} strokeWidth={1.8} />
               {cartCount > 0 && (
-                <span className="glass-cart-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+                <span className="glass-cart-badge">
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
               )}
             </Link>
 
@@ -150,7 +170,11 @@ function Navbar() {
               onClick={() => setMenuOpen(!menuOpen)}
               title="Menu"
             >
-              {menuOpen ? <X size={22} strokeWidth={2} /> : <Menu size={22} strokeWidth={2} />}
+              {menuOpen ? (
+                <X size={22} strokeWidth={2} />
+              ) : (
+                <Menu size={22} strokeWidth={2} />
+              )}
             </button>
           </div>
         </div>
@@ -158,12 +182,20 @@ function Navbar() {
 
       {/* Mobile Menu Overlay */}
       {menuOpen && (
-        <div className="glass-mobile-overlay" onClick={() => setMenuOpen(false)}>
-          <div className="glass-mobile-menu" onClick={(e) => e.stopPropagation()}>
-            
+        <div
+          className="glass-mobile-overlay"
+          onClick={() => setMenuOpen(false)}
+        >
+          <div
+            className="glass-mobile-menu"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="glass-mobile-header">
               <span className="glass-mobile-title">Menu</span>
-              <button className="glass-icon-btn" onClick={() => setMenuOpen(false)}>
+              <button
+                className="glass-icon-btn"
+                onClick={() => setMenuOpen(false)}
+              >
                 <X size={20} strokeWidth={2} />
               </button>
             </div>
@@ -173,25 +205,50 @@ function Navbar() {
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`glass-mobile-link ${currentPath === link.path ? 'active' : ''}`}
+                  className={`glass-mobile-link ${
+                    currentPath === link.path ? 'active' : ''
+                  }`}
                   onClick={() => setMenuOpen(false)}
                 >
                   {link.label}
                 </Link>
               ))}
-              
+
               <div className="glass-mobile-divider"></div>
 
-              <Link to="/favorites" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+              <Link
+                to="/favorites"
+                className="glass-mobile-link"
+                onClick={() => setMenuOpen(false)}
+              >
                 My Favorites
               </Link>
-              <Link to="/order-history" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+              <Link
+                to="/order-history"
+                className="glass-mobile-link"
+                onClick={() => setMenuOpen(false)}
+              >
                 My Orders
               </Link>
-              <Link to="/account" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+              <Link
+                to="/gaming-orders"
+                className="glass-mobile-link"
+                onClick={() => setMenuOpen(false)}
+              >
+                Gaming Orders
+              </Link>
+              <Link
+                to="/account"
+                className="glass-mobile-link"
+                onClick={() => setMenuOpen(false)}
+              >
                 My Account
               </Link>
-              <Link to="/cart" className="glass-mobile-link" onClick={() => setMenuOpen(false)}>
+              <Link
+                to="/cart"
+                className="glass-mobile-link"
+                onClick={() => setMenuOpen(false)}
+              >
                 My Cart {cartCount > 0 && `(${cartCount})`}
               </Link>
             </div>
