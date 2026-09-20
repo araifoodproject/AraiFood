@@ -14,6 +14,7 @@ import {
   Clock,
   Percent,
   Truck,
+  Wallet,
   Settings as SettingsIcon,
 } from 'lucide-react'
 import { FaFacebookF, FaInstagram } from 'react-icons/fa'
@@ -25,23 +26,39 @@ function AdminSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Brand
   const [siteName, setSiteName] = useState('AraiFood')
   const [tagline, setTagline] = useState('Good Food, Good Mood')
+
+  // Contact
   const [contactEmail, setContactEmail] = useState('hello@araifood.com')
   const [contactPhone, setContactPhone] = useState('+880 1700-000000')
   const [address, setAddress] = useState('Araihazar, Narayanganj')
 
+  // Fees
   const [defaultDeliveryFee, setDefaultDeliveryFee] = useState('30')
   const [minOrderAmount, setMinOrderAmount] = useState('100')
   const [commissionPercent, setCommissionPercent] = useState('10')
   const [riderEarningPerDelivery, setRiderEarningPerDelivery] = useState('30')
 
+  // Hours
   const [openingTime, setOpeningTime] = useState('10:00')
   const [closingTime, setClosingTime] = useState('22:00')
 
+  // Social
   const [facebookUrl, setFacebookUrl] = useState('')
   const [instagramUrl, setInstagramUrl] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
+
+  // Gaming
+  const [gamingBkashNumber, setGamingBkashNumber] = useState('01700000000')
+  const [gamingNagadNumber, setGamingNagadNumber] = useState('01700000000')
+
+  // Wallet Top-up
+  const [walletBkashNumber, setWalletBkashNumber] = useState('01700000000')
+  const [walletNagadNumber, setWalletNagadNumber] = useState('01700000000')
+  const [walletMinAmount, setWalletMinAmount] = useState('50')
+  const [walletMaxAmount, setWalletMaxAmount] = useState('10000')
 
   useEffect(() => {
     const load = async () => {
@@ -63,6 +80,12 @@ function AdminSettingsPage() {
           setFacebookUrl(d.facebookUrl || '')
           setInstagramUrl(d.instagramUrl || '')
           setWhatsappNumber(d.whatsappNumber || '')
+          setGamingBkashNumber(d.gamingBkashNumber || '01700000000')
+          setGamingNagadNumber(d.gamingNagadNumber || '01700000000')
+          setWalletBkashNumber(d.walletBkashNumber || '01700000000')
+          setWalletNagadNumber(d.walletNagadNumber || '01700000000')
+          setWalletMinAmount(String(d.walletMinAmount ?? 50))
+          setWalletMaxAmount(String(d.walletMaxAmount ?? 10000))
         }
       } catch (err) {
         console.error('Failed to load settings:', err)
@@ -92,6 +115,12 @@ function AdminSettingsPage() {
           facebookUrl: facebookUrl.trim(),
           instagramUrl: instagramUrl.trim(),
           whatsappNumber: whatsappNumber.trim(),
+          gamingBkashNumber: gamingBkashNumber.trim(),
+          gamingNagadNumber: gamingNagadNumber.trim(),
+          walletBkashNumber: walletBkashNumber.trim(),
+          walletNagadNumber: walletNagadNumber.trim(),
+          walletMinAmount: parseFloat(walletMinAmount) || 50,
+          walletMaxAmount: parseFloat(walletMaxAmount) || 10000,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -236,7 +265,10 @@ function AdminSettingsPage() {
               subtitle="Default charges and platform economics"
             >
               <div style={gridTwo}>
-                <Field label="Default Delivery Fee (৳)" icon={<Truck size={14} />}>
+                <Field
+                  label="Default Delivery Fee (৳)"
+                  icon={<Truck size={14} />}
+                >
                   <input
                     type="number"
                     value={defaultDeliveryFee}
@@ -294,6 +326,80 @@ function AdminSettingsPage() {
                     type="time"
                     value={closingTime}
                     onChange={(e) => setClosingTime(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+            </Section>
+
+            {/* Wallet Top-Up */}
+            <Section
+              icon={<Wallet size={20} />}
+              title="Wallet Top-Up Numbers"
+              subtitle="Customers send money to these numbers to add wallet balance"
+            >
+              <div style={gridTwo}>
+                <Field label="Wallet bKash Number" icon={<Phone size={14} />}>
+                  <input
+                    type="text"
+                    placeholder="01XXXXXXXXX"
+                    value={walletBkashNumber}
+                    onChange={(e) => setWalletBkashNumber(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Wallet Nagad Number" icon={<Phone size={14} />}>
+                  <input
+                    type="text"
+                    placeholder="01XXXXXXXXX"
+                    value={walletNagadNumber}
+                    onChange={(e) => setWalletNagadNumber(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+              <div style={gridTwo}>
+                <Field label="Minimum Top-Up (৳)">
+                  <input
+                    type="number"
+                    placeholder="50"
+                    value={walletMinAmount}
+                    onChange={(e) => setWalletMinAmount(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Maximum Top-Up (৳)">
+                  <input
+                    type="number"
+                    placeholder="10000"
+                    value={walletMaxAmount}
+                    onChange={(e) => setWalletMaxAmount(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+            </Section>
+
+            {/* Gaming */}
+            <Section
+              icon={<SettingsIcon size={20} />}
+              title="Gaming Payment Numbers (Default)"
+              subtitle="Fallback numbers if per-game settings not set"
+            >
+              <div style={gridTwo}>
+                <Field label="Gaming bKash" icon={<Phone size={14} />}>
+                  <input
+                    type="text"
+                    value={gamingBkashNumber}
+                    onChange={(e) => setGamingBkashNumber(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Gaming Nagad" icon={<Phone size={14} />}>
+                  <input
+                    type="text"
+                    value={gamingNagadNumber}
+                    onChange={(e) => setGamingNagadNumber(e.target.value)}
                     style={inputStyle}
                   />
                 </Field>

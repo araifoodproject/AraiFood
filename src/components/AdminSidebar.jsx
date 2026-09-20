@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { auth } from '../firebase'
+import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
+import { collection, onSnapshot } from 'firebase/firestore'
 import {
   LayoutDashboard,
   Package,
@@ -22,45 +23,247 @@ import {
   LogOut,
   X,
   Gamepad2,
+  UserCog,
 } from 'lucide-react'
 
 function AdminSidebar({ mobileOpen, onMobileClose }) {
   const [collapsed, setCollapsed] = useState(false)
+  const [counts, setCounts] = useState({
+    orders: 0,
+    restaurants: 0,
+    riders: 0,
+    walletRequests: 0,
+    gamingOrders: 0,
+    support: 0,
+    reviews: 0,
+  })
+
   const location = useLocation()
   const navigate = useNavigate()
 
-  const menuItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
-    { label: 'Orders', icon: Package, path: '/admin/orders' },
-    { label: 'Restaurants', icon: Store, path: '/admin/restaurants' },
-    { label: 'Food Menu', icon: UtensilsCrossed, path: '/admin/foods' },
-    { label: 'Riders', icon: Bike, path: '/admin/riders' },
-    { label: 'Customers', icon: Users, path: '/admin/customers' },
-    { label: 'Finance', icon: Wallet, path: '/admin/finance' },
-    { label: 'Coupons', icon: Ticket, path: '/admin/coupons' },
-    { label: 'Marketing', icon: Megaphone, path: '/admin/marketing' },
-    { label: 'Reviews', icon: Star, path: '/admin/reviews' },
-    { label: 'Support', icon: LifeBuoy, path: '/admin/support' },
-    { label: 'Delivery Zones', icon: MapPin, path: '/admin/zones' },
+  // Partner mode check
+  const isPartner = localStorage.getItem('isPartner') === 'true'
+  const managementRole = localStorage.getItem('managementRole') || 'partner'
+  let permissions = {}
+  try {
+    permissions = JSON.parse(
+      localStorage.getItem('managementPermissions') || '{}'
+    )
+  } catch (e) {
+    permissions = {}
+  }
+
+  const isSuperAdmin = !isPartner || managementRole === 'admin'
+
+  const canAccess = (key) => {
+    if (isSuperAdmin) return true
+    return permissions[key] === true
+  }
+
+  // ============ LOAD BADGE COUNTS ============
+  useEffect(() => {
+    const unsub1 = onSnapshot(collection(db, 'orders'), (snap) => {
+      const pending = snap.docs.filter((d) => {
+        const s = d.data().status
+        return !s || s === 'pending'
+      }).length
+      setCounts((c) => ({ ...c, orders: pending }))
+    })
+
+    const unsub2 = onSnapshot(collection(db, 'restaurants'), (snap) => {
+      const pending = snap.docs.filter(
+        (d) => d.data().status === 'pending'
+      ).length
+      setCounts((c) => ({ ...c, restaurants: pending }))
+    })
+
+    const unsub3 = onSnapshot(collection(db, 'riders'), (snap) => {
+      const pending = snap.docs.filter(
+        (d) => d.data().status === 'pending'
+      ).length
+      setCounts((c) => ({ ...c, riders: pending }))
+    })
+
+    const unsub4 = onSnapshot(collection(db, 'walletRequests'), (snap) => {
+      const pending = snap.docs.filter(
+        (d) => d.data().status === 'pending'
+      ).length
+      setCounts((c) => ({ ...c, walletRequests: pending }))
+    })
+
+    const unsub5 = onSnapshot(collection(db, 'gamingOrders'), (snap) => {
+      const pending = snap.docs.filter(
+        (d) => d.data().status === 'pending'
+      ).length
+      setCounts((c) => ({ ...c, gamingOrders: pending }))
+    })
+
+    const unsub6 = onSnapshot(collection(db, 'supportTickets'), (snap) => {
+      const open = snap.docs.filter((d) => d.data().status === 'open').length
+      setCounts((c) => ({ ...c, support: open }))
+    })
+
+    const unsub7 = onSnapshot(collection(db, 'reviews'), (snap) => {
+      const flagged = snap.docs.filter(
+        (d) => d.data().flagged === true
+      ).length
+      setCounts((c) => ({ ...c, reviews: flagged }))
+    })
+
+    return () => {
+      unsub1()
+      unsub2()
+      unsub3()
+      unsub4()
+      unsub5()
+      unsub6()
+      unsub7()
+    }
+  }, [])
+
+  const allMenuItems = [
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/admin', key: null },
+    {
+      label: 'Orders',
+      icon: Package,
+      path: '/admin/orders',
+      badge: counts.orders,
+      badgeClass: 'orange',
+      key: 'orders',
+    },
+    {
+      label: 'Restaurants',
+      icon: Store,
+      path: '/admin/restaurants',
+      badge: counts.restaurants,
+      badgeClass: 'blue',
+      key: 'restaurants',
+    },
+    {
+      label: 'Food Menu',
+      icon: UtensilsCrossed,
+      path: '/admin/foods',
+      key: 'foods',
+    },
+    {
+      label: 'Riders',
+      icon: Bike,
+      path: '/admin/riders',
+      badge: counts.riders,
+      badgeClass: 'blue',
+      key: 'riders',
+    },
+    {
+      label: 'Customers',
+      icon: Users,
+      path: '/admin/customers',
+      key: 'customers',
+    },
+    {
+      label: 'Finance',
+      icon: Wallet,
+      path: '/admin/finance',
+      key: 'finance',
+    },
+    {
+      label: 'Coupons',
+      icon: Ticket,
+      path: '/admin/coupons',
+      key: 'coupons',
+    },
+    {
+      label: 'Marketing',
+      icon: Megaphone,
+      path: '/admin/marketing',
+      key: 'marketing',
+    },
+    {
+      label: 'Reviews',
+      icon: Star,
+      path: '/admin/reviews',
+      badge: counts.reviews,
+      badgeClass: 'yellow',
+      key: 'reviews',
+    },
+    {
+      label: 'Support',
+      icon: LifeBuoy,
+      path: '/admin/support',
+      badge: counts.support,
+      badgeClass: 'red',
+      key: 'support',
+    },
+    {
+      label: 'Delivery Zones',
+      icon: MapPin,
+      path: '/admin/zones',
+      key: 'zones',
+    },
+    {
+      label: 'Wallet Requests',
+      icon: Wallet,
+      path: '/admin/wallet-requests',
+      badge: counts.walletRequests,
+      badgeClass: 'green',
+      key: 'walletRequests',
+    },
     {
       label: 'Gaming Products',
       icon: Gamepad2,
       path: '/admin/gaming-products',
+      key: 'gamingProducts',
     },
-    { label: 'Gaming Orders', icon: Package, path: '/admin/gaming-orders' },
+    {
+      label: 'Gaming Orders',
+      icon: Package,
+      path: '/admin/gaming-orders',
+      badge: counts.gamingOrders,
+      badgeClass: 'purple',
+      key: 'gamingOrders',
+    },
     {
       label: 'Gaming Settings',
       icon: Settings,
       path: '/admin/gaming-settings',
+      key: 'gamingSettings',
     },
-    { label: 'Settings', icon: Settings, path: '/admin/settings' },
-    { label: 'Security', icon: Shield, path: '/admin/security' },
+    {
+      label: 'Management Team',
+      icon: UserCog,
+      path: '/admin/management',
+      key: 'management',
+      superAdminOnly: true,
+    },
+    {
+      label: 'Settings',
+      icon: Settings,
+      path: '/admin/settings',
+      key: 'settings',
+    },
+    {
+      label: 'Security',
+      icon: Shield,
+      path: '/admin/security',
+      key: 'security',
+    },
   ]
+
+  // Filter based on permissions
+  const menuItems = allMenuItems.filter((item) => {
+    if (item.key === null) return true // Dashboard always visible
+    if (item.superAdminOnly && !isSuperAdmin) return false
+    return canAccess(item.key)
+  })
 
   const handleLogout = async () => {
     try {
       await signOut(auth)
       localStorage.removeItem('userRole')
+      localStorage.removeItem('isPartner')
+      localStorage.removeItem('managementRole')
+      localStorage.removeItem('managementPermissions')
+      localStorage.removeItem('managementName')
+      localStorage.removeItem('managementId')
       navigate('/login')
     } catch (error) {
       console.error(error)
@@ -89,7 +292,9 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
             {!collapsed && (
               <div className="admin-sidebar-brand-text">
                 <span className="admin-sidebar-title">ARAIFOOD</span>
-                <small className="admin-sidebar-sub">Admin Panel</small>
+                <small className="admin-sidebar-sub">
+                  {isSuperAdmin ? 'Admin Panel' : 'Partner Panel'}
+                </small>
               </div>
             )}
           </Link>
@@ -119,6 +324,9 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
           {menuItems.map((item) => {
             const IconComponent = item.icon
             const isActive = location.pathname === item.path
+            const showBadge =
+              typeof item.badge === 'number' && item.badge > 0
+
             return (
               <Link
                 key={item.path}
@@ -129,6 +337,16 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
               >
                 <IconComponent size={20} strokeWidth={2} />
                 {!collapsed && <span>{item.label}</span>}
+
+                {showBadge && (
+                  <span
+                    className={`admin-sidebar-badge ${
+                      item.badgeClass || 'red'
+                    }`}
+                  >
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
               </Link>
             )
           })}

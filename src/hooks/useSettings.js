@@ -17,6 +17,15 @@ const DEFAULT_SETTINGS = {
   facebookUrl: '',
   instagramUrl: '',
   whatsappNumber: '',
+  // Gaming
+  gamingBkashNumber: '01700000000',
+  gamingNagadNumber: '01700000000',
+  gamingPopupEnabled: false,
+  // Wallet Top-up
+  walletBkashNumber: '01700000000',
+  walletNagadNumber: '01700000000',
+  walletMinAmount: 50,
+  walletMaxAmount: 10000,
 }
 
 export function useSettings() {

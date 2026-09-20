@@ -39,6 +39,7 @@ import TrackOrderPage from './pages/TrackOrderPage'
 import PharmacyPage from './pages/PharmacyPage'
 import GamingPage from './pages/GamingPage'
 import GamingOrdersPage from './pages/GamingOrdersPage'
+import PartnerLoginPage from './pages/PartnerLoginPage'
 import AdminPanel from './pages/AdminPanel'
 import RestaurantPanel from './pages/RestaurantPanel'
 import RiderPanel from './pages/RiderPanel'
@@ -64,6 +65,8 @@ import AdminSecurityPage from './pages/admin/AdminSecurityPage'
 import AdminGamingProductsPage from './pages/admin/AdminGamingProductsPage'
 import AdminGamingOrdersPage from './pages/admin/AdminGamingOrdersPage'
 import AdminGamingSettingsPage from './pages/admin/AdminGamingSettingsPage'
+import AdminWalletRequestsPage from './pages/admin/AdminWalletRequestsPage'
+import AdminManagementPage from './pages/admin/AdminManagementPage'
 
 // ============================================================
 // HOME PAGE
@@ -226,7 +229,8 @@ function App() {
     path === '/restaurant-login' ||
     path === '/restaurant-signup' ||
     path === '/rider-login' ||
-    path === '/rider-signup'
+    path === '/rider-signup' ||
+    path === '/partner-login'
   const isPanel =
     path.startsWith('/admin') ||
     path.startsWith('/restaurant-panel') ||
@@ -253,6 +257,7 @@ function App() {
         {/* AUTH */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/partner-login" element={<PartnerLoginPage />} />
         <Route path="/restaurant-login" element={<RestaurantLoginPage />} />
         <Route path="/restaurant-signup" element={<RestaurantSignupPage />} />
         <Route path="/rider-login" element={<RiderLoginPage />} />
@@ -339,7 +344,7 @@ function App() {
           }
         />
 
-        {/* ADMIN — Main */}
+        {/* ADMIN */}
         <Route
           path="/admin"
           element={
@@ -351,7 +356,11 @@ function App() {
         <Route
           path="/admin/orders"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="orders"
+              redirectTo="/login"
+            >
               <AdminOrdersPage />
             </ProtectedRoute>
           }
@@ -359,7 +368,11 @@ function App() {
         <Route
           path="/admin/restaurants"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="restaurants"
+              redirectTo="/login"
+            >
               <AdminRestaurantsPage />
             </ProtectedRoute>
           }
@@ -367,7 +380,11 @@ function App() {
         <Route
           path="/admin/foods"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="foods"
+              redirectTo="/login"
+            >
               <AdminFoodsPage />
             </ProtectedRoute>
           }
@@ -375,7 +392,11 @@ function App() {
         <Route
           path="/admin/riders"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="riders"
+              redirectTo="/login"
+            >
               <AdminRidersPage />
             </ProtectedRoute>
           }
@@ -383,7 +404,11 @@ function App() {
         <Route
           path="/admin/customers"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="customers"
+              redirectTo="/login"
+            >
               <AdminCustomersPage />
             </ProtectedRoute>
           }
@@ -391,7 +416,11 @@ function App() {
         <Route
           path="/admin/finance"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="finance"
+              redirectTo="/login"
+            >
               <AdminFinancePage />
             </ProtectedRoute>
           }
@@ -399,7 +428,11 @@ function App() {
         <Route
           path="/admin/coupons"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="coupons"
+              redirectTo="/login"
+            >
               <AdminCouponsPage />
             </ProtectedRoute>
           }
@@ -407,7 +440,11 @@ function App() {
         <Route
           path="/admin/marketing"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="marketing"
+              redirectTo="/login"
+            >
               <AdminMarketingPage />
             </ProtectedRoute>
           }
@@ -415,7 +452,11 @@ function App() {
         <Route
           path="/admin/reviews"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="reviews"
+              redirectTo="/login"
+            >
               <AdminReviewsPage />
             </ProtectedRoute>
           }
@@ -423,7 +464,11 @@ function App() {
         <Route
           path="/admin/support"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="support"
+              redirectTo="/login"
+            >
               <AdminSupportPage />
             </ProtectedRoute>
           }
@@ -431,15 +476,35 @@ function App() {
         <Route
           path="/admin/zones"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="zones"
+              redirectTo="/login"
+            >
               <AdminZonesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/wallet-requests"
+          element={
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="walletRequests"
+              redirectTo="/login"
+            >
+              <AdminWalletRequestsPage />
             </ProtectedRoute>
           }
         />
         <Route
           path="/admin/settings"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="settings"
+              redirectTo="/login"
+            >
               <AdminSettingsPage />
             </ProtectedRoute>
           }
@@ -447,7 +512,11 @@ function App() {
         <Route
           path="/admin/security"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="security"
+              redirectTo="/login"
+            >
               <AdminSecurityPage />
             </ProtectedRoute>
           }
@@ -455,7 +524,11 @@ function App() {
         <Route
           path="/admin/gaming-products"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="gamingProducts"
+              redirectTo="/login"
+            >
               <AdminGamingProductsPage />
             </ProtectedRoute>
           }
@@ -463,7 +536,11 @@ function App() {
         <Route
           path="/admin/gaming-orders"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="gamingOrders"
+              redirectTo="/login"
+            >
               <AdminGamingOrdersPage />
             </ProtectedRoute>
           }
@@ -471,8 +548,24 @@ function App() {
         <Route
           path="/admin/gaming-settings"
           element={
-            <ProtectedRoute allowedRoles={['admin']} redirectTo="/login">
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="gamingSettings"
+              redirectTo="/login"
+            >
               <AdminGamingSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/management"
+          element={
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="management"
+              redirectTo="/login"
+            >
+              <AdminManagementPage />
             </ProtectedRoute>
           }
         />

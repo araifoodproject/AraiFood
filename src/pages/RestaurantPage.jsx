@@ -1,320 +1,361 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import Cart from '../components/Cart'
 import { db } from '../firebase'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { Star, Search, X } from 'lucide-react'
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  getDoc,
+} from 'firebase/firestore'
+import { Search, X } from 'lucide-react'
 import PageBackButton from '../components/PageBackButton'
 
-function RestaurantsPage() {
+function RestaurantPage() {
   const [searchParams] = useSearchParams()
-  const initialSearch = searchParams.get('search') || ''
-
-  const [restaurants, setRestaurants] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState(initialSearch)
-  const [filter, setFilter] = useState('all')
-  const [sort, setSort] = useState('recommended')
   const navigate = useNavigate()
+  const restaurantId = searchParams.get('id') || ''
 
-  // Update search if URL param changes
-  useEffect(() => {
-    const q = searchParams.get('search') || ''
-    setSearch(q)
-  }, [searchParams])
+  const [restaurant, setRestaurant] = useState(null)
+  const [menuItems, setMenuItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [menuSearch, setMenuSearch] = useState('')
 
-  // Load approved restaurants from Firestore
+  const savedCart = JSON.parse(localStorage.getItem('cartItems') || '[]')
+  const [cartItems, setCartItems] = useState(savedCart)
+  const [cartOpen, setCartOpen] = useState(false)
+
+  const [showConflictModal, setShowConflictModal] = useState(false)
+  const [pendingFood, setPendingFood] = useState(null)
+
+  // Load Restaurant
   useEffect(() => {
-    const restaurantQuery = query(
-      collection(db, 'restaurants'),
-      where('status', '==', 'approved')
+    const fetchRestaurant = async () => {
+      if (!restaurantId) {
+        console.warn('No restaurant ID in URL')
+        setLoading(false)
+        return
+      }
+
+      try {
+        console.log('Fetching restaurant:', restaurantId)
+        const restaurantDoc = await getDoc(doc(db, 'restaurants', restaurantId))
+
+        if (restaurantDoc.exists()) {
+          const data = restaurantDoc.data()
+          console.log('Restaurant loaded:', data)
+          setRestaurant({ firebaseId: restaurantDoc.id, ...data })
+        } else {
+          console.warn('Restaurant doc not found:', restaurantId)
+          toast.error('Restaurant not found!')
+        }
+      } catch (error) {
+        console.error('Restaurant fetch error:', error)
+        toast.error('Failed to load restaurant')
+      }
+      setLoading(false)
+    }
+    fetchRestaurant()
+  }, [restaurantId])
+
+  // Load Menu (real-time)
+  useEffect(() => {
+    if (!restaurantId) return
+    const menuQuery = query(
+      collection(db, 'foods'),
+      where('restaurantId', '==', restaurantId)
     )
-
-    const unsubscribe = onSnapshot(restaurantQuery, (snapshot) => {
-      const restaurantList = snapshot.docs.map((d) => ({
+    const unsubscribe = onSnapshot(menuQuery, (snapshot) => {
+      const menuList = snapshot.docs.map((d) => ({
         firebaseId: d.id,
         ...d.data(),
       }))
-      setRestaurants(restaurantList)
-      setLoading(false)
+      console.log('Menu items loaded:', menuList.length)
+      setMenuItems(menuList)
     })
-
     return () => unsubscribe()
-  }, [])
+  }, [restaurantId])
 
-  const filteredRestaurants = useMemo(() => {
-    let result = [...restaurants]
+  const saveCart = (items) => {
+    localStorage.setItem('cartItems', JSON.stringify(items))
+    setCartItems(items)
+    window.dispatchEvent(new Event('cartUpdated'))
+    return items
+  }
 
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter((r) =>
-        `${r.restaurantName || ''} ${r.cuisine || ''}`
-          .toLowerCase()
-          .includes(q)
+  const checkCartConflict = (food) => {
+    if (cartItems.length === 0) {
+      addToCartDirect(food)
+      return
+    }
+    const existingRestaurantId = cartItems[0].restaurantId
+    if (existingRestaurantId === restaurant.firebaseId) {
+      addToCartDirect(food)
+    } else {
+      setPendingFood(food)
+      setShowConflictModal(true)
+    }
+  }
+
+  const addToCartDirect = (food) => {
+    const existingItem = cartItems.find((item) => item.id === food.firebaseId)
+    const updatedItems = existingItem
+      ? cartItems.map((item) =>
+          item.id === food.firebaseId
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      : [
+          ...cartItems,
+          {
+            id: food.firebaseId,
+            name: food.name,
+            price: food.discountPrice || food.price,
+            emoji: food.emoji || '🍽️',
+            image: food.image || '',
+            quantity: 1,
+            restaurantId: restaurant.firebaseId,
+            restaurantName: restaurant.restaurantName,
+            restaurantLogo: restaurant.logo || '',
+            deliveryFee: restaurant.deliveryFee || 30,
+            minimumOrder: restaurant.minimumOrder || 100,
+          },
+        ]
+
+    saveCart(updatedItems)
+    toast.success(`${food.name} added to cart!`, { autoClose: 2000 })
+  }
+
+  const handleClearAndAdd = () => {
+    if (!pendingFood) return
+    const newItem = {
+      id: pendingFood.firebaseId,
+      name: pendingFood.name,
+      price: pendingFood.discountPrice || pendingFood.price,
+      emoji: pendingFood.emoji || '🍽️',
+      image: pendingFood.image || '',
+      quantity: 1,
+      restaurantId: restaurant.firebaseId,
+      restaurantName: restaurant.restaurantName,
+      restaurantLogo: restaurant.logo || '',
+      deliveryFee: restaurant.deliveryFee || 30,
+      minimumOrder: restaurant.minimumOrder || 100,
+    }
+    saveCart([newItem])
+    toast.success(`Cart cleared! ${pendingFood.name} added.`)
+    setShowConflictModal(false)
+    setPendingFood(null)
+  }
+
+  const increaseQuantity = (id) => {
+    const updatedItems = cartItems.map((item) =>
+      item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+    )
+    saveCart(updatedItems)
+  }
+
+  const decreaseQuantity = (id) => {
+    const updatedItems = cartItems
+      .map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity - 1 } : item
       )
-    }
+      .filter((item) => item.quantity > 0)
+    saveCart(updatedItems)
+  }
 
-    if (filter === 'top-rated') {
-      result = result.filter((r) => (r.rating || 0) >= 4.5)
-    }
-
-    if (filter === 'fast-delivery') {
-      result = result.filter((r) => r.restaurantStatus === 'online')
-    }
-
-    if (filter === 'budget') {
-      result = result.filter((r) => (r.deliveryFee || 0) <= 30)
-    }
-
-    if (sort === 'rating') {
-      result.sort((a, b) => (b.rating || 0) - (a.rating || 0))
-    }
-
-    if (sort === 'name') {
-      result.sort((a, b) =>
-        (a.restaurantName || '').localeCompare(b.restaurantName || '')
-      )
-    }
-
-    return result
-  }, [restaurants, search, filter, sort])
+  const filteredMenu = menuItems.filter((item) =>
+    item.name?.toLowerCase().includes(menuSearch.toLowerCase())
+  )
+  const availableItems = filteredMenu.filter(
+    (item) => item.available !== false
+  )
 
   if (loading) {
     return (
-      <div className="restaurants-page">
+      <div className="restaurant-page">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
-          <p>Loading restaurants...</p>
+          <p>Loading restaurant...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!restaurant) {
+    return (
+      <div className="restaurant-page">
+        <div className="restaurant-empty-state">
+          <div className="empty-icon">🏪</div>
+          <h2>Restaurant Not Found</h2>
+          <p>
+            The restaurant you're looking for doesn't exist or has been
+            removed.
+          </p>
+          <button onClick={() => navigate('/restaurants')}>
+            Browse Restaurants
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="restaurants-page">
-      <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+    <div className="restaurant-page">
+      <PageBackButton label="Back" fallback="/restaurants" />
 
-        <div className="restaurants-page-header">
-          <span className="glass-section-label">ARAIHAZAR LOCAL FOOD</span>
-          <h1>
-            Find Your Next <span>Favourite Restaurant</span>
-          </h1>
+      {/* Header */}
+      <div className="restaurant-page-header">
+        <div className="restaurant-header-with-logo">
+          <div className="restaurant-header-logo">
+            {restaurant.logo ? (
+              <img src={restaurant.logo} alt={restaurant.restaurantName} />
+            ) : (
+              <span>🏪</span>
+            )}
+          </div>
+          <div className="restaurant-header-info">
+            <h1>{restaurant.restaurantName}</h1>
+            <p>🍽️ {restaurant.cuisine || 'Restaurant'}</p>
+            <span>
+              ⭐ {restaurant.rating || '4.5'} • 🚴 30-40 min • 📦 Min ৳
+              {restaurant.minimumOrder || 100}
+            </span>
+          </div>
+        </div>
+
+        <div className="restaurant-status-badge">
+          <span
+            className={`restaurant-status-dot ${
+              restaurant.restaurantStatus || 'offline'
+            }`}
+          ></span>
+          {restaurant.restaurantStatus === 'online'
+            ? 'Open'
+            : restaurant.restaurantStatus === 'busy'
+            ? 'Busy'
+            : 'Closed'}
+        </div>
+      </div>
+
+      {/* Menu */}
+      <div className="menu-section">
+        <div className="menu-heading">
+          <span className="glass-section-label">MENU</span>
+          <h2>Popular Items</h2>
           <p>
-            Explore the best local restaurants around Araihazar and discover
-            something delicious today.
+            Choose something delicious from {restaurant.restaurantName}.
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="restaurant-page-stats">
-          <div className="restaurant-stat">
-            <strong>{restaurants.length}+</strong>
-            <span>Local Restaurants</span>
-          </div>
-          <div className="restaurant-stat">
-            <strong>100+</strong>
-            <span>Food Items</span>
-          </div>
-          <div className="restaurant-stat">
-            <strong>4.8 ⭐</strong>
-            <span>Average Rating</span>
-          </div>
-          <div className="restaurant-stat">
-            <strong>30 min</strong>
-            <span>Average Delivery</span>
-          </div>
+        <div className="menu-search-bar">
+          <Search size={18} strokeWidth={2.2} />
+          <input
+            type="text"
+            placeholder="Search food items..."
+            value={menuSearch}
+            onChange={(e) => setMenuSearch(e.target.value)}
+          />
+          {menuSearch && (
+            <button
+              type="button"
+              onClick={() => setMenuSearch('')}
+              className="clear-search"
+            >
+              <X size={14} strokeWidth={2.5} />
+            </button>
+          )}
         </div>
 
-        {/* Controls */}
-        <div className="restaurant-controls">
-          <div className="restaurant-search">
-            <Search size={18} strokeWidth={2.2} />
-            <input
-              type="text"
-              placeholder="Search restaurants or food..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="clear-search"
-              >
-                <X size={14} strokeWidth={2.5} />
-              </button>
-            )}
+        {availableItems.length === 0 ? (
+          <div className="restaurant-empty-state">
+            <div className="empty-icon">🍽️</div>
+            <h2>No Food Items Found</h2>
+            <p>This restaurant hasn't added any food items yet.</p>
           </div>
-
-          <div className="restaurant-filter-row">
-            <button
-              className={
-                filter === 'all' ? 'restaurant-filter active' : 'restaurant-filter'
-              }
-              onClick={() => setFilter('all')}
-            >
-              All
-            </button>
-            <button
-              className={
-                filter === 'top-rated'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('top-rated')}
-            >
-              ⭐ Top Rated
-            </button>
-            <button
-              className={
-                filter === 'fast-delivery'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('fast-delivery')}
-            >
-              🟢 Open Now
-            </button>
-            <button
-              className={
-                filter === 'budget'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('budget')}
-            >
-              💰 Budget
-            </button>
-          </div>
-
-          <div className="restaurant-sort">
-            <label htmlFor="restaurant-sort">Sort by</label>
-            <select
-              id="restaurant-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-            >
-              <option value="recommended">Recommended</option>
-              <option value="rating">Highest Rated</option>
-              <option value="name">Name A–Z</option>
-            </select>
-          </div>
-        </div>
-
-        {/* List Header */}
-        <div className="restaurants-list-header">
-          <div>
-            <span className="glass-section-label">EXPLORE</span>
-            <h2>Restaurants Near You</h2>
-          </div>
-          <span className="restaurant-count">
-            {filteredRestaurants.length} Restaurants
-          </span>
-        </div>
-
-        {/* Restaurants Grid */}
-        {filteredRestaurants.length > 0 ? (
-          <div className="all-restaurants-grid">
-            {filteredRestaurants.map((restaurant) => (
-              <div
-                className="all-restaurant-card"
-                key={restaurant.firebaseId}
-                onClick={() =>
-                  navigate(`/restaurant?id=${restaurant.firebaseId}`)
-                }
-              >
-                <div className="all-restaurant-image">
-                  {restaurant.logo ? (
-                    <img
-                      src={restaurant.logo}
-                      alt={restaurant.restaurantName}
-                      className="restaurant-logo-img"
-                    />
+        ) : (
+          <div className="food-grid">
+            {availableItems.map((item) => (
+              <div className="food-card" key={item.firebaseId}>
+                <div className="food-image">
+                  {item.image ? (
+                    <img src={item.image} alt={item.name} />
                   ) : (
-                    <span className="restaurant-main-emoji">🏪</span>
+                    <span style={{ fontSize: '40px' }}>
+                      {item.emoji || '🍽️'}
+                    </span>
                   )}
-
-                  {restaurant.restaurantStatus === 'online' && (
-                    <div className="restaurant-badge online-badge">
-                      🟢 Open
-                    </div>
-                  )}
-                  {restaurant.restaurantStatus === 'busy' && (
-                    <div className="restaurant-badge busy-badge">🟡 Busy</div>
-                  )}
-
-                  <div className="all-restaurant-rating">
-                    <Star size={12} strokeWidth={0} fill="#F59E0B" />
-                    {restaurant.rating || '4.5'}
-                  </div>
                 </div>
-
-                <div className="all-restaurant-info">
-                  <div className="restaurant-title-row">
-                    <h2>{restaurant.restaurantName}</h2>
-                    <span className="restaurant-price">
-                      ৳{restaurant.deliveryFee || 30}
-                    </span>
+                <div className="food-info">
+                  <h3>{item.name}</h3>
+                  <p>{item.description || 'Delicious food item'}</p>
+                  <div className="food-bottom">
+                    <div className="food-price-box">
+                      {item.discountPrice ? (
+                        <>
+                          <strong>৳{item.discountPrice}</strong>
+                          <del>৳{item.price}</del>
+                        </>
+                      ) : (
+                        <strong>৳{item.price}</strong>
+                      )}
+                    </div>
+                    <button onClick={() => checkCartConflict(item)}>
+                      + Add
+                    </button>
                   </div>
-                  <p className="restaurant-cuisine">{restaurant.cuisine}</p>
-                  <div className="all-restaurant-meta">
-                    <span>
-                      🕒 {restaurant.openingTime || '10:00'} -{' '}
-                      {restaurant.closingTime || '22:00'}
-                    </span>
-                    <span>📦 Min ৳{restaurant.minimumOrder || 100}</span>
-                  </div>
-                  <button
-                    className="restaurant-menu-button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      navigate(`/restaurant?id=${restaurant.firebaseId}`)
-                    }}
-                  >
-                    <span>View Menu</span>
-                    <span>→</span>
-                  </button>
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="restaurant-empty-state">
-            <div className="empty-icon">🔍</div>
-            <h2>No restaurants found</h2>
-            <p>Try another search or choose a different filter.</p>
-            <button
-              onClick={() => {
-                setSearch('')
-                setFilter('all')
-                setSort('recommended')
-              }}
-            >
-              Reset Search
-            </button>
-          </div>
         )}
-
-        {/* Bottom CTA */}
-        <div className="restaurants-bottom-cta">
-          <div>
-            <span
-              className="glass-section-label"
-              style={{ color: '#FFFFFF' }}
-            >
-              ARAIFOOD
-            </span>
-            <h2>Can't decide what to eat?</h2>
-            <p>
-              Explore our popular restaurants and find your next favourite
-              meal.
-            </p>
-          </div>
-          <button onClick={() => navigate('/')}>Explore Home →</button>
-        </div>
       </div>
+
+      {/* Cart Modal */}
+      {cartOpen && (
+        <Cart
+          items={cartItems}
+          onClose={() => setCartOpen(false)}
+          onIncrease={increaseQuantity}
+          onDecrease={decreaseQuantity}
+        />
+      )}
+
+      {/* Conflict Modal */}
+      {showConflictModal && (
+        <div className="outside-area-modal">
+          <div className="outside-area-modal-content">
+            <div className="outside-area-icon">⚠️</div>
+            <h2>Clear Your Cart?</h2>
+            <p>
+              Your cart has items from{' '}
+              <strong>{cartItems[0]?.restaurantName}</strong>.
+              <br />
+              <br />
+              Do you want to clear the cart and add items from{' '}
+              <strong>{restaurant.restaurantName}</strong>?
+            </p>
+            <div className="conflict-modal-buttons">
+              <button
+                className="cancel-btn"
+                onClick={() => {
+                  setShowConflictModal(false)
+                  setPendingFood(null)
+                }}
+              >
+                Cancel
+              </button>
+              <button className="confirm-btn" onClick={handleClearAndAdd}>
+                Yes, Clear & Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-export default RestaurantsPage
+export default RestaurantPage

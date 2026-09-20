@@ -1,14 +1,21 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 
-function ProtectedRoute({ allowedRoles = [], redirectTo = '/login', children }) {
+function ProtectedRoute({
+  allowedRoles = [],
+  requiredPermission = null,
+  redirectTo = '/login',
+  children,
+}) {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
-  const checkedRef = useRef(false)
+  const [isPartner, setIsPartner] = useState(false)
+  const [permissions, setPermissions] = useState({})
+  const [managementRole, setManagementRole] = useState(null)
 
   useEffect(() => {
     let isMounted = true
@@ -23,51 +30,102 @@ function ProtectedRoute({ allowedRoles = [], redirectTo = '/login', children }) 
         return
       }
 
-      // 🔥 Already checked once — don't re-run Firestore reads
-      if (checkedRef.current) {
-        setUser(currentUser)
+      setUser(currentUser)
+
+      // 1. Admin email check
+      if (currentUser.email === 'admin@araifood.com') {
+        if (!isMounted) return
+        setRole('admin')
+        setIsPartner(false)
+        setPermissions({})
+        localStorage.setItem('userRole', 'admin')
+        localStorage.removeItem('isPartner')
         setLoading(false)
         return
       }
 
-      setUser(currentUser)
-
-      let detectedRole = 'customer'
-
+      // 2. Check if this user is a management member (partner)
       try {
-        // Admin email check FIRST
-        if (currentUser.email === 'admin@araifood.com') {
-          detectedRole = 'admin'
+        // Try by firebaseUid
+        const q = query(
+          collection(db, 'managementMembers'),
+          where('firebaseUid', '==', currentUser.uid)
+        )
+        const snap = await getDocs(q)
+
+        let memberData = null
+        if (!snap.empty) {
+          memberData = snap.docs[0].data()
         } else {
-          const userDocRef = doc(db, 'users', currentUser.uid)
-          const userDoc = await getDoc(userDocRef)
-          if (userDoc.exists()) {
-            const data = userDoc.data()
-            detectedRole = data.role || 'customer'
-          } else {
-            const restDoc = await getDoc(doc(db, 'restaurants', currentUser.uid))
-            if (restDoc.exists()) {
-              detectedRole = 'restaurant'
-            } else {
-              const riderDoc = await getDoc(doc(db, 'riders', currentUser.uid))
-              if (riderDoc.exists()) {
-                detectedRole = 'rider'
-              } else {
-                detectedRole = 'customer'
-              }
-            }
+          // Fallback: try by email
+          const q2 = query(
+            collection(db, 'managementMembers'),
+            where('email', '==', currentUser.email?.toLowerCase())
+          )
+          const snap2 = await getDocs(q2)
+          if (!snap2.empty) {
+            memberData = snap2.docs[0].data()
           }
         }
-      } catch (error) {
-        console.error('Role detection error:', error)
-        detectedRole = localStorage.getItem('userRole') || 'customer'
+
+        if (memberData) {
+          // Check active status
+          if (memberData.status !== 'active') {
+            await auth.signOut()
+            if (!isMounted) return
+            setUser(null)
+            setRole(null)
+            setLoading(false)
+            return
+          }
+
+          if (!isMounted) return
+          setRole('admin') // treated as admin level
+          setIsPartner(true)
+          setPermissions(memberData.permissions || {})
+          setManagementRole(memberData.role || 'partner')
+
+          localStorage.setItem('userRole', 'admin')
+          localStorage.setItem('isPartner', 'true')
+          localStorage.setItem(
+            'managementRole',
+            memberData.role || 'partner'
+          )
+          localStorage.setItem(
+            'managementPermissions',
+            JSON.stringify(memberData.permissions || {})
+          )
+          localStorage.setItem('managementName', memberData.fullName || '')
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.error('ProtectedRoute partner check error:', err)
       }
 
-      if (!isMounted) return
+      // 3. Fallback: check Firestore users collection
+      try {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
+        if (userDoc.exists()) {
+          const data = userDoc.data()
+          if (!isMounted) return
+          setRole(data.role || 'customer')
+          setIsPartner(false)
+          localStorage.setItem('userRole', data.role || 'customer')
+          localStorage.removeItem('isPartner')
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.error(err)
+      }
 
-      checkedRef.current = true
-      setRole(detectedRole)
-      localStorage.setItem('userRole', detectedRole)
+      // 4. Default customer
+      if (!isMounted) return
+      setRole('customer')
+      setIsPartner(false)
+      localStorage.setItem('userRole', 'customer')
+      localStorage.removeItem('isPartner')
       setLoading(false)
     })
 
@@ -90,15 +148,98 @@ function ProtectedRoute({ allowedRoles = [], redirectTo = '/login', children }) 
     return <Navigate to={redirectTo} replace />
   }
 
-  if (allowedRoles.includes(role)) {
-    return children
+  // Role check
+  if (!allowedRoles.includes(role)) {
+    if (role === 'restaurant') {
+      return <Navigate to="/restaurant-panel" replace />
+    }
+    if (role === 'rider') {
+      return <Navigate to="/rider-panel" replace />
+    }
+    if (role === 'admin') {
+      return <Navigate to="/admin" replace />
+    }
+    return <Navigate to="/" replace />
   }
 
-  // Redirect based on role
-  if (role === 'restaurant') return <Navigate to="/restaurant-panel" replace />
-  if (role === 'rider') return <Navigate to="/rider-panel" replace />
-  if (role === 'admin') return <Navigate to="/admin" replace />
-  return <Navigate to="/" replace />
+  // Permission check (for partners accessing /admin/*)
+  if (
+    requiredPermission &&
+    isPartner &&
+    managementRole !== 'admin' &&
+    !permissions[requiredPermission]
+  ) {
+    return (
+      <div
+        className="admin-layout"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          padding: '20px',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '480px',
+            width: '100%',
+            padding: '40px 32px',
+            background: 'var(--glass-bg)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: '24px',
+            boxShadow: 'var(--shadow-glass)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔒</div>
+          <h2
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '22px',
+              fontWeight: 800,
+              color: 'var(--text-primary)',
+              marginBottom: '12px',
+            }}
+          >
+            Access Denied
+          </h2>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-secondary)',
+              marginBottom: '20px',
+              lineHeight: 1.6,
+            }}
+          >
+            You don't have permission to access this section. Please contact
+            your admin.
+          </p>
+          <button
+            onClick={() => {
+              window.location.href = '/admin'
+            }}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '999px',
+              background: 'linear-gradient(135deg, #059669, #047857)',
+              color: '#FFFFFF',
+              border: 'none',
+              fontSize: '14px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
+            }}
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return children
 }
 
 export default ProtectedRoute
