@@ -1,6 +1,6 @@
 // ============================================================
 // src/components/AdminSidebar.jsx
-// With Pharmacy + Medicines menu items
+// V3 — With Notifications menu item
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -31,6 +31,7 @@ import {
   UserCog,
   Pill,
   Briefcase,
+  Bell, // ✅ NEW: For Notifications
 } from 'lucide-react'
 
 function AdminSidebar({ mobileOpen, onMobileClose }) {
@@ -161,7 +162,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       path: '/admin/foods',
       key: 'foods',
     },
-    // ✅ NEW: PHARMACY
     {
       label: 'Pharmacies',
       icon: Pill,
@@ -201,6 +201,13 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       icon: Ticket,
       path: '/admin/coupons',
       key: 'coupons',
+    },
+    // ✅ NEW: PUSH NOTIFICATIONS
+    {
+      label: 'Notifications',
+      icon: Bell,
+      path: '/admin/notifications',
+      key: 'marketing',
     },
     {
       label: 'Marketing',

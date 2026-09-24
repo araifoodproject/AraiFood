@@ -1,6 +1,6 @@
 // ============================================================
-// src/pages/RestaurantPanel.jsx — PREMIUM V3.1
-// Full rebuild + Reviews tab + Unread reviews badge
+// src/pages/RestaurantPanel.jsx — PREMIUM V3.4
+// Topbar: Only 1 Bell (In-App). Push Toggle: Dashboard + Settings only.
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -21,6 +21,8 @@ import { toast } from 'react-toastify'
 import { sendNotification } from '../utils/sendNotification'
 import { Camera, X, Search, Star } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
+import PushToggleCard from '../components/PushToggleCard'
+import NotificationPanel from '../components/NotificationPanel'
 
 function RestaurantPanel() {
   const [user, setUser] = useState(null)
@@ -138,7 +140,6 @@ function RestaurantPanel() {
           data.location?.lat && data.location?.lng ? data.location : null
         )
 
-        // Load last viewed reviews timestamp
         if (data.lastViewedReviews?.toDate) {
           setLastViewedReviews(data.lastViewedReviews.toDate())
         } else if (data.lastViewedReviews) {
@@ -217,14 +218,6 @@ function RestaurantPanel() {
     })
     return () => unsubscribe()
   }, [restaurant])
-
-  // ============ AUTO-MARK REVIEWS AS VIEWED ============
-  useEffect(() => {
-    if (!restaurant) return
-    if (view !== 'reviews') return
-    // We'll compute unread inside via a helper below; call after reviews loaded
-    // This effect is intentionally lightweight; actual mark happens below
-  }, [view, restaurant])
 
   // ============ LOGO UPLOAD ============
   const handleLogoUpload = (e) => {
@@ -674,7 +667,6 @@ function RestaurantPanel() {
         console.error('Mark viewed error:', err)
       }
     }
-    // Small delay so user sees "new" badge momentarily
     const timer = setTimeout(markViewed, 1500)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -802,6 +794,9 @@ function RestaurantPanel() {
         </div>
 
         <div className="rest-v2-topbar-actions">
+          {/* ✅ Single Bell — In-App Notifications only */}
+          <NotificationPanel targetUserId={user?.uid} />
+
           <button
             className={`rest-v2-pill-btn ${
               isOnline ? 'online' : 'offline'
@@ -825,6 +820,11 @@ function RestaurantPanel() {
       {view === 'dashboard' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">📊 Dashboard</h2>
+
+          {/* Push Notification Card */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
 
           <div className="rest-v2-hero-card">
             <p className="rest-v2-hero-card-label">Today's Sales</p>
@@ -1908,6 +1908,11 @@ function RestaurantPanel() {
       {view === 'settings' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">⚙️ Settings</h2>
+
+          {/* Push Notification Settings */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
 
           <div className="rest-v2-form">
             <div className="rest-v2-form-row">

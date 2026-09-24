@@ -1,3 +1,8 @@
+// ============================================================
+// src/components/NotificationPanel.jsx — V2
+// Reusable — Supports targetUserId prop for Restaurant/Rider/Pharmacy panels
+// ============================================================
+
 import { useState, useEffect, useRef } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '../firebase'
@@ -22,7 +27,7 @@ import {
   X,
 } from 'lucide-react'
 
-function NotificationPanel() {
+function NotificationPanel({ targetUserId = null }) {
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [user, setUser] = useState(null)
@@ -45,14 +50,21 @@ function NotificationPanel() {
 
   // Load Notifications
   useEffect(() => {
-    if (!user) {
+    // ✅ Use targetUserId if provided, otherwise fallback to auth user
+    const effectiveUserId = targetUserId || user?.uid
+
+    if (!effectiveUserId) {
       setNotifications([])
       setUnreadCount(0)
       return
     }
 
-    let userIds = [user.uid]
-    if (userRole === 'admin') userIds = ['admin']
+    let userIds = [effectiveUserId]
+
+    // Admin special case (only if no targetUserId override)
+    if (!targetUserId && userRole === 'admin') {
+      userIds = ['admin']
+    }
 
     const notifQuery = query(
       collection(db, 'notifications'),
@@ -88,7 +100,8 @@ function NotificationPanel() {
     )
 
     return () => unsubscribe()
-  }, [user, userRole, lastNotificationId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, userRole, targetUserId])
 
   // Close on Outside Click
   useEffect(() => {
@@ -158,15 +171,21 @@ function NotificationPanel() {
 
   const handleClick = (notification) => {
     markAsRead(notification.firebaseId)
-    if (notification.orderId) {
+
+    // Order-related: go to tracking (customer only)
+    if (notification.orderId && userRole === 'customer') {
       navigate(`/track-order?id=${notification.orderId}`)
       setIsOpen(false)
       return
     }
+
+    // Role-based navigation
     if (userRole === 'admin') navigate('/admin')
     else if (userRole === 'restaurant') navigate('/restaurant-panel')
     else if (userRole === 'rider') navigate('/rider-panel')
+    else if (userRole === 'pharmacy') navigate('/pharmacy-panel')
     else navigate('/order-history')
+
     setIsOpen(false)
   }
 
@@ -217,7 +236,7 @@ function NotificationPanel() {
   // ============================================================
   // GUEST USER — Show bell that prompts login
   // ============================================================
-  if (!user) {
+  if (!user && !targetUserId) {
     return (
       <div className="glass-notification-wrapper">
         <button

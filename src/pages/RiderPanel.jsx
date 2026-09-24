@@ -1,6 +1,7 @@
 // ============================================================
-// src/pages/RiderPanel.jsx — PREMIUM V2.2
-// Full rebuild — bottom nav, distance/ETA, zone display
+// src/pages/RiderPanel.jsx — PREMIUM V2.3
+// + Push Notification toggle in Dashboard + Settings
+// + In-App Notification Bell in Topbar
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -26,6 +27,8 @@ import {
   getProgressFromStatus,
 } from '../utils/locationTracker'
 import useSettings from '../hooks/useSettings'
+import PushToggleCard from '../components/PushToggleCard'
+import NotificationPanel from '../components/NotificationPanel'
 
 // ------------------------------------------------------------
 // Distance helper — Haversine
@@ -43,7 +46,6 @@ const calculateDistanceKm = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-// ETA: 10 km/h → 6 min per km
 const calculateEtaMin = (km) => {
   if (km == null) return null
   return Math.max(1, Math.round(km * 6))
@@ -66,10 +68,8 @@ function RiderPanel() {
   const [gpsError, setGpsError] = useState('')
   const [gpsLoading, setGpsLoading] = useState(false)
 
-  // Restaurant location cache
   const [restaurantLocCache, setRestaurantLocCache] = useState({})
 
-  // Profile edit
   const [editMode, setEditMode] = useState(false)
   const [editProfileImage, setEditProfileImage] = useState('')
   const [editPhone, setEditPhone] = useState('')
@@ -82,9 +82,6 @@ function RiderPanel() {
   const watchIdRef = useRef(null)
   const authCheckedRef = useRef(false)
 
-  // ------------------------------------------------------------
-  // Restaurant location fetch (with cache)
-  // ------------------------------------------------------------
   const getRestaurantLocation = async (restaurantId) => {
     if (!restaurantId) return settings.mapDefaultCenter || null
     if (restaurantLocCache[restaurantId]) return restaurantLocCache[restaurantId]
@@ -187,7 +184,7 @@ function RiderPanel() {
     }
   }, [])
 
-  // ============ AUTO-REQUEST GPS (real mode) ============
+  // ============ AUTO-REQUEST GPS ============
   useEffect(() => {
     if (!rider || gpsMode !== 'real') return
     if (currentGPSLocation) return
@@ -271,7 +268,6 @@ function RiderPanel() {
     return () => unsubscribe()
   }, [])
 
-  // ============ AUTO-FETCH restaurant locations for available orders ============
   const availableOrders = useMemo(
     () =>
       orders.filter(
@@ -758,6 +754,9 @@ function RiderPanel() {
         </div>
 
         <div className="rider-v2-topbar-actions">
+          {/* ✅ In-App Notification Bell */}
+          <NotificationPanel targetUserId={user?.uid} />
+
           <button
             className={`rider-v2-pill-btn gps ${
               gpsMode === 'real' ? 'real' : 'simulated'
@@ -791,6 +790,11 @@ function RiderPanel() {
       {view === 'dashboard' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">📊 Dashboard</h2>
+
+          {/* ✅ Push Notification Card */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
 
           <div className="rider-v2-hero-card">
             <p className="rider-v2-hero-card-label">Today's Earnings</p>
@@ -882,7 +886,6 @@ function RiderPanel() {
                     className="rider-v2-order new-order"
                     key={order.firebaseId}
                   >
-                    {/* Header */}
                     <div className="rider-v2-order-header">
                       <div className="rider-v2-order-thumb">
                         {order.restaurantLogo ? (
@@ -899,7 +902,6 @@ function RiderPanel() {
                       </div>
                     </div>
 
-                    {/* Info */}
                     <div className="rider-v2-order-info">
                       {order.zoneName && (
                         <div className="rider-v2-info-row">
@@ -925,7 +927,6 @@ function RiderPanel() {
                       </div>
                     </div>
 
-                    {/* Distance / ETA */}
                     {distanceKm != null && (
                       <div className="rider-v2-distance-badge">
                         <span className="rider-v2-distance-chip">
@@ -937,7 +938,6 @@ function RiderPanel() {
                       </div>
                     )}
 
-                    {/* Items */}
                     {order.items?.length > 0 && (
                       <div className="rider-v2-order-items">
                         {order.items.map((item, idx) => (
@@ -951,7 +951,6 @@ function RiderPanel() {
                       </div>
                     )}
 
-                    {/* Totals */}
                     <div className="rider-v2-order-totals">
                       <div className="rider-v2-total-block">
                         <span className="rider-v2-total-label">
@@ -969,7 +968,6 @@ function RiderPanel() {
                       </div>
                     </div>
 
-                    {/* Accept */}
                     <button
                       className="rider-v2-action-btn"
                       onClick={() => acceptOrder(order)}
@@ -1063,7 +1061,6 @@ function RiderPanel() {
                     }`}
                     key={order.firebaseId}
                   >
-                    {/* Header */}
                     <div className="rider-v2-order-header">
                       <div className="rider-v2-order-thumb">
                         {order.restaurantLogo ? (
@@ -1087,7 +1084,6 @@ function RiderPanel() {
                       </span>
                     </div>
 
-                    {/* Info */}
                     <div className="rider-v2-order-info">
                       {order.zoneName && (
                         <div className="rider-v2-info-row">
@@ -1111,7 +1107,6 @@ function RiderPanel() {
                       </div>
                     </div>
 
-                    {/* Distance to customer */}
                     {distToCustomer != null && (
                       <div className="rider-v2-distance-badge">
                         <span className="rider-v2-distance-chip orange">
@@ -1123,7 +1118,6 @@ function RiderPanel() {
                       </div>
                     )}
 
-                    {/* Items */}
                     {order.items?.length > 0 && (
                       <div className="rider-v2-order-items">
                         {order.items.map((item, idx) => (
@@ -1137,7 +1131,6 @@ function RiderPanel() {
                       </div>
                     )}
 
-                    {/* Totals */}
                     <div className="rider-v2-order-totals">
                       <div className="rider-v2-total-block">
                         <span className="rider-v2-total-label">
@@ -1157,7 +1150,6 @@ function RiderPanel() {
                       </div>
                     </div>
 
-                    {/* Timeline */}
                     {isActive && (
                       <div className="rider-v2-timeline">
                         {steps.map((step, idx) => (
@@ -1182,7 +1174,6 @@ function RiderPanel() {
                       </div>
                     )}
 
-                    {/* Action buttons */}
                     {order.riderStatus === 'accepted' && (
                       <button
                         className="rider-v2-action-btn"
@@ -1230,7 +1221,6 @@ function RiderPanel() {
                       </button>
                     )}
 
-                    {/* OTP */}
                     {order.riderStatus === 'going_to_customer' && (
                       <div className="rider-v2-otp-box">
                         <label className="rider-v2-otp-label">
@@ -1287,6 +1277,11 @@ function RiderPanel() {
       {view === 'profile' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">👤 Profile</h2>
+
+          {/* ✅ Push Notification Card in Profile */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
 
           <div className="rider-v2-profile-card">
             <div className="rider-v2-profile-avatar">

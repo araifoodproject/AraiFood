@@ -1,6 +1,7 @@
 // ============================================================
-// src/pages/PharmacyPanel.jsx — PREMIUM V1
-// Pharmacy owner panel — Dashboard, Orders, Medicines, Reviews, Profile, Settings
+// src/pages/PharmacyPanel.jsx — PREMIUM V1.1
+// + Push Notification toggle in Dashboard + Settings + Profile
+// + In-App Notification Bell in Topbar
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -21,6 +22,8 @@ import { toast } from 'react-toastify'
 import { sendNotification } from '../utils/sendNotification'
 import { Camera, X, Search, Star } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
+import PushToggleCard from '../components/PushToggleCard'
+import NotificationPanel from '../components/NotificationPanel'
 
 const MED_CATEGORIES = [
   { key: 'pain', label: 'Pain Relief' },
@@ -46,7 +49,6 @@ function PharmacyPanel() {
   const [error, setError] = useState('')
   const [view, setView] = useState('dashboard')
 
-  // Medicine form
   const [showAddMed, setShowAddMed] = useState(false)
   const [medName, setMedName] = useState('')
   const [medGeneric, setMedGeneric] = useState('')
@@ -61,13 +63,11 @@ function PharmacyPanel() {
   const [medAvailable, setMedAvailable] = useState(true)
   const [editingMedId, setEditingMedId] = useState(null)
 
-  // Settings
   const [openingTime, setOpeningTime] = useState('09:00')
   const [closingTime, setClosingTime] = useState('22:00')
   const [minimumOrder, setMinimumOrder] = useState('50')
   const [deliveryFee, setDeliveryFee] = useState('30')
 
-  // Profile
   const [logo, setLogo] = useState('')
   const [pharmacyName, setPharmacyName] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -78,11 +78,9 @@ function PharmacyPanel() {
   const [location, setLocation] = useState(null)
   const [savingProfile, setSavingProfile] = useState(false)
 
-  // Orders search/filter
   const [orderSearch, setOrderSearch] = useState('')
   const [orderFilter, setOrderFilter] = useState('all')
 
-  // Reviews filter
   const [reviewRatingFilter, setReviewRatingFilter] = useState('all')
   const [lastViewedReviews, setLastViewedReviews] = useState(null)
 
@@ -533,7 +531,6 @@ function PharmacyPanel() {
   const readyOrders = orders.filter((o) => o.status === 'delivering').length
   const completedOrders = orders.filter((o) => o.status === 'delivered').length
 
-  // Filtered orders
   const filteredOrders = useMemo(() => {
     let r = [...orders]
     if (orderFilter !== 'all') {
@@ -558,7 +555,6 @@ function PharmacyPanel() {
     return r
   }, [orders, orderFilter, orderSearch])
 
-  // Reviews stats
   const visibleReviews = useMemo(
     () => reviews.filter((r) => r.hidden !== true),
     [reviews]
@@ -718,6 +714,9 @@ function PharmacyPanel() {
         </div>
 
         <div className="rest-v2-topbar-actions">
+          {/* ✅ In-App Notification Bell */}
+          <NotificationPanel targetUserId={user?.uid} />
+
           <button
             className={`rest-v2-pill-btn ${isOnline ? 'online' : 'offline'}`}
             onClick={() => changeStatus(isOnline ? 'offline' : 'online')}
@@ -734,6 +733,11 @@ function PharmacyPanel() {
       {view === 'dashboard' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">📊 Dashboard</h2>
+
+          {/* ✅ Push Notification Card */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
 
           <div className="rest-v2-hero-card">
             <p className="rest-v2-hero-card-label">Today's Sales</p>
@@ -1280,7 +1284,11 @@ function PharmacyPanel() {
                       <button
                         className="delete-btn"
                         onClick={() => editMedicine(m)}
-                        style={{ background: 'rgba(5,150,105,0.12)', color: '#059669', border: '1px solid rgba(5,150,105,0.3)' }}
+                        style={{
+                          background: 'rgba(5,150,105,0.12)',
+                          color: '#059669',
+                          border: '1px solid rgba(5,150,105,0.3)',
+                        }}
                       >
                         ✏️
                       </button>
@@ -1445,7 +1453,9 @@ function PharmacyPanel() {
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+            >
               {filteredReviews.map((r) => (
                 <div
                   key={r.firebaseId}
@@ -1528,6 +1538,11 @@ function PharmacyPanel() {
       {view === 'profile' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">🏪 Pharmacy Profile</h2>
+
+          {/* ✅ Push Notification Card */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
 
           <div className="rest-v2-profile-card">
             <div className="rest-v2-profile-avatar">
@@ -1657,6 +1672,12 @@ function PharmacyPanel() {
       {view === 'settings' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">⚙️ Settings</h2>
+
+          {/* ✅ Push Notification Card */}
+          <div style={{ marginBottom: '16px' }}>
+            <PushToggleCard user={user} />
+          </div>
+
           <div className="rest-v2-form">
             <div className="rest-v2-form-row">
               <div className="rest-v2-form-group">

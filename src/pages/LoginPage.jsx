@@ -1,4 +1,10 @@
+// ============================================================
+// src/pages/LoginPage.jsx
+// V2 — Premium redesign, role detection unchanged
+// ============================================================
+
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -16,6 +22,7 @@ import {
   getDocs,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import { Eye, EyeOff } from 'lucide-react'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -30,10 +37,6 @@ function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault()
 
-    console.log('=== LOGIN ATTEMPT ===')
-    console.log('Email:', email.trim().toLowerCase())
-    console.log('Password length:', password.length)
-
     setError('')
     setMessage('')
     setLoading(true)
@@ -41,21 +44,14 @@ function LoginPage() {
     const cleanEmail = email.trim().toLowerCase()
 
     try {
-      // ============================================================
-      // STEP 1: FORCE SIGN OUT any existing session
-      // ============================================================
+      // STEP 1: Force signout
       try {
-        if (auth.currentUser) {
-          console.log('Signing out existing user:', auth.currentUser.email)
-          await signOut(auth)
-        }
-      } catch (signOutErr) {
-        console.warn('Sign out warning:', signOutErr)
+        if (auth.currentUser) await signOut(auth)
+      } catch (err) {
+        console.warn('Sign out warning:', err)
       }
 
-      // ============================================================
-      // STEP 2: CLEAR all role-related localStorage
-      // ============================================================
+      // STEP 2: Clear role storage
       localStorage.removeItem('userRole')
       localStorage.removeItem('isPartner')
       localStorage.removeItem('managementRole')
@@ -63,48 +59,34 @@ function LoginPage() {
       localStorage.removeItem('managementName')
       localStorage.removeItem('managementId')
 
-      // ============================================================
-      // STEP 3: SET persistence
-      // ============================================================
+      // STEP 3: Set persistence
       await setPersistence(auth, browserLocalPersistence)
 
-      // ============================================================
       // STEP 4: Sign in
-      // ============================================================
       const userCred = await signInWithEmailAndPassword(
         auth,
         cleanEmail,
         password
       )
-
       const uid = userCred.user.uid
 
-      console.log('=== LOGIN SUCCESS ===')
-      console.log('Logged in as:', userCred.user.email)
-      console.log('UID:', uid)
-
-      // ============================================================
       // STEP 5: Determine role
-      // ============================================================
 
-      // 5a. Admin email check
+      // 5a. Admin email
       if (cleanEmail === 'admin@araifood.com') {
-        console.log('Role: ADMIN (email match)')
         localStorage.setItem('userRole', 'admin')
         window.location.href = '/admin'
         return
       }
 
-      // 5b. Partner check
+      // 5b. Management member
       try {
         let memberData = null
-
         const partnerQuery = query(
           collection(db, 'managementMembers'),
           where('firebaseUid', '==', uid)
         )
         const partnerSnap = await getDocs(partnerQuery)
-
         if (!partnerSnap.empty) {
           memberData = partnerSnap.docs[0].data()
         } else {
@@ -113,13 +95,10 @@ function LoginPage() {
             where('email', '==', cleanEmail)
           )
           const emailSnap = await getDocs(emailQuery)
-          if (!emailSnap.empty) {
-            memberData = emailSnap.docs[0].data()
-          }
+          if (!emailSnap.empty) memberData = emailSnap.docs[0].data()
         }
 
         if (memberData && memberData.status === 'active') {
-          console.log('Role: ADMIN (partner)')
           localStorage.setItem('userRole', 'admin')
           localStorage.setItem('isPartner', 'true')
           localStorage.setItem(
@@ -130,22 +109,55 @@ function LoginPage() {
             'managementPermissions',
             JSON.stringify(memberData.permissions || {})
           )
-          localStorage.setItem(
-            'managementName',
-            memberData.fullName || ''
-          )
-          localStorage.setItem(
-            'managementId',
-            memberData.memberId || ''
-          )
+          localStorage.setItem('managementName', memberData.fullName || '')
+          localStorage.setItem('managementId', memberData.memberId || '')
           window.location.href = '/admin'
           return
         }
-      } catch (partnerErr) {
-        console.error('Partner check error:', partnerErr)
+      } catch (err) {
+        console.error('Partner check error:', err)
       }
 
-      // 5c. Firestore users/{uid} doc check
+      // 5c. Pharmacy / Restaurant / Rider doc check
+      try {
+        const pharmDoc = await getDoc(doc(db, 'pharmacies', uid))
+        if (pharmDoc.exists()) {
+          const d = pharmDoc.data()
+          localStorage.setItem('userRole', 'pharmacy')
+          if (d.status === 'approved') {
+            window.location.href = '/pharmacy-panel'
+          } else {
+            window.location.href = '/pharmacy-panel'
+          }
+          return
+        }
+      } catch (err) {
+        console.error('Pharmacy check error:', err)
+      }
+
+      try {
+        const restDoc = await getDoc(doc(db, 'restaurants', uid))
+        if (restDoc.exists()) {
+          localStorage.setItem('userRole', 'restaurant')
+          window.location.href = '/restaurant-panel'
+          return
+        }
+      } catch (err) {
+        console.error('Restaurant check error:', err)
+      }
+
+      try {
+        const riderDoc = await getDoc(doc(db, 'riders', uid))
+        if (riderDoc.exists()) {
+          localStorage.setItem('userRole', 'rider')
+          window.location.href = '/rider-panel'
+          return
+        }
+      } catch (err) {
+        console.error('Rider check error:', err)
+      }
+
+      // 5d. Customer (users doc)
       try {
         const userDocRef = doc(db, 'users', uid)
         const userDoc = await getDoc(userDocRef)
@@ -153,22 +165,15 @@ function LoginPage() {
         if (userDoc.exists()) {
           const data = userDoc.data()
           const realRole = data.role || 'customer'
-          console.log('Role: from Firestore users doc:', realRole)
-
           localStorage.setItem('userRole', realRole)
-
           if (!data.email) {
             await setDoc(
               userDocRef,
-              {
-                email: cleanEmail,
-                role: realRole,
-              },
+              { email: cleanEmail, role: realRole },
               { merge: true }
             )
           }
         } else {
-          console.log('Role: CUSTOMER (new user doc created)')
           await setDoc(userDocRef, {
             email: cleanEmail,
             fullName: '',
@@ -184,21 +189,15 @@ function LoginPage() {
           })
           localStorage.setItem('userRole', 'customer')
         }
-      } catch (userDocErr) {
-        console.error('User doc check error:', userDocErr)
+      } catch (err) {
+        console.error('User doc check error:', err)
         localStorage.setItem('userRole', 'customer')
       }
 
-      // ============================================================
-      // STEP 6: Redirect to Home
-      // ============================================================
-      console.log('Redirecting to home...')
+      // STEP 6: Redirect home
       window.location.href = '/'
     } catch (err) {
-      console.error('=== LOGIN FAILED ===')
-      console.error('Code:', err.code)
-      console.error('Message:', err.message)
-
+      console.error('Login failed:', err)
       if (
         err.code === 'auth/invalid-credential' ||
         err.code === 'auth/user-not-found' ||
@@ -252,6 +251,7 @@ function LoginPage() {
       <div className="floating-food food-four">🍗</div>
 
       <div className="premium-login-card">
+        {/* Logo */}
         <div className="premium-login-logo">
           <img
             src="/araifood-logo.png"
@@ -262,6 +262,7 @@ function LoginPage() {
           <p>Good Food, Good Mood</p>
         </div>
 
+        {/* Header */}
         <div className="premium-login-header">
           <span className="section-label">WELCOME BACK</span>
           <h2>Login to Continue</h2>
@@ -280,6 +281,7 @@ function LoginPage() {
                 setError('')
                 setMessage('')
               }}
+              autoComplete="email"
               required
             />
           </div>
@@ -295,6 +297,7 @@ function LoginPage() {
                   setPassword(e.target.value)
                   setError('')
                 }}
+                autoComplete="current-password"
                 required
                 style={{ paddingRight: '50px' }}
               />
@@ -309,11 +312,13 @@ function LoginPage() {
                   border: 'none',
                   background: 'transparent',
                   cursor: 'pointer',
-                  fontSize: '18px',
-                  padding: '5px',
+                  color: 'var(--text-tertiary)',
+                  padding: '6px',
+                  display: 'flex',
                 }}
+                aria-label="Toggle password"
               >
-                {showPassword ? '🙈' : '👁️'}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
@@ -335,9 +340,9 @@ function LoginPage() {
               style={{
                 border: 'none',
                 background: 'transparent',
-                color: '#13a89e',
-                fontSize: '14px',
-                fontWeight: '600',
+                color: '#059669',
+                fontSize: '13.5px',
+                fontWeight: 700,
                 cursor: 'pointer',
                 padding: '4px 0',
               }}
@@ -349,18 +354,19 @@ function LoginPage() {
           {showForgot && (
             <div
               style={{
-                background: 'rgba(19, 168, 158, 0.1)',
-                border: '1px solid rgba(19, 168, 158, 0.3)',
-                borderRadius: '12px',
-                padding: '15px',
+                background: 'rgba(5,150,105,0.08)',
+                border: '1px solid rgba(5,150,105,0.25)',
+                borderRadius: '14px',
+                padding: '16px',
                 marginBottom: '18px',
               }}
             >
               <strong
                 style={{
                   display: 'block',
-                  color: '#13a89e',
+                  color: '#059669',
                   marginBottom: '6px',
+                  fontSize: '14px',
                 }}
               >
                 Reset your password
@@ -370,6 +376,7 @@ function LoginPage() {
                   marginTop: 0,
                   marginBottom: '12px',
                   fontSize: '13px',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 Enter your email above and we'll send you a reset link.
@@ -380,13 +387,16 @@ function LoginPage() {
                 disabled={resetLoading}
                 style={{
                   width: '100%',
-                  padding: '10px',
+                  padding: '11px',
                   border: 'none',
-                  borderRadius: '9px',
-                  background: '#13a89e',
+                  borderRadius: '10px',
+                  background:
+                    'linear-gradient(135deg, #059669, #047857)',
                   color: '#fff',
-                  fontWeight: '700',
+                  fontWeight: 800,
+                  fontSize: '13.5px',
                   cursor: resetLoading ? 'not-allowed' : 'pointer',
+                  opacity: resetLoading ? 0.7 : 1,
                 }}
               >
                 {resetLoading ? 'Sending...' : 'Send Reset Email'}
@@ -403,12 +413,12 @@ function LoginPage() {
             <p
               style={{
                 marginBottom: '12px',
-                color: '#13a89e',
-                fontWeight: '600',
-                fontSize: '14px',
+                color: '#059669',
+                fontWeight: 600,
+                fontSize: '13.5px',
               }}
             >
-              {message}
+              ✓ {message}
             </p>
           )}
 
@@ -423,15 +433,13 @@ function LoginPage() {
 
         <div className="login-footer">
           <p>Don't have an account?</p>
-          <button
-            type="button"
+          <Link
+            to="/signup"
             className="signup-link"
-            onClick={() => {
-              window.location.href = '/signup'
-            }}
+            style={{ textDecoration: 'none' }}
           >
             Create an account
-          </button>
+          </Link>
         </div>
       </div>
     </div>

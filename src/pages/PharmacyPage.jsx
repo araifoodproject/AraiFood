@@ -1,34 +1,61 @@
 // ============================================================
 // src/pages/PharmacyPage.jsx
-// Pharmacy listing page
+// V3 — Debug-friendly version with console logs
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../firebase'
-import { collection, query, where, onSnapshot } from 'firebase/firestore'
-import { Search, X } from 'lucide-react'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { X } from 'lucide-react'
 import PageBackButton from '../components/PageBackButton'
 
 function PharmacyPage() {
   const navigate = useNavigate()
-  const [pharmacies, setPharmacies] = useState([])
+  const [allPharmacies, setAllPharmacies] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('rating')
+  const [error, setError] = useState('')
 
+  // ============ LOAD ALL PHARMACIES ============
   useEffect(() => {
-    const q = query(
+    console.log('🟢 PharmacyPage: Starting to load...')
+
+    const unsub = onSnapshot(
       collection(db, 'pharmacies'),
-      where('status', '==', 'approved')
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          firebaseId: d.id,
+          ...d.data(),
+        }))
+
+        console.log('🟢 Total pharmacies loaded:', list.length)
+        list.forEach((p) => {
+          console.log(`   → ${p.pharmacyName} | status: "${p.status}" | status type: ${typeof p.status}`)
+        })
+
+        const approved = list.filter((p) => p.status === 'approved')
+        console.log('🟢 Approved pharmacies:', approved.length)
+
+        setAllPharmacies(list)
+        setLoading(false)
+      },
+      (err) => {
+        console.error('🔴 Pharmacy load error:', err)
+        setError(err.message || 'Failed to load pharmacies')
+        setLoading(false)
+      }
     )
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
-      setPharmacies(list)
-      setLoading(false)
-    })
+
     return () => unsub()
   }, [])
+
+  // ============ CLIENT-SIDE FILTER ============
+  const pharmacies = useMemo(
+    () => allPharmacies.filter((p) => p.status === 'approved'),
+    [allPharmacies]
+  )
 
   const filtered = useMemo(() => {
     let result = [...pharmacies]
@@ -45,9 +72,7 @@ function PharmacyPage() {
     if (sortBy === 'rating') {
       result.sort((a, b) => (b.rating || 0) - (a.rating || 0))
     } else if (sortBy === 'delivery') {
-      result.sort(
-        (a, b) => (a.deliveryFee || 0) - (b.deliveryFee || 0)
-      )
+      result.sort((a, b) => (a.deliveryFee || 0) - (b.deliveryFee || 0))
     } else if (sortBy === 'name') {
       result.sort((a, b) =>
         (a.pharmacyName || '').localeCompare(b.pharmacyName || '')
@@ -145,6 +170,12 @@ function PharmacyPage() {
             <div className="panel-loading-spinner"></div>
             <p>Loading pharmacies...</p>
           </div>
+        ) : error ? (
+          <div className="restaurant-empty-state">
+            <div className="empty-icon">⚠️</div>
+            <h2>Could not load pharmacies</h2>
+            <p>{error}</p>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">💊</div>
@@ -152,6 +183,10 @@ function PharmacyPage() {
             <p>
               {search
                 ? 'Try a different search term'
+                : allPharmacies.length === 0
+                ? 'No pharmacies in database yet'
+                : pharmacies.length === 0
+                ? `${allPharmacies.length} pharmacies total, none approved`
                 : 'Pharmacies will appear here soon'}
             </p>
           </div>
@@ -188,7 +223,8 @@ function PharmacyPage() {
                     </div>
                     {p.rating != null && (
                       <div className="all-restaurant-rating">
-                        ⭐ {p.rating.toFixed ? p.rating.toFixed(1) : p.rating}
+                        ⭐{' '}
+                        {p.rating.toFixed ? p.rating.toFixed(1) : p.rating}
                       </div>
                     )}
                   </div>

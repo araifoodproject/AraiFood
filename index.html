@@ -7,14 +7,62 @@
     <meta name="theme-color" content="#059669" />
     <meta name="description" content="AraiFood - Your local food delivery platform for Araihazar. Discover great food from your favourite local restaurants." />
     <title>AraiFood - Food Delivery in Araihazar</title>
-    
-    <!-- Premium Fonts: Inter + Plus Jakarta Sans -->
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link 
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" 
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     >
+
+    <!-- ============================================================
+         OneSignal Web Push SDK v16 — v2 (fresh worker paths)
+         ============================================================ -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function (OneSignal) {
+        await OneSignal.init({
+          appId: "e0eeba72-f784-46f5-8b92-8622ae59c5d3",
+
+          // ✅ NEW worker paths — force fresh registration
+          serviceWorkerParam: { scope: "/" },
+          serviceWorkerPath: "/OneSignalSDKWorker-v2.js",
+
+          allowLocalhostAsSecureOrigin: true,
+
+          notifyButton: {
+            enable: false,
+          },
+
+          promptOptions: {
+            slidedown: {
+              prompts: [
+                {
+                  type: "push",
+                  autoPrompt: false,
+                  text: {
+                    actionMessage: "Get instant updates about your orders!",
+                    acceptButton: "Allow",
+                    cancelButton: "No thanks",
+                  },
+                  delay: {
+                    pageViews: 1,
+                    timeDelay: 0,
+                  },
+                },
+              ],
+            },
+          },
+
+          welcomeNotification: {
+            disable: true,
+          },
+        });
+
+        console.log("✅ OneSignal initialized (v2 worker)");
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

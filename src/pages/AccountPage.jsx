@@ -1,10 +1,14 @@
+// ============================================================
+// src/pages/AccountPage.jsx
+// V3 — With OneSignal Push Notifications
+// ============================================================
+
 import { useState, useEffect, useRef } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
   collection,
   addDoc,
   query,
@@ -12,6 +16,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore'
+import { Link } from 'react-router-dom'
 import { auth, db } from '../firebase'
 import PageBackButton from '../components/PageBackButton'
 import useSettings from '../hooks/useSettings'
@@ -22,10 +27,19 @@ import {
   Wallet,
   Copy,
   Check,
-  Clock,
-  CheckCircle2,
-  XCircle,
+  LogOut,
+  Home as HomeIcon,
+  Edit3,
+  Bell,
+  BellOff,
+  BellRing,
 } from 'lucide-react'
+import {
+  enableNotifications,
+  disableNotifications,
+  getSubscriptionStatus,
+  getBrowserPermission,
+} from '../utils/oneSignal'
 
 function AccountPage() {
   const { settings } = useSettings()
@@ -36,7 +50,6 @@ function AccountPage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
-  const [role, setRole] = useState('customer')
   const [profileImage, setProfileImage] = useState('')
 
   const [saving, setSaving] = useState(false)
@@ -47,13 +60,23 @@ function AccountPage() {
   const [walletTransactions, setWalletTransactions] = useState([])
   const [pointsHistory, setPointsHistory] = useState([])
 
-  // Wallet Requests
+  const [totalOrders, setTotalOrders] = useState(0)
+  const [activeOrders, setActiveOrders] = useState(0)
+  const [totalSpent, setTotalSpent] = useState(0)
+
   const [walletRequests, setWalletRequests] = useState([])
   const [showAddMoney, setShowAddMoney] = useState(false)
 
+  const [editMode, setEditMode] = useState(false)
+
+  // ============ NOTIFICATION STATE ============
+  const [notifStatus, setNotifStatus] = useState('checking')
+  // 'checking' | 'enabled' | 'disabled' | 'denied' | 'unsupported'
+  const [notifLoading, setNotifLoading] = useState(false)
+
   const fileInputRef = useRef(null)
 
-  // ============ AUTH + LOAD ============
+  // ============ AUTH ============
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser)
@@ -65,9 +88,7 @@ function AccountPage() {
 
           if (userDoc.exists()) {
             const data = userDoc.data()
-            const dbRole = 'customer'
-            setRole(dbRole)
-            localStorage.setItem('userRole', dbRole)
+            localStorage.setItem('userRole', 'customer')
 
             setFullName(data.fullName || '')
             setPhone(data.phone || '')
@@ -92,7 +113,6 @@ function AccountPage() {
               createdAt: new Date(),
             })
             localStorage.setItem('userRole', 'customer')
-            setRole('customer')
           }
         } catch (error) {
           console.error('Error loading user data:', error)
@@ -105,7 +125,32 @@ function AccountPage() {
     return () => unsubscribe()
   }, [])
 
-  // ============ LOAD MY WALLET REQUESTS ============
+  // ============ LOAD ORDERS STATS ============
+  useEffect(() => {
+    if (!user) return
+    const q = query(
+      collection(db, 'orders'),
+      where('userId', '==', user.uid)
+    )
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs.map((d) => d.data())
+      setTotalOrders(list.length)
+      setActiveOrders(
+        list.filter((o) =>
+          ['pending', 'preparing', 'delivering'].includes(o.status) ||
+          !o.status
+        ).length
+      )
+      setTotalSpent(
+        list
+          .filter((o) => o.status !== 'cancelled')
+          .reduce((s, o) => s + (o.total || 0), 0)
+      )
+    })
+    return () => unsub()
+  }, [user])
+
+  // ============ LOAD WALLET REQUESTS ============
   useEffect(() => {
     if (!user) return
     const q = query(
@@ -123,6 +168,62 @@ function AccountPage() {
     })
     return () => unsub()
   }, [user])
+
+  // ============ NOTIFICATION STATUS CHECK ============
+  useEffect(() => {
+    if (!user) return
+
+    const checkStatus = async () => {
+      const permission = getBrowserPermission()
+
+      if (permission === 'unsupported') {
+        setNotifStatus('unsupported')
+        return
+      }
+      if (permission === 'denied') {
+        setNotifStatus('denied')
+        return
+      }
+
+      const sub = await getSubscriptionStatus()
+      setNotifStatus(sub.enabled ? 'enabled' : 'disabled')
+    }
+
+    checkStatus()
+  }, [user])
+
+  // ============ ENABLE / DISABLE NOTIFICATIONS ============
+  const handleToggleNotifications = async () => {
+    if (!user) return
+    setNotifLoading(true)
+
+    try {
+      if (notifStatus === 'enabled') {
+        const res = await disableNotifications(user)
+        if (res.success) {
+          toast.success('🔕 Notifications disabled')
+          setNotifStatus('disabled')
+        } else {
+          toast.error(res.error || 'Failed to disable')
+        }
+      } else {
+        const res = await enableNotifications(user)
+        if (res.success) {
+          toast.success('🔔 Notifications enabled!')
+          setNotifStatus('enabled')
+        } else {
+          toast.error(res.error || 'Failed to enable')
+          const perm = getBrowserPermission()
+          if (perm === 'denied') setNotifStatus('denied')
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Something went wrong')
+    } finally {
+      setNotifLoading(false)
+    }
+  }
 
   // ============ IMAGE UPLOAD ============
   const handleImageUpload = (e) => {
@@ -165,9 +266,8 @@ function AccountPage() {
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, width, height)
         ctx.drawImage(img, 0, 0, width, height)
-        const compressed = canvas.toDataURL('image/jpeg', 0.8)
-        setProfileImage(compressed)
-        toast.success('📷 Profile photo ready! Click "Save Profile".')
+        setProfileImage(canvas.toDataURL('image/jpeg', 0.8))
+        toast.success('📷 Photo ready! Click "Save".')
       }
       img.src = event.target.result
     }
@@ -188,9 +288,8 @@ function AccountPage() {
     setSaving(true)
     setMessage('')
     try {
-      const userDocRef = doc(db, 'users', user.uid)
       await setDoc(
-        userDocRef,
+        doc(db, 'users', user.uid),
         {
           fullName: fullName.trim(),
           phone: phone.trim(),
@@ -204,6 +303,7 @@ function AccountPage() {
       )
       setMessage('Profile saved successfully!')
       toast.success('✅ Profile saved!')
+      setEditMode(false)
     } catch (error) {
       console.error('Save error:', error)
       setMessage('Could not save profile. Please try again.')
@@ -223,6 +323,7 @@ function AccountPage() {
     }
   }
 
+  // ============ LOADING ============
   if (loading) {
     return (
       <div className="account-page">
@@ -234,6 +335,7 @@ function AccountPage() {
     )
   }
 
+  // ============ NOT LOGGED IN ============
   if (!user) {
     return (
       <div className="account-page">
@@ -254,16 +356,51 @@ function AccountPage() {
     )
   }
 
+  // Reusable input style
+  const fieldInputStyle = {
+    width: '100%',
+    padding: '14px 16px 14px 48px',
+    borderRadius: '14px',
+    border: '1px solid var(--border-strong)',
+    background: 'var(--surface)',
+    color: 'var(--text-primary)',
+    fontSize: '14.5px',
+    fontWeight: 600,
+    fontFamily: 'var(--font-primary)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  }
+
+  const fieldIconStyle = {
+    position: 'absolute',
+    left: '16px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    fontSize: '16px',
+    pointerEvents: 'none',
+    zIndex: 2,
+    lineHeight: 1,
+  }
+
+  const fieldLabelStyle = {
+    display: 'block',
+    fontSize: '12.5px',
+    fontWeight: 800,
+    color: 'var(--text-secondary)',
+    marginBottom: '8px',
+  }
+
+  // ============ MAIN ============
   return (
     <div className="account-page">
       <div className="account-container">
         <PageBackButton label="Back" fallback="/" />
 
+        {/* Header */}
         <div className="account-header">
           <div className="account-header-top">
             <span className="account-header-badge">ARAIFOOD ACCOUNT</span>
           </div>
-
           <h1>
             Welcome back,
             <span> {fullName || 'Food Lover'}!</span>
@@ -271,8 +408,8 @@ function AccountPage() {
           <p>Manage your profile, wallet, and rewards all in one place.</p>
         </div>
 
-        <div className="account-card">
-          {/* Profile */}
+        {/* ============ HERO PROFILE CARD ============ */}
+        <div className="account-card" style={{ marginBottom: '20px' }}>
           <div className="account-profile">
             <div className="profile-avatar-wrapper">
               <div
@@ -355,21 +492,195 @@ function AccountPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
-                  title="Remove Photo"
                 >
                   <X size={16} />
                 </button>
               )}
             </div>
           </div>
+        </div>
 
-          <div className="account-divider"></div>
+        {/* ============ STATS GRID ============ */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: '12px',
+            marginBottom: '20px',
+          }}
+        >
+          <div className="reward-card" style={{ cursor: 'pointer' }}>
+            <div className="reward-icon">📦</div>
+            <div className="reward-info">
+              <strong>{totalOrders}</strong>
+              <small>Total Orders</small>
+            </div>
+          </div>
+          <div className="reward-card" style={{ cursor: 'pointer' }}>
+            <div className="reward-icon">⚡</div>
+            <div className="reward-info">
+              <strong>{activeOrders}</strong>
+              <small>Active Now</small>
+            </div>
+          </div>
+          <div className="reward-card" style={{ cursor: 'pointer' }}>
+            <div className="reward-icon">💰</div>
+            <div className="reward-info">
+              <strong>৳{totalSpent.toFixed(0)}</strong>
+              <small>Total Spent</small>
+            </div>
+          </div>
+          <div className="reward-card" style={{ cursor: 'pointer' }}>
+            <div className="reward-icon">⭐</div>
+            <div className="reward-info">
+              <strong>{loyaltyPoints}</strong>
+              <small>Points</small>
+            </div>
+          </div>
+        </div>
 
-          {/* Rewards */}
+        {/* ============ NOTIFICATION SETTINGS ============ */}
+        <div className="account-card" style={{ marginBottom: '20px' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '16px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                flex: 1,
+                minWidth: '220px',
+              }}
+            >
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '16px',
+                  background:
+                    notifStatus === 'enabled'
+                      ? 'linear-gradient(135deg, #D1FAE5, #A7F3D0)'
+                      : notifStatus === 'denied'
+                      ? 'linear-gradient(135deg, #FEE2E2, #FECACA)'
+                      : 'linear-gradient(135deg, #FEF3C7, #FDE68A)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px',
+                  flexShrink: 0,
+                }}
+              >
+                {notifStatus === 'enabled' ? (
+                  <BellRing size={24} color="#047857" strokeWidth={2.4} />
+                ) : notifStatus === 'denied' ? (
+                  <BellOff size={24} color="#DC2626" strokeWidth={2.4} />
+                ) : (
+                  <Bell size={24} color="#D97706" strokeWidth={2.4} />
+                )}
+              </div>
+
+              <div>
+                <strong
+                  style={{
+                    display: 'block',
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: '15px',
+                    fontWeight: 800,
+                    color: 'var(--text-primary)',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Push Notifications
+                </strong>
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    color: 'var(--text-tertiary)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {notifStatus === 'checking' && 'Checking...'}
+                  {notifStatus === 'enabled' &&
+                    "✅ Enabled — You'll get real-time updates"}
+                  {notifStatus === 'disabled' &&
+                    '🔔 Get instant updates about your orders'}
+                  {notifStatus === 'denied' &&
+                    '🚫 Blocked — Enable from browser settings'}
+                  {notifStatus === 'unsupported' &&
+                    'Not supported in this browser'}
+                </span>
+              </div>
+            </div>
+
+            {notifStatus !== 'unsupported' &&
+              notifStatus !== 'checking' && (
+                <button
+                  onClick={handleToggleNotifications}
+                  disabled={notifLoading || notifStatus === 'denied'}
+                  style={{
+                    padding: '12px 22px',
+                    borderRadius: '999px',
+                    background:
+                      notifStatus === 'enabled'
+                        ? 'rgba(220,38,38,0.08)'
+                        : notifStatus === 'denied'
+                        ? 'var(--surface-soft)'
+                        : 'linear-gradient(135deg, #059669, #047857)',
+                    color:
+                      notifStatus === 'enabled'
+                        ? '#DC2626'
+                        : notifStatus === 'denied'
+                        ? 'var(--text-tertiary)'
+                        : '#FFFFFF',
+                    border:
+                      notifStatus === 'enabled'
+                        ? '1px solid rgba(220,38,38,0.25)'
+                        : notifStatus === 'denied'
+                        ? '1px solid var(--border)'
+                        : 'none',
+                    fontSize: '13.5px',
+                    fontWeight: 800,
+                    cursor:
+                      notifLoading || notifStatus === 'denied'
+                        ? 'not-allowed'
+                        : 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    boxShadow:
+                      notifStatus === 'disabled'
+                        ? '0 4px 12px rgba(5,150,105,0.3)'
+                        : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {notifLoading
+                    ? '⏳ Loading...'
+                    : notifStatus === 'enabled'
+                    ? '🔕 Disable'
+                    : notifStatus === 'denied'
+                    ? '🚫 Blocked'
+                    : '🔔 Enable'}
+                </button>
+              )}
+          </div>
+        </div>
+
+        {/* ============ WALLET + REWARDS ============ */}
+        <div className="account-card" style={{ marginBottom: '20px' }}>
           <div className="rewards-section">
             <div className="rewards-header">
-              <span className="section-label">YOUR REWARDS</span>
-              <h3>Loyalty Points & Wallet</h3>
+              <span className="section-label">YOUR WALLET</span>
+              <h3>Balance & Rewards</h3>
             </div>
 
             <div className="rewards-grid">
@@ -399,332 +710,580 @@ function AccountPage() {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Wallet Requests (Pending) */}
-          {walletRequests.length > 0 && (
-            <div className="wallet-transactions-section">
-              <div className="account-section-title">
-                <div className="account-section-icon">💰</div>
-                <div>
-                  <h3>Top-Up Requests</h3>
-                  <p>Your wallet top-up requests</p>
-                </div>
-              </div>
-
-              <div className="wallet-transaction-list">
-                {walletRequests.slice(0, 5).map((req) => {
-                  const statusMap = {
-                    pending: {
-                      label: 'Pending',
-                      color: '#f59e0b',
-                      bg: 'rgba(245,158,11,0.12)',
-                      icon: '⏳',
-                    },
-                    approved: {
-                      label: 'Approved',
-                      color: '#16a34a',
-                      bg: 'rgba(22,163,74,0.12)',
-                      icon: '✅',
-                    },
-                    rejected: {
-                      label: 'Rejected',
-                      color: '#dc2626',
-                      bg: 'rgba(220,38,38,0.12)',
-                      icon: '❌',
-                    },
-                  }
-                  const s = statusMap[req.status] || statusMap.pending
-                  return (
-                    <div
-                      className="wallet-transaction-card"
-                      key={req.firebaseId}
-                    >
-                      <div className="transaction-icon">
-                        {req.method === 'bkash' ? '💳' : '💰'}
-                      </div>
-                      <div className="transaction-info">
-                        <strong>
-                          ৳{req.amount} via{' '}
-                          {req.method === 'bkash' ? 'bKash' : 'Nagad'}
-                        </strong>
-                        <small>
-                          {req.createdAt?.toDate?.()
-                            ? req.createdAt
-                                .toDate()
-                                .toLocaleString()
-                            : 'Just now'}
-                        </small>
-                        {req.status === 'rejected' && req.rejectReason && (
-                          <small
-                            style={{ color: '#dc2626', display: 'block' }}
-                          >
-                            Reason: {req.rejectReason}
-                          </small>
-                        )}
-                      </div>
-                      <div
-                        className="transaction-amount"
-                        style={{ color: s.color }}
-                      >
-                        <span
-                          style={{
-                            padding: '4px 12px',
-                            borderRadius: '999px',
-                            background: s.bg,
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          {s.icon} {s.label}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Wallet Transactions */}
-          <div className="wallet-transactions-section">
+        {/* ============ PENDING REQUESTS ============ */}
+        {walletRequests.filter((r) => r.status === 'pending').length > 0 && (
+          <div className="account-card" style={{ marginBottom: '20px' }}>
             <div className="account-section-title">
-              <div className="account-section-icon">💳</div>
+              <div className="account-section-icon">⏳</div>
               <div>
-                <h3>Wallet Transactions</h3>
-                <p>Your wallet activity</p>
+                <h3>Pending Top-Up Requests</h3>
+                <p>Being verified by admin</p>
               </div>
             </div>
-
             <div className="wallet-transaction-list">
-              {walletTransactions.length === 0 ? (
-                <p className="no-transactions">
-                  No wallet transactions yet.
-                </p>
-              ) : (
-                walletTransactions.slice(0, 5).map((transaction) => (
+              {walletRequests
+                .filter((r) => r.status === 'pending')
+                .slice(0, 3)
+                .map((req) => (
                   <div
                     className="wallet-transaction-card"
-                    key={transaction.id}
+                    key={req.firebaseId}
                   >
                     <div className="transaction-icon">
-                      {transaction.type === 'credit' ? '⬇️' : '⬆️'}
+                      {req.method === 'bkash' ? '💳' : '💰'}
                     </div>
                     <div className="transaction-info">
                       <strong>
-                        {transaction.type === 'credit'
-                          ? 'Money Added'
-                          : 'Payment Made'}
+                        ৳{req.amount} via{' '}
+                        {req.method === 'bkash' ? 'bKash' : 'Nagad'}
                       </strong>
-                      <small>{transaction.date}</small>
+                      <small>
+                        ID: {req.transactionId} ·{' '}
+                        {req.createdAt?.toDate?.()
+                          ? req.createdAt.toDate().toLocaleString()
+                          : 'Just now'}
+                      </small>
                     </div>
-                    <div
-                      className={`transaction-amount ${
-                        transaction.type === 'credit' ? 'credit' : 'debit'
-                      }`}
+                    <span
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '999px',
+                        background: 'rgba(245,158,11,0.12)',
+                        color: '#f59e0b',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                      }}
                     >
-                      <strong>৳{transaction.amount.toFixed(2)}</strong>
-                    </div>
+                      ⏳ Pending
+                    </span>
                   </div>
-                ))
-              )}
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* ============ WALLET TRANSACTIONS ============ */}
+        <div className="account-card" style={{ marginBottom: '20px' }}>
+          <div className="account-section-title">
+            <div className="account-section-icon">💳</div>
+            <div>
+              <h3>Recent Transactions</h3>
+              <p>Your wallet activity</p>
             </div>
           </div>
 
-          {/* Points History */}
-          <div className="points-history-section">
+          <div className="wallet-transaction-list">
+            {walletTransactions.length === 0 ? (
+              <p className="no-transactions">
+                No wallet transactions yet.
+              </p>
+            ) : (
+              walletTransactions.slice(0, 5).map((transaction) => (
+                <div
+                  className="wallet-transaction-card"
+                  key={transaction.id}
+                >
+                  <div className="transaction-icon">
+                    {transaction.type === 'credit' ? '⬇️' : '⬆️'}
+                  </div>
+                  <div className="transaction-info">
+                    <strong>
+                      {transaction.type === 'credit'
+                        ? 'Money Added'
+                        : 'Payment Made'}
+                    </strong>
+                    <small>{transaction.date}</small>
+                  </div>
+                  <div
+                    className={`transaction-amount ${
+                      transaction.type === 'credit' ? 'credit' : 'debit'
+                    }`}
+                  >
+                    <strong>৳{transaction.amount.toFixed(2)}</strong>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ============ POINTS HISTORY ============ */}
+        {pointsHistory.length > 0 && (
+          <div className="account-card" style={{ marginBottom: '20px' }}>
             <div className="account-section-title">
               <div className="account-section-icon">⭐</div>
               <div>
-                <h3>Loyalty Points History</h3>
+                <h3>Points History</h3>
                 <p>How you earned your points</p>
               </div>
             </div>
 
             <div className="points-history-list">
-              {pointsHistory.length === 0 ? (
-                <p className="no-transactions">
-                  No points history yet. Order food to earn points!
-                </p>
-              ) : (
-                pointsHistory.slice(0, 5).map((point) => (
-                  <div className="points-history-card" key={point.id}>
-                    <div className="points-icon">⭐</div>
-                    <div className="points-info">
-                      <strong>Earned {point.amount} Points</strong>
-                      <small>{point.date}</small>
-                    </div>
-                    <div className="points-amount">
-                      <strong>+{point.amount}</strong>
-                    </div>
+              {pointsHistory.slice(0, 5).map((point) => (
+                <div className="points-history-card" key={point.id}>
+                  <div className="points-icon">⭐</div>
+                  <div className="points-info">
+                    <strong>Earned {point.amount} Points</strong>
+                    <small>{point.date}</small>
                   </div>
-                ))
-              )}
+                  <div className="points-amount">
+                    <strong>+{point.amount}</strong>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+        )}
 
-          <div className="account-divider"></div>
-
-          {/* Personal Info */}
-          <div className="account-section-title">
-            <div className="account-section-icon">👤</div>
-            <div>
-              <h3>Personal Information</h3>
-              <p>Your information can be edited anytime.</p>
-            </div>
-          </div>
-
-          <div className="form-group account-form-group">
-            <label>Full Name</label>
-            <div className="account-input-wrapper">
-              <span className="account-input-icon">👤</span>
-              <input
-                type="text"
-                placeholder="Enter your full name"
-                value={fullName}
-                onChange={(e) => {
-                  setFullName(e.target.value)
-                  setMessage('')
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="form-group account-form-group">
-            <label>Mobile Number</label>
-            <div className="account-input-wrapper">
-              <span className="account-input-icon">📱</span>
-              <input
-                type="tel"
-                placeholder="01XXXXXXXXX"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value)
-                  setMessage('')
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="form-group account-form-group">
-            <label>Delivery Address</label>
-            <div className="account-textarea-wrapper">
-              <span className="account-textarea-icon">📍</span>
-              <textarea
-                placeholder="House / Road / Area / Union / Upazila..."
-                rows="4"
-                value={address}
-                onChange={(e) => {
-                  setAddress(e.target.value)
-                  setMessage('')
-                }}
-              ></textarea>
-            </div>
-          </div>
-
-          <div className="save-profile-section">
-            <button
-              className="account-save-button"
-              onClick={saveProfile}
-              disabled={saving}
+        {/* ============ PERSONAL INFORMATION ============ */}
+        <div className="account-card" style={{ marginBottom: '20px' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '18px',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              className="account-section-title"
+              style={{ marginBottom: 0 }}
             >
-              {saving ? (
-                <>
-                  <span className="save-spinner">⏳</span>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <span>✓</span>
-                  Save Profile
-                </>
-              )}
-            </button>
-
-            {message && (
-              <div
-                className={`account-message ${
-                  message.includes('successfully') ? 'success' : 'error'
-                }`}
-              >
-                <span className="message-icon">
-                  {message.includes('successfully') ? '✓' : '⚠️'}
-                </span>
-                <span>{message}</span>
+              <div className="account-section-icon">👤</div>
+              <div>
+                <h3>Personal Information</h3>
+                <p>
+                  {editMode
+                    ? 'Edit and save your details'
+                    : 'Your information'}
+                </p>
               </div>
+            </div>
+            {!editMode && (
+              <button
+                onClick={() => setEditMode(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 18px',
+                  borderRadius: '999px',
+                  background:
+                    'linear-gradient(135deg, #059669, #047857)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
+                }}
+              >
+                <Edit3 size={14} />
+                Edit
+              </button>
             )}
           </div>
 
-          <div className="account-divider"></div>
-
-          {/* Account Info */}
-          <div className="account-information-card">
-            <div className="account-section-title">
-              <div className="account-section-icon">🛡️</div>
-              <div>
-                <h3>Account Information</h3>
-                <p>Your AraiFood account details.</p>
-              </div>
-            </div>
-
-            <div className="account-info-grid">
-              <div className="account-info-item">
-                <div className="account-info-icon">📧</div>
-                <div className="account-info-content">
-                  <span>Email</span>
-                  <strong>{user.email}</strong>
+          {editMode ? (
+            <>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={fieldLabelStyle}>Full Name</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={fieldIconStyle}>👤</span>
+                  <input
+                    type="text"
+                    placeholder="Enter your full name"
+                    value={fullName}
+                    onChange={(e) => {
+                      setFullName(e.target.value)
+                      setMessage('')
+                    }}
+                    style={fieldInputStyle}
+                  />
                 </div>
               </div>
 
+              <div style={{ marginBottom: '16px' }}>
+                <label style={fieldLabelStyle}>Mobile Number</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={fieldIconStyle}>📱</span>
+                  <input
+                    type="tel"
+                    placeholder="01XXXXXXXXX"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value)
+                      setMessage('')
+                    }}
+                    style={fieldInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={fieldLabelStyle}>Delivery Address</label>
+                <div style={{ position: 'relative' }}>
+                  <span
+                    style={{
+                      ...fieldIconStyle,
+                      top: '20px',
+                      transform: 'none',
+                    }}
+                  >
+                    📍
+                  </span>
+                  <textarea
+                    placeholder="House / Road / Area / Union / Upazila..."
+                    rows="3"
+                    value={address}
+                    onChange={(e) => {
+                      setAddress(e.target.value)
+                      setMessage('')
+                    }}
+                    style={{
+                      ...fieldInputStyle,
+                      resize: 'vertical',
+                      minHeight: '90px',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                  marginTop: '8px',
+                }}
+              >
+                <button
+                  className="account-save-button"
+                  onClick={saveProfile}
+                  disabled={saving}
+                  style={{ flex: 1, minWidth: '140px' }}
+                >
+                  {saving ? '⏳ Saving...' : '✓ Save Changes'}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditMode(false)
+                    setMessage('')
+                  }}
+                  disabled={saving}
+                  style={{
+                    padding: '14px 24px',
+                    borderRadius: '999px',
+                    background: 'var(--surface-soft)',
+                    border: '1px solid var(--border-strong)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {message && (
+                <div
+                  className={`account-message ${
+                    message.includes('successfully')
+                      ? 'success'
+                      : 'error'
+                  }`}
+                  style={{ marginTop: '12px' }}
+                >
+                  <span>
+                    {message.includes('successfully') ? '✓' : '⚠️'}
+                  </span>
+                  <span>{message}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="account-info-grid">
               <div className="account-info-item">
                 <div className="account-info-icon">👤</div>
                 <div className="account-info-content">
-                  <span>Account Type</span>
-                  <strong>Customer</strong>
+                  <span>Full Name</span>
+                  <strong>{fullName || 'Not set'}</strong>
                 </div>
               </div>
 
               <div className="account-info-item">
-                <div className="account-info-icon">🆔</div>
+                <div className="account-info-icon">📱</div>
                 <div className="account-info-content">
-                  <span>Account ID</span>
-                  <strong>{user.uid.substring(0, 12)}...</strong>
+                  <span>Phone</span>
+                  <strong>{phone || 'Not set'}</strong>
                 </div>
               </div>
 
-              <div className="account-info-item">
-                <div className="account-info-icon">📅</div>
+              <div
+                className="account-info-item"
+                style={{ gridColumn: '1 / -1' }}
+              >
+                <div className="account-info-icon">📍</div>
                 <div className="account-info-content">
-                  <span>Member Since</span>
-                  <strong>
-                    {user.metadata?.creationTime
-                      ? new Date(user.metadata.creationTime).toLocaleDateString()
-                      : 'N/A'}
-                  </strong>
+                  <span>Delivery Address</span>
+                  <strong>{address || 'Not set'}</strong>
                 </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* ============ ACCOUNT INFO ============ */}
+        <div className="account-card" style={{ marginBottom: '20px' }}>
+          <div className="account-section-title">
+            <div className="account-section-icon">🛡️</div>
+            <div>
+              <h3>Account Information</h3>
+              <p>Your AraiFood account details.</p>
+            </div>
           </div>
 
-          {/* Actions */}
-          <div className="account-actions">
-            <button className="account-logout-button" onClick={handleLogout}>
-              <span className="account-action-icon">🚪</span>
-              <span>Logout</span>
-            </button>
+          <div className="account-info-grid">
+            <div className="account-info-item">
+              <div className="account-info-icon">📧</div>
+              <div className="account-info-content">
+                <span>Email</span>
+                <strong>{user.email}</strong>
+              </div>
+            </div>
 
-            <button
-              className="account-home-button-large"
-              onClick={() => {
-                window.location.href = '/'
+            <div className="account-info-item">
+              <div className="account-info-icon">👤</div>
+              <div className="account-info-content">
+                <span>Account Type</span>
+                <strong>Customer</strong>
+              </div>
+            </div>
+
+            <div className="account-info-item">
+              <div className="account-info-icon">🆔</div>
+              <div className="account-info-content">
+                <span>Account ID</span>
+                <strong>{user.uid.substring(0, 12)}...</strong>
+              </div>
+            </div>
+
+            <div className="account-info-item">
+              <div className="account-info-icon">📅</div>
+              <div className="account-info-content">
+                <span>Member Since</span>
+                <strong>
+                  {user.metadata?.creationTime
+                    ? new Date(
+                        user.metadata.creationTime
+                      ).toLocaleDateString()
+                    : 'N/A'}
+                </strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============ QUICK ACTIONS ============ */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            marginBottom: '16px',
+          }}
+        >
+          <Link
+            to="/order-history"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              padding: '18px 20px',
+              borderRadius: '18px',
+              background:
+                'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.05))',
+              border: '1px solid rgba(59,130,246,0.25)',
+              textDecoration: 'none',
+            }}
+          >
+            <div
+              style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '14px',
+                background:
+                  'linear-gradient(135deg, #3B82F6, #2563EB)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px',
+                flexShrink: 0,
+                boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
               }}
             >
-              <span className="account-action-icon">🏠</span>
-              <span>Back to Home</span>
-            </button>
-          </div>
+              📦
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong
+                style={{
+                  display: 'block',
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  marginBottom: '2px',
+                }}
+              >
+                My Orders
+              </strong>
+              <span
+                style={{
+                  fontSize: '12.5px',
+                  color: 'var(--text-tertiary)',
+                  fontWeight: 600,
+                }}
+              >
+                Track & review
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: '18px',
+                color: '#3B82F6',
+                fontWeight: 800,
+              }}
+            >
+              →
+            </span>
+          </Link>
+
+          <Link
+            to="/favorites"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              padding: '18px 20px',
+              borderRadius: '18px',
+              background:
+                'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(236,72,153,0.05))',
+              border: '1px solid rgba(236,72,153,0.25)',
+              textDecoration: 'none',
+            }}
+          >
+            <div
+              style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '14px',
+                background:
+                  'linear-gradient(135deg, #EC4899, #DB2777)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px',
+                flexShrink: 0,
+                boxShadow: '0 4px 12px rgba(236,72,153,0.3)',
+              }}
+            >
+              ❤️
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong
+                style={{
+                  display: 'block',
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  marginBottom: '2px',
+                }}
+              >
+                Favorites
+              </strong>
+              <span
+                style={{
+                  fontSize: '12.5px',
+                  color: 'var(--text-tertiary)',
+                  fontWeight: 600,
+                }}
+              >
+                Saved items
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: '18px',
+                color: '#EC4899',
+                fontWeight: 800,
+              }}
+            >
+              →
+            </span>
+          </Link>
+        </div>
+
+        {/* ============ LOGOUT / HOME ============ */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+          }}
+        >
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              padding: '16px 20px',
+              borderRadius: '18px',
+              background: 'rgba(239,68,68,0.08)',
+              border: '1px solid rgba(239,68,68,0.25)',
+              color: '#DC2626',
+              fontSize: '14px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <LogOut size={18} strokeWidth={2.4} />
+            Logout
+          </button>
+
+          <button
+            onClick={() => {
+              window.location.href = '/'
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              padding: '16px 20px',
+              borderRadius: '18px',
+              background:
+                'linear-gradient(135deg, #059669, #047857)',
+              color: '#FFFFFF',
+              fontSize: '14px',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <HomeIcon size={18} strokeWidth={2.4} />
+            Back to Home
+          </button>
         </div>
       </div>
 
@@ -902,7 +1461,6 @@ function AddMoneyModal({ user, settings, onClose }) {
             gap: '16px',
           }}
         >
-          {/* Info Banner */}
           <div
             style={{
               padding: '12px 14px',
@@ -916,8 +1474,8 @@ function AddMoneyModal({ user, settings, onClose }) {
             }}
           >
             💡 <strong>How it works:</strong> Send money to the bKash/Nagad
-            number below, then submit the transaction ID. Admin will verify and
-            add funds to your wallet within 5 minutes.
+            number below, then submit the transaction ID. Admin will verify
+            and add funds to your wallet within 5 minutes.
           </div>
 
           {/* Amount */}
@@ -1019,9 +1577,13 @@ function AddMoneyModal({ user, settings, onClose }) {
                       ? 'linear-gradient(135deg, #E2136E, #B10F53)'
                       : 'var(--surface-soft)',
                   border:
-                    method === 'bkash' ? 'none' : '1px solid var(--border)',
+                    method === 'bkash'
+                      ? 'none'
+                      : '1px solid var(--border)',
                   color:
-                    method === 'bkash' ? '#FFFFFF' : 'var(--text-primary)',
+                    method === 'bkash'
+                      ? '#FFFFFF'
+                      : 'var(--text-primary)',
                   fontSize: '13px',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -1039,9 +1601,13 @@ function AddMoneyModal({ user, settings, onClose }) {
                       ? 'linear-gradient(135deg, #F58220, #C96615)'
                       : 'var(--surface-soft)',
                   border:
-                    method === 'nagad' ? 'none' : '1px solid var(--border)',
+                    method === 'nagad'
+                      ? 'none'
+                      : '1px solid var(--border)',
                   color:
-                    method === 'nagad' ? '#FFFFFF' : 'var(--text-primary)',
+                    method === 'nagad'
+                      ? '#FFFFFF'
+                      : 'var(--text-primary)',
                   fontSize: '13px',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -1076,8 +1642,8 @@ function AddMoneyModal({ user, settings, onClose }) {
                   marginBottom: '3px',
                 }}
               >
-                Send money to this {method === 'bkash' ? 'bKash' : 'Nagad'}{' '}
-                number (Personal)
+                Send money to this{' '}
+                {method === 'bkash' ? 'bKash' : 'Nagad'} number (Personal)
               </div>
               <strong
                 style={{

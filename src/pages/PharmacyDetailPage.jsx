@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/PharmacyDetailPage.jsx
-// Pharmacy detail + medicines listing
+// V2 — Debug-friendly version with detailed console logs
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -36,11 +36,12 @@ const CATEGORIES = [
 function PharmacyDetailPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const pharmacyId = searchParams.get('id') || ''
+  const pharmacyId = (searchParams.get('id') || '').trim()
 
   const [pharmacy, setPharmacy] = useState(null)
   const [medicines, setMedicines] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
 
@@ -52,45 +53,84 @@ function PharmacyDetailPage() {
   const [conflictMed, setConflictMed] = useState(null)
   const [showConflict, setShowConflict] = useState(false)
 
-  // Load pharmacy
+  // ============ LOAD PHARMACY ============
   useEffect(() => {
     if (!pharmacyId) {
+      console.log('🔴 No pharmacyId in URL')
       setLoading(false)
+      setError('No pharmacy ID provided')
       return
     }
+
+    console.log('🔵 Attempting to load pharmacy')
+    console.log('   ID:', pharmacyId)
+    console.log('   ID length:', pharmacyId.length)
+    console.log('   Doc path: pharmacies/' + pharmacyId)
+
     const unsub = onSnapshot(
       doc(db, 'pharmacies', pharmacyId),
       (snap) => {
+        console.log('🟢 Snapshot received')
+        console.log('   Exists:', snap.exists())
+        console.log('   Doc ID:', snap.id)
         if (snap.exists()) {
-          setPharmacy({ firebaseId: snap.id, ...snap.data() })
+          const data = snap.data()
+          console.log('   Pharmacy name:', data.pharmacyName)
+          console.log('   Status:', data.status)
+          setPharmacy({ firebaseId: snap.id, ...data })
+          setError('')
         } else {
+          console.log('🔴 Pharmacy does NOT exist at path')
+          setPharmacy(null)
+          setError('Pharmacy not found in database')
           toast.error('Pharmacy not found!')
         }
         setLoading(false)
       },
       (err) => {
-        console.error(err)
+        console.error('🔴 Pharmacy load error:', err)
+        console.error('   Error code:', err.code)
+        console.error('   Error message:', err.message)
+        setPharmacy(null)
+        setError(err.message || 'Failed to load pharmacy')
         setLoading(false)
       }
     )
     return () => unsub()
   }, [pharmacyId])
 
-  // Load medicines
+  // ============ LOAD MEDICINES ============
   useEffect(() => {
     if (!pharmacyId) return
+
+    console.log('🔵 Loading medicines for pharmacy:', pharmacyId)
+
     const q = query(
       collection(db, 'medicines'),
       where('pharmacyId', '==', pharmacyId)
     )
-    const unsub = onSnapshot(q, (snap) => {
-      setMedicines(
-        snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
-      )
-    })
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          firebaseId: d.id,
+          ...d.data(),
+        }))
+        console.log('🟢 Medicines found:', list.length)
+        list.forEach((m) => {
+          console.log(`   → ${m.name} | available: ${m.available} | category: ${m.category}`)
+        })
+        setMedicines(list)
+      },
+      (err) => {
+        console.error('🔴 Medicines load error:', err)
+        console.error('   Code:', err.code)
+      }
+    )
     return () => unsub()
   }, [pharmacyId])
 
+  // ============ CART HELPERS ============
   const saveCart = (items) => {
     localStorage.setItem('pharmacyCartItems', JSON.stringify(items))
     setCartItems(items)
@@ -182,36 +222,6 @@ function PharmacyDetailPage() {
     return result
   }, [medicines, category, search])
 
-  if (loading) {
-    return (
-      <div className="restaurant-page">
-        <div className="panel-loading">
-          <div className="panel-loading-spinner"></div>
-          <p>Loading pharmacy...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!pharmacy) {
-    return (
-      <div className="restaurant-page">
-        <div className="restaurant-empty-state">
-          <div className="empty-icon">💊</div>
-          <h2>Pharmacy Not Found</h2>
-          <p>This pharmacy doesn't exist or has been removed.</p>
-          <button onClick={() => navigate('/pharmacy')}>
-            Browse Pharmacies
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  const isOpen =
-    pharmacy.pharmacyStatus === 'online' ||
-    pharmacy.pharmacyStatus === 'busy'
-
   const formatTime = (time24) => {
     if (!time24) return '10 AM'
     try {
@@ -224,6 +234,53 @@ function PharmacyDetailPage() {
       return '10 AM'
     }
   }
+
+  // ============ LOADING ============
+  if (loading) {
+    return (
+      <div className="restaurant-page">
+        <div className="panel-loading">
+          <div className="panel-loading-spinner"></div>
+          <p>Loading pharmacy...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ============ NOT FOUND ============
+  if (!pharmacy) {
+    return (
+      <div className="restaurant-page">
+        <div className="restaurant-empty-state">
+          <div className="empty-icon">💊</div>
+          <h2>Pharmacy Not Found</h2>
+          <p>{error || "This pharmacy doesn't exist or has been removed."}</p>
+          {pharmacyId && (
+            <p
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-tertiary)',
+                fontFamily: 'monospace',
+                marginTop: '8px',
+                wordBreak: 'break-all',
+                maxWidth: '400px',
+                margin: '8px auto 0',
+              }}
+            >
+              ID: {pharmacyId}
+            </p>
+          )}
+          <button onClick={() => navigate('/pharmacy')}>
+            Browse Pharmacies
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const isOpen =
+    pharmacy.pharmacyStatus === 'online' ||
+    pharmacy.pharmacyStatus === 'busy'
 
   return (
     <div className="restaurant-page">
@@ -243,7 +300,7 @@ function PharmacyDetailPage() {
             <p>📍 {pharmacy.address || 'Araihazar'}</p>
             <span>
               {pharmacy.rating != null &&
-                `⭐ ${pharmacy.rating.toFixed(1)} • `}
+                `⭐ ${Number(pharmacy.rating).toFixed(1)} • `}
               🕐 {pharmacy.deliveryTime || '20-30 min'} • 🚚 ৳
               {pharmacy.deliveryFee || 0}
             </span>
@@ -343,7 +400,9 @@ function PharmacyDetailPage() {
             <p>
               {search || category !== 'all'
                 ? 'Try a different search or category'
-                : 'This pharmacy hasn\'t added medicines yet'}
+                : medicines.length === 0
+                ? 'This pharmacy hasn\'t added medicines yet'
+                : 'No available medicines'}
             </p>
           </div>
         ) : (
@@ -360,9 +419,7 @@ function PharmacyDetailPage() {
                 <div className="food-info">
                   <h3>{m.name}</h3>
                   <p style={{ fontSize: '11.5px', marginBottom: '4px' }}>
-                    {m.genericName && (
-                      <span>🩺 {m.genericName}</span>
-                    )}
+                    {m.genericName && <span>🩺 {m.genericName}</span>}
                   </p>
                   <p style={{ fontSize: '11.5px', marginBottom: '4px' }}>
                     {m.company && <span>🏭 {m.company}</span>}

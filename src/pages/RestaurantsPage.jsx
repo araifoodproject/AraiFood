@@ -1,3 +1,8 @@
+// ============================================================
+// src/pages/RestaurantsPage.jsx
+// V2 — Enhanced filters + sort + stats + food search
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { db } from '../firebase'
@@ -16,84 +21,133 @@ function RestaurantsPage() {
   const [search, setSearch] = useState(initialSearch)
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('recommended')
-  const [addingId, setAddingId] = useState(null)
   const [conflictModal, setConflictModal] = useState(null)
   const navigate = useNavigate()
 
-  // Update search if URL param changes
+  // Sync search from URL
   useEffect(() => {
     const q = searchParams.get('search') || ''
     setSearch(q)
   }, [searchParams])
 
-  // Load approved restaurants
+  // Load restaurants
   useEffect(() => {
     const restaurantQuery = query(
       collection(db, 'restaurants'),
       where('status', '==', 'approved')
     )
-    const unsubscribe = onSnapshot(restaurantQuery, (snapshot) => {
-      const list = snapshot.docs.map((d) => ({
-        firebaseId: d.id,
-        ...d.data(),
-      }))
-      setRestaurants(list)
+    const unsub = onSnapshot(restaurantQuery, (snap) => {
+      setRestaurants(
+        snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+      )
       setLoading(false)
     })
-    return () => unsubscribe()
+    return () => unsub()
   }, [])
 
-  // Load all foods
+  // Load foods
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'foods'), (snapshot) => {
-      const list = snapshot.docs.map((d) => ({
-        firebaseId: d.id,
-        ...d.data(),
-      }))
-      setFoods(list)
+    const unsub = onSnapshot(collection(db, 'foods'), (snap) => {
+      setFoods(snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() })))
     })
-    return () => unsubscribe()
+    return () => unsub()
   }, [])
 
-  // Filter restaurants
+  // ============ HELPERS ============
+  const parseDeliveryTime = (timeStr) => {
+    if (!timeStr) return 999
+    const match = timeStr.match(/(\d+)/)
+    return match ? parseInt(match[1]) : 999
+  }
+
+  // ============ FILTER + SORT ============
   const filteredRestaurants = useMemo(() => {
     let result = [...restaurants]
 
+    // Search
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter((r) =>
-        `${r.restaurantName || ''} ${r.cuisine || ''}`
+        `${r.restaurantName || ''} ${r.cuisine || ''} ${
+          r.description || ''
+        }`
           .toLowerCase()
           .includes(q)
       )
     }
 
-    if (filter === 'top-rated') {
-      result = result.filter((r) => (r.rating || 0) >= 4.5)
+    // Filter
+    switch (filter) {
+      case 'top-rated':
+        result = result.filter((r) => (r.rating || 0) >= 4.5)
+        break
+      case 'open-now':
+        result = result.filter((r) => r.restaurantStatus === 'online')
+        break
+      case 'budget':
+        result = result.filter((r) => (r.deliveryFee || 0) <= 30)
+        break
+      case 'fast':
+        result = result.filter(
+          (r) => parseDeliveryTime(r.deliveryTime || r.delivery) <= 30
+        )
+        break
+      case 'veg':
+        result = result.filter((r) =>
+          (r.cuisine || '').toLowerCase().includes('veg')
+        )
+        break
+      case 'all':
+      default:
+        break
     }
 
-    if (filter === 'fast-delivery') {
-      result = result.filter((r) => r.restaurantStatus === 'online')
-    }
-
-    if (filter === 'budget') {
-      result = result.filter((r) => (r.deliveryFee || 0) <= 30)
-    }
-
-    if (sort === 'rating') {
-      result.sort((a, b) => (b.rating || 0) - (a.rating || 0))
-    }
-
-    if (sort === 'name') {
-      result.sort((a, b) =>
-        (a.restaurantName || '').localeCompare(b.restaurantName || '')
-      )
+    // Sort
+    switch (sort) {
+      case 'rating':
+        result.sort((a, b) => (b.rating || 0) - (a.rating || 0))
+        break
+      case 'fastest':
+        result.sort(
+          (a, b) =>
+            parseDeliveryTime(a.deliveryTime || a.delivery) -
+            parseDeliveryTime(b.deliveryTime || b.delivery)
+        )
+        break
+      case 'cheapest':
+        result.sort(
+          (a, b) => (a.deliveryFee || 999) - (b.deliveryFee || 999)
+        )
+        break
+      case 'newest':
+        result.sort((a, b) => {
+          const aT = a.createdAt?.toDate?.()?.getTime() || 0
+          const bT = b.createdAt?.toDate?.()?.getTime() || 0
+          return bT - aT
+        })
+        break
+      case 'name':
+        result.sort((a, b) =>
+          (a.restaurantName || '').localeCompare(b.restaurantName || '')
+        )
+        break
+      case 'recommended':
+      default:
+        // Recommended: higher rating first, then open ones
+        result.sort((a, b) => {
+          const aScore =
+            (a.rating || 0) * 10 + (a.restaurantStatus === 'online' ? 5 : 0)
+          const bScore =
+            (b.rating || 0) * 10 + (b.restaurantStatus === 'online' ? 5 : 0)
+          return bScore - aScore
+        })
+        break
     }
 
     return result
   }, [restaurants, search, filter, sort])
 
-  // Filter foods by search
+  // Food search
   const matchingFoods = useMemo(() => {
     if (!search.trim()) return []
     const q = search.toLowerCase()
@@ -108,9 +162,29 @@ function RestaurantsPage() {
       .slice(0, 12)
   }, [foods, search])
 
-  // ============ ADD TO CART ============
+  // ============ STATS ============
+  const stats = useMemo(() => {
+    const openCount = restaurants.filter(
+      (r) => r.restaurantStatus === 'online'
+    ).length
+    const avgRating =
+      restaurants.length > 0
+        ? restaurants.reduce((s, r) => s + (r.rating || 0), 0) /
+          restaurants.length
+        : 0
+    return {
+      total: restaurants.length,
+      foods: foods.length,
+      open: openCount,
+      avgRating: avgRating.toFixed(1),
+    }
+  }, [restaurants, foods])
+
+  // ============ CART ============
   const addToCartDirect = (food) => {
-    const restaurant = restaurants.find((r) => r.firebaseId === food.restaurantId)
+    const restaurant = restaurants.find(
+      (r) => r.firebaseId === food.restaurantId
+    )
     const cartItems = JSON.parse(localStorage.getItem('cartItems') || '[]')
 
     const existingIndex = cartItems.findIndex((c) => c.id === food.firebaseId)
@@ -136,6 +210,7 @@ function RestaurantsPage() {
           restaurantLogo: restaurant?.logo || '',
           deliveryFee: restaurant?.deliveryFee || 30,
           minimumOrder: restaurant?.minimumOrder || 100,
+          deliveryTime: restaurant?.deliveryTime || '30-40 min',
         },
       ]
     }
@@ -147,12 +222,10 @@ function RestaurantsPage() {
 
   const handleAddFood = (food) => {
     const cartItems = JSON.parse(localStorage.getItem('cartItems') || '[]')
-
     if (cartItems.length === 0) {
       addToCartDirect(food)
       return
     }
-
     if (cartItems[0].restaurantId === food.restaurantId) {
       addToCartDirect(food)
     } else {
@@ -169,6 +242,16 @@ function RestaurantsPage() {
     addToCartDirect(conflictModal.food)
     setConflictModal(null)
   }
+
+  // ============ FILTER OPTIONS ============
+  const FILTERS = [
+    { value: 'all', label: 'All', icon: '🍽️' },
+    { value: 'top-rated', label: 'Top Rated', icon: '⭐' },
+    { value: 'open-now', label: 'Open Now', icon: '🟢' },
+    { value: 'fast', label: 'Fast Delivery', icon: '🚀' },
+    { value: 'budget', label: 'Budget', icon: '💰' },
+    { value: 'veg', label: 'Pure Veg', icon: '🥬' },
+  ]
 
   if (loading) {
     return (
@@ -188,6 +271,7 @@ function RestaurantsPage() {
       <div className="restaurants-page-container">
         <PageBackButton label="Back" fallback="/" />
 
+        {/* Header */}
         <div className="restaurants-page-header">
           <span className="glass-section-label">ARAIHAZAR LOCAL FOOD</span>
           <h1>
@@ -202,25 +286,26 @@ function RestaurantsPage() {
         {/* Stats */}
         <div className="restaurant-page-stats">
           <div className="restaurant-stat">
-            <strong>{restaurants.length}+</strong>
-            <span>Local Restaurants</span>
+            <strong>{stats.total}+</strong>
+            <span>Restaurants</span>
           </div>
           <div className="restaurant-stat">
-            <strong>{foods.length}+</strong>
+            <strong>{stats.foods}+</strong>
             <span>Food Items</span>
           </div>
           <div className="restaurant-stat">
-            <strong>4.8 ⭐</strong>
-            <span>Average Rating</span>
+            <strong>{stats.open}</strong>
+            <span>Open Now</span>
           </div>
           <div className="restaurant-stat">
-            <strong>30 min</strong>
-            <span>Average Delivery</span>
+            <strong>{stats.avgRating} ⭐</strong>
+            <span>Avg Rating</span>
           </div>
         </div>
 
         {/* Controls */}
         <div className="restaurant-controls">
+          {/* Search */}
           <div className="restaurant-search">
             <Search size={18} strokeWidth={2.2} />
             <input
@@ -240,60 +325,60 @@ function RestaurantsPage() {
             )}
           </div>
 
+          {/* Filter chips */}
           <div className="restaurant-filter-row">
-            <button
-              className={
-                filter === 'all'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('all')}
-            >
-              All
-            </button>
-            <button
-              className={
-                filter === 'top-rated'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('top-rated')}
-            >
-              ⭐ Top Rated
-            </button>
-            <button
-              className={
-                filter === 'fast-delivery'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('fast-delivery')}
-            >
-              🟢 Open Now
-            </button>
-            <button
-              className={
-                filter === 'budget'
-                  ? 'restaurant-filter active'
-                  : 'restaurant-filter'
-              }
-              onClick={() => setFilter('budget')}
-            >
-              💰 Budget
-            </button>
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                className={
+                  filter === f.value
+                    ? 'restaurant-filter active'
+                    : 'restaurant-filter'
+                }
+                onClick={() => setFilter(f.value)}
+              >
+                <span style={{ marginRight: '4px' }}>{f.icon}</span>
+                {f.label}
+              </button>
+            ))}
           </div>
 
-          <div className="restaurant-sort">
-            <label htmlFor="restaurant-sort">Sort by</label>
-            <select
-              id="restaurant-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
+          {/* Sort + Results */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '16px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div className="restaurant-sort">
+              <label htmlFor="restaurant-sort">Sort by</label>
+              <select
+                id="restaurant-sort"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+              >
+                <option value="recommended">Recommended</option>
+                <option value="rating">⭐ Highest Rated</option>
+                <option value="fastest">🚀 Fastest Delivery</option>
+                <option value="cheapest">💰 Lowest Fee</option>
+                <option value="newest">📅 Newest</option>
+                <option value="name">A-Z by Name</option>
+              </select>
+            </div>
+
+            <div
+              style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: 'var(--text-tertiary)',
+              }}
             >
-              <option value="recommended">Recommended</option>
-              <option value="rating">Highest Rated</option>
-              <option value="name">Name A–Z</option>
-            </select>
+              {filteredRestaurants.length} restaurant
+              {filteredRestaurants.length !== 1 ? 's' : ''} found
+            </div>
           </div>
         </div>
 
@@ -360,7 +445,6 @@ function RestaurantsPage() {
                           className="glass-dish-add orange"
                           title="Add to cart"
                           onClick={() => handleAddFood(food)}
-                          disabled={addingId === food.firebaseId}
                         >
                           <Plus size={16} strokeWidth={2.8} />
                         </button>
@@ -382,11 +466,14 @@ function RestaurantsPage() {
             <h2>
               {hasSearch
                 ? `Restaurants for "${search}"`
-                : 'Restaurants Near You'}
+                : filter === 'all' && sort === 'recommended'
+                ? 'All Restaurants'
+                : `${FILTERS.find((f) => f.value === filter)?.label} Restaurants`}
             </h2>
           </div>
           <span className="restaurant-count">
-            {filteredRestaurants.length} Restaurants
+            {filteredRestaurants.length} Result
+            {filteredRestaurants.length !== 1 ? 's' : ''}
           </span>
         </div>
 
@@ -422,7 +509,9 @@ function RestaurantsPage() {
 
                   <div className="all-restaurant-rating">
                     <Star size={12} strokeWidth={0} fill="#F59E0B" />
-                    {restaurant.rating || '4.5'}
+                    {restaurant.rating?.toFixed?.(1) ||
+                      restaurant.rating ||
+                      '4.5'}
                   </div>
                 </div>
 
@@ -436,8 +525,11 @@ function RestaurantsPage() {
                   <p className="restaurant-cuisine">{restaurant.cuisine}</p>
                   <div className="all-restaurant-meta">
                     <span>
-                      🕒 {restaurant.openingTime || '10:00'} -{' '}
-                      {restaurant.closingTime || '22:00'}
+                      🕒{' '}
+                      {restaurant.deliveryTime ||
+                        `${restaurant.openingTime || '10:00'} - ${
+                          restaurant.closingTime || '22:00'
+                        }`}
                     </span>
                     <span>📦 Min ৳{restaurant.minimumOrder || 100}</span>
                   </div>
@@ -473,8 +565,12 @@ function RestaurantsPage() {
         ) : (
           <div className="restaurant-empty-state">
             <div className="empty-icon">🔍</div>
-            <h2>No results for "{search}"</h2>
-            <p>Try another search or choose a different filter.</p>
+            <h2>No results found</h2>
+            <p>
+              {search
+                ? `No restaurants match "${search}" with current filters.`
+                : 'Try a different filter or search.'}
+            </p>
             <button
               onClick={() => {
                 setSearch('')
@@ -482,7 +578,7 @@ function RestaurantsPage() {
                 setSort('recommended')
               }}
             >
-              Reset Search
+              Reset Filters
             </button>
           </div>
         )}
