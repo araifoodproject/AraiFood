@@ -1,52 +1,64 @@
-import { useState, useEffect, useMemo } from 'react'
+// ============================================================
+// src/pages/admin/AdminSupportPage.jsx — V2 (Real Live Chat)
+// Admin chat inbox — reply to customer messages
+// ============================================================
+
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { db } from '../../firebase'
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+  addDoc,
+  getDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+} from 'firebase/firestore'
 import AdminSidebar from '../../components/AdminSidebar'
 import { toast } from 'react-toastify'
 import {
   Menu,
   Search,
   X,
-  LifeBuoy,
-  Eye,
   Send,
   Trash2,
   CheckCircle2,
-  Clock,
-  AlertCircle,
   MessageSquare,
+  ArrowLeft,
 } from 'lucide-react'
 
 function AdminSupportPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [tickets, setTickets] = useState([])
+  const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [selected, setSelected] = useState(null)
+  const [selectedChat, setSelectedChat] = useState(null)
+  const [messages, setMessages] = useState([])
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [mobileView, setMobileView] = useState('list') // 'list' | 'chat'
 
+  const messagesEndRef = useRef(null)
+
+  // ============ LOAD CHATS ============
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'supportTickets'),
+    const unsub = onSnapshot(
+      collection(db, 'chats'),
       (snapshot) => {
         const list = snapshot.docs.map((d) => ({
-          firebaseId: d.id,
+          chatId: d.id,
           ...d.data(),
         }))
         list.sort((a, b) => {
-          const aTime =
-            a.createdAt?.toDate?.()?.getTime?.() ||
-            new Date(a.createdAt).getTime?.() ||
-            0
-          const bTime =
-            b.createdAt?.toDate?.()?.getTime?.() ||
-            new Date(b.createdAt).getTime?.() ||
-            0
-          return bTime - aTime
+          const aT = a.lastMessageAt?.toDate?.()?.getTime() || 0
+          const bT = b.lastMessageAt?.toDate?.()?.getTime() || 0
+          return bT - aT
         })
-        setTickets(list)
+        setChats(list)
         setLoading(false)
       },
       (err) => {
@@ -54,82 +66,118 @@ function AdminSupportPage() {
         setLoading(false)
       }
     )
-    return () => unsubscribe()
+    return () => unsub()
   }, [])
 
-  const filteredTickets = useMemo(() => {
-    let result = [...tickets]
+  // ============ LOAD MESSAGES OF SELECTED CHAT ============
+  useEffect(() => {
+    if (!selectedChat?.chatId) {
+      setMessages([])
+      return
+    }
+    const msgsRef = collection(db, 'chats', selectedChat.chatId, 'messages')
+    const msgsQuery = query(msgsRef, orderBy('createdAt', 'asc'))
+    const unsub = onSnapshot(msgsQuery, (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setMessages(list)
+    })
+    return () => unsub()
+  }, [selectedChat?.chatId])
 
-    if (statusFilter !== 'all') {
-      result = result.filter((t) => t.status === statusFilter)
+  // ============ AUTO SCROLL ============
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages])
+
+  // ============ MARK CHAT AS READ FOR ADMIN ============
+  useEffect(() => {
+    if (!selectedChat?.chatId) return
+    const markRead = async () => {
+      try {
+        await updateDoc(doc(db, 'chats', selectedChat.chatId), {
+          unreadForAdmin: 0,
+        })
+      } catch (err) {
+        console.error('Mark read error:', err)
+      }
+    }
+    // Small delay
+    const t = setTimeout(markRead, 500)
+    return () => clearTimeout(t)
+  }, [selectedChat?.chatId, selectedChat?.unreadForAdmin])
+
+  // ============ FILTERED CHATS ============
+  const filteredChats = useMemo(() => {
+    let result = [...chats]
+
+    if (statusFilter === 'unread') {
+      result = result.filter((c) => (c.unreadForAdmin || 0) > 0)
+    } else if (statusFilter === 'open') {
+      result = result.filter((c) => c.status !== 'resolved')
+    } else if (statusFilter === 'resolved') {
+      result = result.filter((c) => c.status === 'resolved')
     }
 
     if (search.trim()) {
       const q = search.toLowerCase()
-      result = result.filter((t) =>
-        `${t.subject || ''} ${t.message || ''} ${t.userName || ''} ${t.userEmail || ''}`
+      result = result.filter((c) =>
+        `${c.userName || ''} ${c.userEmail || ''} ${c.lastMessage || ''}`
           .toLowerCase()
           .includes(q)
       )
     }
 
     return result
-  }, [tickets, statusFilter, search])
+  }, [chats, statusFilter, search])
 
+  // ============ STATS ============
   const stats = useMemo(() => {
     return {
-      total: tickets.length,
-      open: tickets.filter((t) => t.status === 'open').length,
-      inProgress: tickets.filter((t) => t.status === 'in-progress').length,
-      resolved: tickets.filter((t) => t.status === 'resolved').length,
+      total: chats.length,
+      unread: chats.filter((c) => (c.unreadForAdmin || 0) > 0).length,
+      open: chats.filter((c) => c.status !== 'resolved').length,
+      resolved: chats.filter((c) => c.status === 'resolved').length,
     }
-  }, [tickets])
+  }, [chats])
 
-  const updateStatus = async (firebaseId, newStatus) => {
-    try {
-      await updateDoc(doc(db, 'supportTickets', firebaseId), {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-      })
-      toast.success(`Ticket marked as ${newStatus}`)
-    } catch (err) {
-      console.error(err)
-      toast.error('Failed to update status')
-    }
-  }
-
-  const deleteTicket = async (firebaseId) => {
-    if (!window.confirm('Delete this ticket permanently?')) return
-    try {
-      await deleteDoc(doc(db, 'supportTickets', firebaseId))
-      toast.success('Ticket deleted')
-      if (selected?.firebaseId === firebaseId) setSelected(null)
-    } catch (err) {
-      console.error(err)
-      toast.error('Failed to delete')
-    }
-  }
-
+  // ============ SEND REPLY ============
   const sendReply = async () => {
-    if (!replyText.trim() || !selected) return
-    setSendingReply(true)
-    try {
-      const reply = {
-        text: replyText.trim(),
-        from: 'admin',
-        createdAt: new Date().toISOString(),
-      }
+    if (!replyText.trim() || !selectedChat?.chatId) return
 
-      // Add reply to replies array
-      const existingReplies = selected.replies || []
-      await updateDoc(doc(db, 'supportTickets', selected.firebaseId), {
-        replies: [...existingReplies, reply],
-        status: 'in-progress',
-        updatedAt: serverTimestamp(),
+    setSendingReply(true)
+    const text = replyText.trim()
+    setReplyText('')
+
+    try {
+      // Add admin message
+      await addDoc(
+        collection(db, 'chats', selectedChat.chatId, 'messages'),
+        {
+          text,
+          senderId: 'admin',
+          senderName: 'Support Team',
+          senderRole: 'admin',
+          createdAt: serverTimestamp(),
+          read: false,
+        }
+      )
+
+      // Update chat meta
+      const chatRef = doc(db, 'chats', selectedChat.chatId)
+      const snap = await getDoc(chatRef)
+      const existingUnread = snap.data()?.unreadForUser || 0
+
+      await updateDoc(chatRef, {
+        lastMessage: text,
+        lastMessageAt: serverTimestamp(),
+        lastMessageBy: 'admin',
+        unreadForUser: existingUnread + 1,
+        status: 'open',
       })
 
       toast.success('Reply sent!')
-      setReplyText('')
     } catch (err) {
       console.error(err)
       toast.error('Failed to send reply')
@@ -138,33 +186,65 @@ function AdminSupportPage() {
     }
   }
 
-  const getStatusBadge = (status) => {
-    const map = {
-      open: { label: 'Open', color: '#dc2626', bg: 'rgba(220,38,38,0.12)', icon: '🔴' },
-      'in-progress': { label: 'In Progress', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', icon: '🟡' },
-      resolved: { label: 'Resolved', color: '#16a34a', bg: 'rgba(22,163,74,0.12)', icon: '🟢' },
-      closed: { label: 'Closed', color: '#6B7280', bg: 'rgba(107,114,128,0.12)', icon: '⚫' },
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendReply()
     }
-    return map[status] || map.open
   }
 
-  const getPriorityBadge = (priority) => {
-    const map = {
-      high: { label: 'High', color: '#dc2626', bg: 'rgba(220,38,38,0.12)' },
-      medium: { label: 'Medium', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-      low: { label: 'Low', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  // ============ MARK RESOLVED ============
+  const toggleResolved = async (chatId, currentStatus) => {
+    const newStatus = currentStatus === 'resolved' ? 'open' : 'resolved'
+    try {
+      await updateDoc(doc(db, 'chats', chatId), {
+        status: newStatus,
+      })
+      toast.success(
+        newStatus === 'resolved' ? 'Marked as resolved' : 'Reopened'
+      )
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to update status')
     }
-    return map[priority] || map.medium
   }
 
-  const formatDate = (ts) => {
-    if (!ts) return '—'
+  // ============ DELETE CHAT ============
+  const deleteChat = async (chatId) => {
+    if (!window.confirm('Delete this entire conversation?')) return
+    try {
+      await deleteDoc(doc(db, 'chats', chatId))
+      toast.success('Conversation deleted')
+      if (selectedChat?.chatId === chatId) {
+        setSelectedChat(null)
+        setMobileView('list')
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to delete')
+    }
+  }
+
+  const formatTime = (ts) => {
+    if (!ts) return ''
     const d = ts.toDate ? ts.toDate() : new Date(ts)
-    return (
-      d.toLocaleDateString() +
-      ' ' +
-      d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    )
+    const now = new Date()
+    const diffMs = now - d
+    const diffMin = Math.floor(diffMs / 60000)
+    const diffHr = Math.floor(diffMs / 3600000)
+    const diffDay = Math.floor(diffMs / 86400000)
+
+    if (diffMin < 1) return 'Just now'
+    if (diffMin < 60) return `${diffMin}m ago`
+    if (diffHr < 24) return `${diffHr}h ago`
+    if (diffDay < 7) return `${diffDay}d ago`
+    return d.toLocaleDateString()
+  }
+
+  const formatMsgTime = (ts) => {
+    if (!ts?.toDate) return ''
+    const d = ts.toDate()
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   return (
@@ -194,9 +274,9 @@ function AdminSupportPage() {
         <div className="admin-page-header">
           <div>
             <span className="admin-page-label">ADMIN PANEL</span>
-            <h1 className="admin-page-title">Support</h1>
+            <h1 className="admin-page-title">Support Chat</h1>
             <p className="admin-page-sub">
-              Respond to customer queries and support tickets.
+              Live chat with customers. Replies appear instantly.
             </p>
           </div>
         </div>
@@ -205,29 +285,25 @@ function AdminSupportPage() {
         <div className="admin-stats-grid">
           <div className="admin-stat-card glass-stat blue">
             <div className="admin-stat-icon">
-              <LifeBuoy size={24} strokeWidth={2.2} />
+              <MessageSquare size={24} strokeWidth={2.2} />
             </div>
             <div className="admin-stat-content">
-              <span className="admin-stat-label">Total Tickets</span>
+              <span className="admin-stat-label">Total Chats</span>
               <strong className="admin-stat-value">{stats.total}</strong>
             </div>
           </div>
-          <div className="admin-stat-card glass-stat pink">
-            <div className="admin-stat-icon">
-              <AlertCircle size={24} strokeWidth={2.2} />
+          <div className="admin-stat-card glass-stat orange">
+            <div className="admin-stat-icon">🔔</div>
+            <div className="admin-stat-content">
+              <span className="admin-stat-label">Unread</span>
+              <strong className="admin-stat-value">{stats.unread}</strong>
             </div>
+          </div>
+          <div className="admin-stat-card glass-stat pink">
+            <div className="admin-stat-icon">💬</div>
             <div className="admin-stat-content">
               <span className="admin-stat-label">Open</span>
               <strong className="admin-stat-value">{stats.open}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card glass-stat orange">
-            <div className="admin-stat-icon">
-              <Clock size={24} strokeWidth={2.2} />
-            </div>
-            <div className="admin-stat-content">
-              <span className="admin-stat-label">In Progress</span>
-              <strong className="admin-stat-value">{stats.inProgress}</strong>
             </div>
           </div>
           <div className="admin-stat-card glass-stat green">
@@ -241,8 +317,8 @@ function AdminSupportPage() {
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="admin-section" style={{ padding: '20px' }}>
+        {/* Search + Filters */}
+        <div className="admin-section" style={{ padding: '16px 20px' }}>
           <div
             style={{
               display: 'flex',
@@ -267,7 +343,7 @@ function AdminSupportPage() {
               <Search size={18} strokeWidth={2.2} />
               <input
                 type="text"
-                placeholder="Search tickets..."
+                placeholder="Search by customer name, email, message..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
@@ -305,9 +381,9 @@ function AdminSupportPage() {
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {[
                 { value: 'all', label: 'All' },
-                { value: 'open', label: '🔴 Open' },
-                { value: 'in-progress', label: '🟡 In Progress' },
-                { value: 'resolved', label: '🟢 Resolved' },
+                { value: 'unread', label: `🔔 Unread (${stats.unread})` },
+                { value: 'open', label: '💬 Open' },
+                { value: 'resolved', label: '✅ Resolved' },
               ].map((opt) => (
                 <button
                   key={opt.value}
@@ -339,517 +415,481 @@ function AdminSupportPage() {
           </div>
         </div>
 
-        {/* List */}
-        {loading ? (
-          <div className="panel-loading">
-            <div className="panel-loading-spinner"></div>
-            <p>Loading tickets...</p>
-          </div>
-        ) : filteredTickets.length === 0 ? (
+        {/* ============ TWO-COLUMN LAYOUT ============ */}
+        <div
+          className="admin-section"
+          style={{
+            padding: 0,
+            overflow: 'hidden',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(280px, 380px) 1fr',
+            minHeight: '600px',
+            maxHeight: '75vh',
+          }}
+        >
+          {/* LEFT: Chats list */}
           <div
-            className="admin-section"
-            style={{ textAlign: 'center', padding: '60px' }}
+            style={{
+              borderRight: '1px solid var(--border)',
+              overflowY: 'auto',
+              background: 'var(--surface-soft)',
+            }}
           >
-            <p style={{ fontSize: '48px', marginBottom: '12px' }}>🎫</p>
-            <h3>No support tickets</h3>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              {search || statusFilter !== 'all'
-                ? 'Try a different search or filter.'
-                : 'All caught up! No pending tickets.'}
-            </p>
-          </div>
-        ) : (
-          <div className="admin-section" style={{ padding: '10px' }}>
-            {filteredTickets.map((t) => {
-              const statusBadge = getStatusBadge(t.status)
-              const priorityBadge = getPriorityBadge(t.priority)
-              const hasReplies = (t.replies?.length || 0) > 0
-              return (
-                <div
-                  key={t.firebaseId}
-                  style={{
-                    background: 'var(--surface-soft)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px',
-                    padding: '18px',
-                    marginBottom: '12px',
-                    display: 'flex',
-                    gap: '16px',
-                    flexWrap: 'wrap',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  {/* Icon */}
+            {loading ? (
+              <div className="panel-loading" style={{ padding: '40px' }}>
+                <div className="panel-loading-spinner"></div>
+                <p>Loading...</p>
+              </div>
+            ) : filteredChats.length === 0 ? (
+              <div
+                style={{
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>
+                  💬
+                </div>
+                <p style={{ fontWeight: 700, fontSize: '13.5px' }}>
+                  No chats
+                </p>
+                <p style={{ fontSize: '12px', marginTop: '4px' }}>
+                  {search || statusFilter !== 'all'
+                    ? 'Try different filter'
+                    : 'Customer messages will appear here'}
+                </p>
+              </div>
+            ) : (
+              filteredChats.map((chat) => {
+                const isSelected = selectedChat?.chatId === chat.chatId
+                const unread = chat.unreadForAdmin || 0
+                const isResolved = chat.status === 'resolved'
+
+                return (
                   <div
+                    key={chat.chatId}
+                    onClick={() => {
+                      setSelectedChat(chat)
+                      setMobileView('chat')
+                    }}
                     style={{
-                      width: '52px',
-                      height: '52px',
-                      borderRadius: '14px',
-                      background: statusBadge.bg,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '24px',
-                      flexShrink: 0,
+                      padding: '14px 16px',
+                      borderBottom: '1px solid var(--border)',
+                      cursor: 'pointer',
+                      background: isSelected
+                        ? 'linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.05))'
+                        : 'transparent',
+                      borderLeft: isSelected
+                        ? '3px solid #059669'
+                        : '3px solid transparent',
+                      transition: 'all 0.15s',
+                      opacity: isResolved ? 0.65 : 1,
                     }}
                   >
-                    🎫
-                  </div>
-
-                  {/* Info */}
-                  <div style={{ flex: 1, minWidth: '220px' }}>
                     <div
                       style={{
                         display: 'flex',
+                        alignItems: 'center',
                         gap: '10px',
-                        alignItems: 'center',
                         marginBottom: '6px',
-                        flexWrap: 'wrap',
                       }}
                     >
-                      <strong
+                      <div
                         style={{
-                          fontFamily: 'var(--font-heading)',
-                          fontSize: '15px',
-                          fontWeight: 800,
-                          color: 'var(--text-primary)',
-                        }}
-                      >
-                        {t.subject || 'No Subject'}
-                      </strong>
-                      <span
-                        style={{
-                          padding: '4px 12px',
-                          borderRadius: '999px',
-                          background: statusBadge.bg,
-                          color: statusBadge.color,
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {statusBadge.icon} {statusBadge.label}
-                      </span>
-                      <span
-                        style={{
-                          padding: '4px 12px',
-                          borderRadius: '999px',
-                          background: priorityBadge.bg,
-                          color: priorityBadge.color,
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {priorityBadge.label}
-                      </span>
-                    </div>
-
-                    <p
-                      style={{
-                        margin: '4px 0 8px',
-                        fontSize: '13.5px',
-                        color: 'var(--text-secondary)',
-                        lineHeight: 1.5,
-                        wordBreak: 'break-word',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {t.message || '—'}
-                    </p>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '12px',
-                        flexWrap: 'wrap',
-                        fontSize: '11.5px',
-                        color: 'var(--text-tertiary)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <span>👤 {t.userName || 'User'}</span>
-                      {t.userEmail && <span>📧 {t.userEmail}</span>}
-                      <span>🕐 {formatDate(t.createdAt)}</span>
-                      {hasReplies && (
-                        <span>
-                          💬 {t.replies.length} repl{t.replies.length === 1 ? 'y' : 'ies'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={() => setSelected(t)}
-                      title="View & Reply"
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: '999px',
-                        background: 'linear-gradient(135deg, #059669, #047857)',
-                        border: 'none',
-                        color: '#FFFFFF',
-                        cursor: 'pointer',
-                        fontSize: '12.5px',
-                        fontWeight: 800,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Eye size={14} />
-                      View
-                    </button>
-
-                    {t.status !== 'resolved' && (
-                      <button
-                        onClick={() => updateStatus(t.firebaseId, 'resolved')}
-                        title="Mark Resolved"
-                        style={{
-                          width: '36px',
-                          height: '36px',
+                          width: '38px',
+                          height: '38px',
                           borderRadius: '50%',
-                          background: 'rgba(22,163,74,0.12)',
-                          border: '1px solid rgba(22,163,74,0.3)',
-                          color: '#16a34a',
-                          cursor: 'pointer',
+                          background:
+                            'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          fontSize: '14px',
+                          fontWeight: 900,
+                          color: '#047857',
+                          fontFamily: 'var(--font-heading)',
+                          flexShrink: 0,
                         }}
                       >
-                        <CheckCircle2 size={16} />
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => deleteTicket(t.firebaseId)}
-                      title="Delete"
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        background: 'rgba(220,38,38,0.12)',
-                        border: '1px solid rgba(220,38,38,0.3)',
-                        color: '#dc2626',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </main>
-
-      {/* Ticket Detail Modal with Reply */}
-      {selected && (
-        <div
-          className="outside-area-modal"
-          onClick={() => setSelected(null)}
-        >
-          <div
-            className="outside-area-modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: '600px',
-              width: '100%',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              textAlign: 'left',
-              padding: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {/* Header */}
-            <div
-              style={{
-                position: 'sticky',
-                top: 0,
-                background: 'var(--glass-bg-strong)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                zIndex: 10,
-                padding: '20px 24px 16px',
-                borderBottom: '1px solid var(--border)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: '12px',
-              }}
-            >
-              <div style={{ minWidth: 0 }}>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: 'var(--text-tertiary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    display: 'block',
-                    marginBottom: '4px',
-                  }}
-                >
-                  Support Ticket
-                </span>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontFamily: 'var(--font-heading)',
-                    fontSize: '18px',
-                    fontWeight: 800,
-                    color: 'var(--text-primary)',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {selected.subject || 'No Subject'}
-                </h2>
-              </div>
-              <button
-                onClick={() => setSelected(null)}
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  background: 'var(--surface-soft)',
-                  border: '1px solid var(--border)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div
-              style={{
-                padding: '20px 24px 24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-              }}
-            >
-              {/* User Info */}
-              <div
-                style={{
-                  padding: '14px',
-                  background: 'var(--surface-soft)',
-                  borderRadius: '12px',
-                  border: '1px solid var(--border)',
-                  fontSize: '13px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>👤 From</span>
-                  <strong>{selected.userName || 'User'}</strong>
-                </div>
-                {selected.userEmail && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>📧 Email</span>
-                    <strong style={{ wordBreak: 'break-all', textAlign: 'right' }}>
-                      {selected.userEmail}
-                    </strong>
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>🕐 Created</span>
-                  <strong>{formatDate(selected.createdAt)}</strong>
-                </div>
-              </div>
-
-              {/* Original Message */}
-              <div>
-                <strong
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-tertiary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    display: 'block',
-                    marginBottom: '8px',
-                  }}
-                >
-                  💬 Original Message
-                </strong>
-                <div
-                  style={{
-                    padding: '14px',
-                    background: 'var(--surface-soft)',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border)',
-                    fontSize: '14px',
-                    lineHeight: 1.6,
-                    color: 'var(--text-primary)',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {selected.message || '—'}
-                </div>
-              </div>
-
-              {/* Replies */}
-              {selected.replies?.length > 0 && (
-                <div>
-                  <strong
-                    style={{
-                      fontSize: '11px',
-                      color: 'var(--text-tertiary)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                      display: 'block',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    💬 Replies ({selected.replies.length})
-                  </strong>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px',
-                    }}
-                  >
-                    {selected.replies.map((rep, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          padding: '12px 14px',
-                          background:
-                            rep.from === 'admin'
-                              ? 'rgba(5,150,105,0.08)'
-                              : 'var(--surface-soft)',
-                          border:
-                            rep.from === 'admin'
-                              ? '1px solid rgba(5,150,105,0.2)'
-                              : '1px solid var(--border)',
-                          borderRadius: '12px',
-                        }}
-                      >
+                        {(chat.userName || 'U')[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            color:
-                              rep.from === 'admin' ? '#059669' : 'var(--text-tertiary)',
-                            marginBottom: '6px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '6px',
                           }}
                         >
-                          {rep.from === 'admin' ? '👑 Admin' : '👤 User'}
+                          <strong
+                            style={{
+                              fontFamily: 'var(--font-heading)',
+                              fontSize: '13.5px',
+                              fontWeight: 800,
+                              color: 'var(--text-primary)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {chat.userName || 'User'}
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: '10.5px',
+                              color: 'var(--text-tertiary)',
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {formatTime(chat.lastMessageAt)}
+                          </span>
                         </div>
                         <div
                           style={{
-                            fontSize: '13.5px',
-                            color: 'var(--text-primary)',
-                            lineHeight: 1.5,
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            marginTop: '2px',
                           }}
                         >
-                          {rep.text}
+                          <span
+                            style={{
+                              fontSize: '12px',
+                              color: 'var(--text-secondary)',
+                              fontWeight: 500,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              flex: 1,
+                            }}
+                          >
+                            {chat.lastMessageBy === 'admin' && '👑 '}
+                            {chat.lastMessage || 'No messages yet'}
+                          </span>
+                          {unread > 0 && (
+                            <span
+                              style={{
+                                minWidth: '18px',
+                                height: '18px',
+                                padding: '0 5px',
+                                borderRadius: '999px',
+                                background: '#F97316',
+                                color: '#FFFFFF',
+                                fontSize: '10px',
+                                fontWeight: 900,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {unread > 9 ? '9+' : unread}
+                            </span>
+                          )}
                         </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })
+            )}
+          </div>
 
-              {/* Reply Input */}
-              <div>
-                <strong
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-tertiary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    display: 'block',
-                    marginBottom: '8px',
-                  }}
-                >
-                  ✍️ Your Reply
-                </strong>
-                <textarea
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type your response..."
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border-strong)',
-                    background: 'var(--surface)',
-                    fontSize: '14px',
-                    color: 'var(--text-primary)',
-                    outline: 'none',
-                    resize: 'vertical',
-                    fontFamily: 'var(--font-primary)',
-                    lineHeight: 1.5,
-                    boxSizing: 'border-box',
-                  }}
-                />
-                <button
-                  onClick={sendReply}
-                  disabled={sendingReply || !replyText.trim()}
-                  style={{
-                    width: '100%',
-                    marginTop: '10px',
-                    padding: '14px',
-                    borderRadius: '999px',
-                    background:
-                      sendingReply || !replyText.trim()
-                        ? 'var(--surface-soft)'
-                        : 'linear-gradient(135deg, #059669, #047857)',
-                    color:
-                      sendingReply || !replyText.trim()
-                        ? 'var(--text-tertiary)'
-                        : '#FFFFFF',
-                    border: 'none',
-                    fontSize: '14px',
-                    fontWeight: 800,
-                    cursor:
-                      sendingReply || !replyText.trim()
-                        ? 'not-allowed'
-                        : 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow:
-                      sendingReply || !replyText.trim()
-                        ? 'none'
-                        : '0 4px 12px rgba(5,150,105,0.3)',
-                  }}
-                >
-                  <Send size={16} strokeWidth={2.4} />
-                  {sendingReply ? 'Sending...' : 'Send Reply'}
-                </button>
+          {/* RIGHT: Chat messages */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--surface)',
+            }}
+          >
+            {!selectedChat ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px',
+                  color: 'var(--text-tertiary)',
+                  gap: '12px',
+                }}
+              >
+                <div style={{ fontSize: '64px', opacity: 0.6 }}>💬</div>
+                <p style={{ fontSize: '15px', fontWeight: 700 }}>
+                  Select a chat to start
+                </p>
+                <p style={{ fontSize: '13px' }}>
+                  Choose a conversation from the left
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Chat header */}
+                <div
+                  style={{
+                    padding: '14px 20px',
+                    borderBottom: '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: 'var(--surface-soft)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '50%',
+                      background:
+                        'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      fontWeight: 900,
+                      color: '#047857',
+                      fontFamily: 'var(--font-heading)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {(selectedChat.userName || 'U')[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong
+                      style={{
+                        display: 'block',
+                        fontFamily: 'var(--font-heading)',
+                        fontSize: '14px',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {selectedChat.userName || 'User'}
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '11.5px',
+                        color: 'var(--text-tertiary)',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: 'block',
+                      }}
+                    >
+                      {selectedChat.userEmail}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() =>
+                      toggleResolved(selectedChat.chatId, selectedChat.status)
+                    }
+                    title={
+                      selectedChat.status === 'resolved'
+                        ? 'Reopen'
+                        : 'Mark resolved'
+                    }
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '999px',
+                      background:
+                        selectedChat.status === 'resolved'
+                          ? 'rgba(22,163,74,0.15)'
+                          : 'var(--surface)',
+                      border:
+                        selectedChat.status === 'resolved'
+                          ? '1px solid rgba(22,163,74,0.3)'
+                          : '1px solid var(--border-strong)',
+                      color:
+                        selectedChat.status === 'resolved'
+                          ? '#16a34a'
+                          : 'var(--text-secondary)',
+                      fontSize: '11.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {selectedChat.status === 'resolved'
+                      ? '✅ Resolved'
+                      : 'Mark Done'}
+                  </button>
+                  <button
+                    onClick={() => deleteChat(selectedChat.chatId)}
+                    title="Delete"
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: 'rgba(220,38,38,0.1)',
+                      border: '1px solid rgba(220,38,38,0.25)',
+                      color: '#DC2626',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {/* Messages */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    background: 'var(--bg-base)',
+                  }}
+                >
+                  {messages.length === 0 ? (
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        padding: '40px',
+                        color: 'var(--text-tertiary)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      No messages yet
+                    </div>
+                  ) : (
+                    messages.map((msg) => {
+                      const isAdmin = msg.senderRole === 'admin'
+                      return (
+                        <div
+                          key={msg.id}
+                          style={{
+                            maxWidth: '75%',
+                            alignSelf: isAdmin ? 'flex-end' : 'flex-start',
+                            padding: '10px 14px',
+                            borderRadius: isAdmin
+                              ? '16px 16px 4px 16px'
+                              : '16px 16px 16px 4px',
+                            background: isAdmin
+                              ? 'linear-gradient(135deg, #059669, #047857)'
+                              : 'var(--surface)',
+                            color: isAdmin
+                              ? '#FFFFFF'
+                              : 'var(--text-primary)',
+                            border: isAdmin
+                              ? 'none'
+                              : '1px solid var(--border)',
+                            boxShadow: isAdmin
+                              ? '0 4px 12px rgba(5,150,105,0.25)'
+                              : '0 2px 6px rgba(0,0,0,0.04)',
+                            fontSize: '13.5px',
+                            lineHeight: 1.45,
+                            fontWeight: 500,
+                            wordBreak: 'break-word',
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {msg.text}
+                          <div
+                            style={{
+                              fontSize: '10px',
+                              opacity: 0.7,
+                              marginTop: '4px',
+                              textAlign: isAdmin ? 'right' : 'left',
+                            }}
+                          >
+                            {formatMsgTime(msg.createdAt)}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Reply input */}
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderTop: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    flexShrink: 0,
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Type your reply..."
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={sendingReply}
+                    style={{
+                      flex: 1,
+                      padding: '12px 18px',
+                      borderRadius: '999px',
+                      border: '1px solid var(--border-strong)',
+                      background: 'var(--surface-soft)',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                      minWidth: 0,
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  />
+                  <button
+                    onClick={sendReply}
+                    disabled={sendingReply || !replyText.trim()}
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background:
+                        sendingReply || !replyText.trim()
+                          ? 'var(--surface-soft)'
+                          : 'linear-gradient(135deg, #059669, #047857)',
+                      color:
+                        sendingReply || !replyText.trim()
+                          ? 'var(--text-tertiary)'
+                          : '#FFFFFF',
+                      border: 'none',
+                      cursor:
+                        sendingReply || !replyText.trim()
+                          ? 'not-allowed'
+                          : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow:
+                        sendingReply || !replyText.trim()
+                          ? 'none'
+                          : '0 4px 12px rgba(5,150,105,0.3)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Send size={18} strokeWidth={2.4} />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </main>
     </div>
   )
 }

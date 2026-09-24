@@ -1,7 +1,7 @@
 // ============================================================
 // src/App.jsx
 // FULLY REAL-TIME — RestaurantCard + HomePage section titles
-// from settings.platform (nested). Routes unchanged.
+// from settings.platform. With Pharmacy + Gaming routes.
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -40,6 +40,11 @@ import FavoritesPage from './pages/FavoritesPage'
 import OrderHistoryPage from './pages/OrderHistoryPage'
 import TrackOrderPage from './pages/TrackOrderPage'
 import PharmacyPage from './pages/PharmacyPage'
+import PharmacyDetailPage from './pages/PharmacyDetailPage'
+import PharmacyCheckoutPage from './pages/PharmacyCheckoutPage'
+import PharmacyLoginPage from './pages/PharmacyLoginPage'
+import PharmacySignupPage from './pages/PharmacySignupPage'
+import PharmacyPanel from './pages/PharmacyPanel'
 import GamingPage from './pages/GamingPage'
 import GamingOrdersPage from './pages/GamingOrdersPage'
 import PartnerLoginPage from './pages/PartnerLoginPage'
@@ -70,6 +75,8 @@ import AdminGamingOrdersPage from './pages/admin/AdminGamingOrdersPage'
 import AdminGamingSettingsPage from './pages/admin/AdminGamingSettingsPage'
 import AdminWalletRequestsPage from './pages/admin/AdminWalletRequestsPage'
 import AdminManagementPage from './pages/admin/AdminManagementPage'
+import AdminPharmaciesPage from './pages/admin/AdminPharmaciesPage'
+import AdminMedicinesPage from './pages/admin/AdminMedicinesPage'
 
 // ============================================================
 // HOME PAGE — Restaurant Card Component
@@ -83,7 +90,6 @@ function RestaurantCardHome({ restaurant }) {
     restaurant.restaurantStatus === 'online' ||
     restaurant.restaurantStatus === 'busy'
 
-  // Real delivery time from Firestore (fallback from settings)
   const deliveryTime =
     restaurant.deliveryTime ||
     restaurant.delivery ||
@@ -94,7 +100,6 @@ function RestaurantCardHome({ restaurant }) {
       ? restaurant.deliveryFee
       : settings.defaultDeliveryFee
 
-  // Format 24h time to 12h AM/PM
   const formatTime = (time24) => {
     if (!time24) return '10 AM'
     try {
@@ -108,7 +113,6 @@ function RestaurantCardHome({ restaurant }) {
     }
   }
 
-  // Status message
   const getStatusMessage = () => {
     if (isOpen) return 'Open · Now'
     if (restaurant.openingTime) {
@@ -202,7 +206,6 @@ function HomePage() {
       <Hero />
       <Categories />
 
-      {/* Popular Restaurants */}
       <section className="aa-section">
         <div className="aa-section-header">
           <div>
@@ -246,13 +249,8 @@ function HomePage() {
         )}
       </section>
 
-      {/* Gaming Banner */}
       <GamingBanner />
-
-      {/* Partner CTA */}
       <PartnerCTA />
-
-      {/* Delivery Areas */}
       <DeliveryAreas />
     </>
   )
@@ -336,7 +334,7 @@ function App() {
   const location = useLocation()
   const path = location.pathname
 
-  const isCheckout = path === '/checkout'
+  const isCheckout = path === '/checkout' || path === '/pharmacy-checkout'
   const isAuth =
     path === '/login' ||
     path === '/signup' ||
@@ -344,11 +342,14 @@ function App() {
     path === '/restaurant-signup' ||
     path === '/rider-login' ||
     path === '/rider-signup' ||
-    path === '/partner-login'
+    path === '/partner-login' ||
+    path === '/pharmacy-login' ||
+    path === '/pharmacy-signup'
   const isPanel =
     path.startsWith('/admin') ||
     path.startsWith('/restaurant-panel') ||
-    path.startsWith('/rider-panel')
+    path.startsWith('/rider-panel') ||
+    path.startsWith('/pharmacy-panel')
 
   const showNavbarAndFooter = !isCheckout && !isAuth && !isPanel
 
@@ -365,7 +366,12 @@ function App() {
         <Route path="/restaurant" element={<RestaurantPage />} />
         <Route path="/offers" element={<OffersPage />} />
         <Route path="/about" element={<AboutPage />} />
+
+        {/* PHARMACY */}
         <Route path="/pharmacy" element={<PharmacyPage />} />
+        <Route path="/pharmacy-detail" element={<PharmacyDetailPage />} />
+
+        {/* GAMING */}
         <Route path="/gaming" element={<GamingPage />} />
 
         {/* AUTH */}
@@ -376,6 +382,8 @@ function App() {
         <Route path="/restaurant-signup" element={<RestaurantSignupPage />} />
         <Route path="/rider-login" element={<RiderLoginPage />} />
         <Route path="/rider-signup" element={<RiderSignupPage />} />
+        <Route path="/pharmacy-login" element={<PharmacyLoginPage />} />
+        <Route path="/pharmacy-signup" element={<PharmacySignupPage />} />
 
         {/* CUSTOMER PROTECTED */}
         <Route
@@ -399,6 +407,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['customer']} redirectTo="/login">
               <CheckoutPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/pharmacy-checkout"
+          element={
+            <ProtectedRoute allowedRoles={['customer']} redirectTo="/login">
+              <PharmacyCheckoutPage />
             </ProtectedRoute>
           }
         />
@@ -435,7 +451,7 @@ function App() {
           }
         />
 
-        {/* RESTAURANT */}
+        {/* RESTAURANT PANEL */}
         <Route
           path="/restaurant-panel"
           element={
@@ -448,12 +464,25 @@ function App() {
           }
         />
 
-        {/* RIDER */}
+        {/* RIDER PANEL */}
         <Route
           path="/rider-panel"
           element={
             <ProtectedRoute allowedRoles={['rider']} redirectTo="/rider-login">
               <RiderPanel />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* PHARMACY PANEL */}
+        <Route
+          path="/pharmacy-panel"
+          element={
+            <ProtectedRoute
+              allowedRoles={['pharmacy']}
+              redirectTo="/pharmacy-login"
+            >
+              <PharmacyPanel />
             </ProtectedRoute>
           }
         />
@@ -503,6 +532,33 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ADMIN — PHARMACY */}
+        <Route
+          path="/admin/pharmacies"
+          element={
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="restaurants"
+              redirectTo="/login"
+            >
+              <AdminPharmaciesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/medicines"
+          element={
+            <ProtectedRoute
+              allowedRoles={['admin']}
+              requiredPermission="foods"
+              redirectTo="/login"
+            >
+              <AdminMedicinesPage />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/admin/riders"
           element={

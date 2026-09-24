@@ -1,3 +1,8 @@
+// ============================================================
+// src/components/ProtectedRoute.jsx
+// Role-based route protection — includes pharmacy role
+// ============================================================
+
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -30,9 +35,6 @@ function ProtectedRoute({
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return
 
-      // ============================================================
-      // Debug logs
-      // ============================================================
       console.log('=== ProtectedRoute Auth Check ===')
       console.log('User:', currentUser?.email || 'NO USER')
       console.log('UID:', currentUser?.uid || 'NO UID')
@@ -49,7 +51,7 @@ function ProtectedRoute({
       setUser(currentUser)
 
       // ============================================================
-      // STEP 1: Admin email check FIRST
+      // STEP 1: Admin email check
       // ============================================================
       if (currentUser.email === 'admin@araifood.com') {
         console.log('ROLE DETECTED: admin (email)')
@@ -67,7 +69,53 @@ function ProtectedRoute({
       }
 
       // ============================================================
-      // STEP 2: Partner (management member) check
+      // STEP 2: Pharmacy owner check (NEW)
+      // ============================================================
+      try {
+        const pharmDoc = await getDoc(doc(db, 'pharmacies', currentUser.uid))
+        if (pharmDoc.exists()) {
+          console.log('ROLE DETECTED: pharmacy')
+          if (!isMounted) return
+          setRole('pharmacy')
+          setIsPartner(false)
+          setPermissions({})
+          setManagementRole(null)
+          localStorage.setItem('userRole', 'pharmacy')
+          localStorage.removeItem('isPartner')
+          localStorage.removeItem('managementRole')
+          localStorage.removeItem('managementPermissions')
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.error('Pharmacy check error:', err)
+      }
+
+      // ============================================================
+      // STEP 3: Restaurant owner check
+      // ============================================================
+      try {
+        const restDoc = await getDoc(doc(db, 'restaurants', currentUser.uid))
+        if (restDoc.exists()) {
+          console.log('ROLE DETECTED: restaurant')
+          if (!isMounted) return
+          setRole('restaurant')
+          setIsPartner(false)
+          setPermissions({})
+          setManagementRole(null)
+          localStorage.setItem('userRole', 'restaurant')
+          localStorage.removeItem('isPartner')
+          localStorage.removeItem('managementRole')
+          localStorage.removeItem('managementPermissions')
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.error('Restaurant check error:', err)
+      }
+
+      // ============================================================
+      // STEP 4: Partner (management member) check
       // ============================================================
       try {
         let memberData = null
@@ -132,7 +180,30 @@ function ProtectedRoute({
       }
 
       // ============================================================
-      // STEP 3: users/{uid} doc check
+      // STEP 5: Rider check
+      // ============================================================
+      try {
+        const riderDoc = await getDoc(doc(db, 'riders', currentUser.uid))
+        if (riderDoc.exists()) {
+          console.log('ROLE DETECTED: rider')
+          if (!isMounted) return
+          setRole('rider')
+          setIsPartner(false)
+          setPermissions({})
+          setManagementRole(null)
+          localStorage.setItem('userRole', 'rider')
+          localStorage.removeItem('isPartner')
+          localStorage.removeItem('managementRole')
+          localStorage.removeItem('managementPermissions')
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.error('Rider check error:', err)
+      }
+
+      // ============================================================
+      // STEP 6: users/{uid} doc check
       // ============================================================
       try {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
@@ -141,17 +212,13 @@ function ProtectedRoute({
           const userRole = data.role || 'customer'
           console.log('ROLE DETECTED from users doc:', userRole)
 
-          if (
-            userRole === 'customer' ||
-            userRole === 'restaurant' ||
-            userRole === 'rider'
-          ) {
+          if (userRole === 'customer') {
             if (!isMounted) return
-            setRole(userRole)
+            setRole('customer')
             setIsPartner(false)
             setPermissions({})
             setManagementRole(null)
-            localStorage.setItem('userRole', userRole)
+            localStorage.setItem('userRole', 'customer')
             localStorage.removeItem('isPartner')
             localStorage.removeItem('managementRole')
             localStorage.removeItem('managementPermissions')
@@ -166,7 +233,7 @@ function ProtectedRoute({
       }
 
       // ============================================================
-      // STEP 4: Default — customer
+      // STEP 7: Default — customer
       // ============================================================
       console.log('ROLE DETECTED: customer (default)')
       if (!isMounted) return
@@ -208,6 +275,9 @@ function ProtectedRoute({
     }
     if (role === 'rider') {
       return <Navigate to="/rider-panel" replace />
+    }
+    if (role === 'pharmacy') {
+      return <Navigate to="/pharmacy-panel" replace />
     }
     if (role === 'admin') {
       return <Navigate to="/admin" replace />

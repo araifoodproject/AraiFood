@@ -1,7 +1,6 @@
 // ============================================================
-// src/pages/RestaurantPanel.jsx — PREMIUM V2
-// Full rebuild with bottom nav, top dishes, earnings breakdown,
-// search/filter orders, reject with reason, location picker
+// src/pages/RestaurantPanel.jsx — PREMIUM V3.1
+// Full rebuild + Reviews tab + Unread reviews badge
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -20,7 +19,7 @@ import {
 } from 'firebase/firestore'
 import { toast } from 'react-toastify'
 import { sendNotification } from '../utils/sendNotification'
-import { Camera, X, Search } from 'lucide-react'
+import { Camera, X, Search, Star } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
 
 function RestaurantPanel() {
@@ -28,6 +27,7 @@ function RestaurantPanel() {
   const [restaurant, setRestaurant] = useState(null)
   const [orders, setOrders] = useState([])
   const [menuItems, setMenuItems] = useState([])
+  const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [view, setView] = useState('dashboard')
@@ -63,6 +63,10 @@ function RestaurantPanel() {
   // Orders search/filter
   const [orderSearch, setOrderSearch] = useState('')
   const [orderFilter, setOrderFilter] = useState('all')
+
+  // Reviews filter
+  const [reviewRatingFilter, setReviewRatingFilter] = useState('all')
+  const [lastViewedReviews, setLastViewedReviews] = useState(null)
 
   const logoInputRef = useRef(null)
   const authCheckedRef = useRef(false)
@@ -134,6 +138,13 @@ function RestaurantPanel() {
           data.location?.lat && data.location?.lng ? data.location : null
         )
 
+        // Load last viewed reviews timestamp
+        if (data.lastViewedReviews?.toDate) {
+          setLastViewedReviews(data.lastViewedReviews.toDate())
+        } else if (data.lastViewedReviews) {
+          setLastViewedReviews(new Date(data.lastViewedReviews))
+        }
+
         setError('')
         localStorage.setItem('userRole', 'restaurant')
       } catch (err) {
@@ -186,6 +197,34 @@ function RestaurantPanel() {
     })
     return () => unsubscribe()
   }, [restaurant])
+
+  // ============ LIVE REVIEWS ============
+  useEffect(() => {
+    if (!restaurant) return
+    const reviewsQuery = query(
+      collection(db, 'reviews'),
+      where('restaurantId', '==', restaurant.firebaseId)
+    )
+    const unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
+      const list = snapshot.docs
+        .map((d) => ({ firebaseId: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const aT = a.createdAt?.toDate?.()?.getTime() || 0
+          const bT = b.createdAt?.toDate?.()?.getTime() || 0
+          return bT - aT
+        })
+      setReviews(list)
+    })
+    return () => unsubscribe()
+  }, [restaurant])
+
+  // ============ AUTO-MARK REVIEWS AS VIEWED ============
+  useEffect(() => {
+    if (!restaurant) return
+    if (view !== 'reviews') return
+    // We'll compute unread inside via a helper below; call after reviews loaded
+    // This effect is intentionally lightweight; actual mark happens below
+  }, [view, restaurant])
 
   // ============ LOGO UPLOAD ============
   const handleLogoUpload = (e) => {
@@ -570,7 +609,8 @@ function RestaurantPanel() {
     if (orderFilter !== 'all') {
       if (orderFilter === 'new') {
         result = result.filter(
-          (o) => (o.status === 'pending' || !o.status) && o.status !== 'cancelled'
+          (o) =>
+            (o.status === 'pending' || !o.status) && o.status !== 'cancelled'
         )
       } else {
         result = result.filter((o) => o.status === orderFilter)
@@ -587,6 +627,94 @@ function RestaurantPanel() {
     }
     return result
   }, [orders, orderFilter, orderSearch])
+
+  // ============ REVIEWS STATS ============
+  const visibleReviews = useMemo(
+    () => reviews.filter((r) => r.hidden !== true),
+    [reviews]
+  )
+
+  const reviewsStats = useMemo(() => {
+    const total = visibleReviews.length
+    const avg =
+      total > 0
+        ? visibleReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / total
+        : 0
+    const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+    visibleReviews.forEach((r) => {
+      const star = Math.floor(r.rating || 0)
+      if (star >= 1 && star <= 5) dist[star]++
+    })
+    return { total, avg, dist }
+  }, [visibleReviews])
+
+  // ============ UNREAD REVIEWS COUNT ============
+  const unreadReviewsCount = useMemo(() => {
+    if (!lastViewedReviews) return visibleReviews.length
+    return visibleReviews.filter((r) => {
+      const t = r.createdAt?.toDate?.()
+      return t && t > lastViewedReviews
+    }).length
+  }, [visibleReviews, lastViewedReviews])
+
+  // ============ AUTO-MARK REVIEWS AS VIEWED ============
+  useEffect(() => {
+    if (!restaurant) return
+    if (view !== 'reviews') return
+    if (unreadReviewsCount === 0) return
+
+    const markViewed = async () => {
+      try {
+        const nowTime = new Date()
+        await updateDoc(doc(db, 'restaurants', restaurant.firebaseId), {
+          lastViewedReviews: nowTime,
+        })
+        setLastViewedReviews(nowTime)
+      } catch (err) {
+        console.error('Mark viewed error:', err)
+      }
+    }
+    // Small delay so user sees "new" badge momentarily
+    const timer = setTimeout(markViewed, 1500)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, restaurant?.firebaseId, reviews.length])
+
+  // ============ FILTERED REVIEWS ============
+  const filteredReviews = useMemo(() => {
+    if (reviewRatingFilter === 'all') return visibleReviews
+    return visibleReviews.filter(
+      (r) => Math.floor(r.rating || 0) === parseInt(reviewRatingFilter)
+    )
+  }, [visibleReviews, reviewRatingFilter])
+
+  // Render stars
+  const renderReadOnlyStars = (value, size = 14) => {
+    const rounded = Math.round(Number(value) || 0)
+    return (
+      <div style={{ display: 'flex', gap: '2px' }}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Star
+            key={i}
+            size={size}
+            fill={i <= rounded ? '#F59E0B' : 'transparent'}
+            color={i <= rounded ? '#F59E0B' : '#D1D5DB'}
+            strokeWidth={2}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  const formatDate = (ts) => {
+    if (!ts) return '—'
+    const d = ts.toDate ? ts.toDate() : new Date(ts)
+    return d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  }
 
   // ============ GUARDS ============
   if (loading) {
@@ -654,9 +782,7 @@ function RestaurantPanel() {
               )}
             </div>
             <span
-              className={`rest-v2-avatar-pulse ${
-                isOnline ? '' : 'offline'
-              }`}
+              className={`rest-v2-avatar-pulse ${isOnline ? '' : 'offline'}`}
             />
           </div>
           <div>
@@ -744,7 +870,6 @@ function RestaurantPanel() {
             </div>
           </div>
 
-          {/* Earnings Breakdown */}
           <div className="rest-v2-view-title" style={{ fontSize: '18px' }}>
             💰 Earnings
           </div>
@@ -775,7 +900,6 @@ function RestaurantPanel() {
             </div>
           </div>
 
-          {/* Top Dishes */}
           <div className="rest-v2-top-dishes">
             <h3 className="rest-v2-top-dishes-title">
               🏆 Top Selling Items
@@ -830,7 +954,6 @@ function RestaurantPanel() {
             📦 Orders ({orders.length})
           </h2>
 
-          {/* Search */}
           <div className="rest-v2-search-bar">
             <Search size={18} strokeWidth={2.2} />
             <input
@@ -856,7 +979,6 @@ function RestaurantPanel() {
             )}
           </div>
 
-          {/* Filters */}
           <div className="rest-v2-filter-row">
             {[
               { value: 'all', label: 'All' },
@@ -878,7 +1000,6 @@ function RestaurantPanel() {
             ))}
           </div>
 
-          {/* List */}
           {filteredOrders.length === 0 ? (
             <div className="rest-v2-empty">
               <div className="rest-v2-empty-icon">📭</div>
@@ -930,9 +1051,7 @@ function RestaurantPanel() {
                       </div>
                       {order.zoneName && (
                         <div className="rest-v2-info-row">
-                          <span className="rest-v2-info-row-icon">
-                            🗺️
-                          </span>
+                          <span className="rest-v2-info-row-icon">🗺️</span>
                           <span className="rest-v2-info-row-text">
                             Zone: {order.zoneName}
                           </span>
@@ -940,9 +1059,7 @@ function RestaurantPanel() {
                       )}
                       {order.orderNote && (
                         <div className="rest-v2-info-row">
-                          <span className="rest-v2-info-row-icon">
-                            📝
-                          </span>
+                          <span className="rest-v2-info-row-icon">📝</span>
                           <span className="rest-v2-info-row-text">
                             {order.orderNote}
                           </span>
@@ -950,9 +1067,7 @@ function RestaurantPanel() {
                       )}
                       {order.cancelReason && (
                         <div className="rest-v2-info-row">
-                          <span className="rest-v2-info-row-icon">
-                            ❌
-                          </span>
+                          <span className="rest-v2-info-row-icon">❌</span>
                           <span
                             className="rest-v2-info-row-text"
                             style={{ color: '#DC2626' }}
@@ -999,7 +1114,6 @@ function RestaurantPanel() {
                       </div>
                     </div>
 
-                    {/* Action buttons */}
                     {!isCancelled && (
                       <div className="rest-v2-order-actions">
                         {status === 'pending' && (
@@ -1156,12 +1270,7 @@ function RestaurantPanel() {
               <div className="rest-v2-form-group">
                 <label>Food Image</label>
                 {foodImage ? (
-                  <div
-                    style={{
-                      position: 'relative',
-                      maxWidth: '200px',
-                    }}
-                  >
+                  <div style={{ position: 'relative', maxWidth: '200px' }}>
                     <img
                       src={foodImage}
                       alt="Food Preview"
@@ -1231,10 +1340,7 @@ function RestaurantPanel() {
                 />
               </div>
 
-              <button
-                className="rest-v2-form-submit"
-                onClick={addFood}
-              >
+              <button className="rest-v2-form-submit" onClick={addFood}>
                 + Add Food
               </button>
             </div>
@@ -1256,11 +1362,7 @@ function RestaurantPanel() {
                   key={item.firebaseId}
                 >
                   <div className="rest-v2-menu-img">
-                    {item.image ? (
-                      <img src={item.image} alt="" />
-                    ) : (
-                      '🍽️'
-                    )}
+                    {item.image ? <img src={item.image} alt="" /> : '🍽️'}
                   </div>
                   <div className="rest-v2-menu-info">
                     <h4>{item.name}</h4>
@@ -1297,6 +1399,304 @@ function RestaurantPanel() {
                       </button>
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============ REVIEWS ============ */}
+      {view === 'reviews' && (
+        <div className="rest-v2-view">
+          <h2 className="rest-v2-view-title">
+            ⭐ Reviews ({reviewsStats.total})
+            {unreadReviewsCount > 0 && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  background: 'linear-gradient(135deg, #F97316, #EA580C)',
+                  color: '#FFFFFF',
+                  marginLeft: '8px',
+                  boxShadow: '0 2px 8px rgba(249,115,22,0.3)',
+                }}
+              >
+                {unreadReviewsCount} new
+              </span>
+            )}
+          </h2>
+
+          {reviewsStats.total > 0 && (
+            <div
+              style={{
+                padding: '20px',
+                borderRadius: '20px',
+                background:
+                  'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.06))',
+                border: '1px solid rgba(245,158,11,0.25)',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '20px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div
+                style={{
+                  textAlign: 'center',
+                  minWidth: '100px',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: '48px',
+                    fontWeight: 900,
+                    color: '#D97706',
+                    lineHeight: 1,
+                  }}
+                >
+                  {reviewsStats.avg.toFixed(1)}
+                </div>
+                <div style={{ marginTop: '6px' }}>
+                  {renderReadOnlyStars(reviewsStats.avg, 18)}
+                </div>
+                <div
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    color: 'var(--text-tertiary)',
+                    marginTop: '6px',
+                  }}
+                >
+                  {reviewsStats.total} review
+                  {reviewsStats.total !== 1 ? 's' : ''}
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const count = reviewsStats.dist[star] || 0
+                  const percent =
+                    reviewsStats.total > 0
+                      ? (count / reviewsStats.total) * 100
+                      : 0
+                  return (
+                    <div
+                      key={star}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '12px',
+                        marginBottom: '5px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          minWidth: '24px',
+                          fontWeight: 800,
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        {star}★
+                      </span>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: '7px',
+                          background: 'var(--surface-soft)',
+                          borderRadius: '999px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${percent}%`,
+                            height: '100%',
+                            background:
+                              star >= 4
+                                ? '#16a34a'
+                                : star === 3
+                                ? '#f59e0b'
+                                : '#dc2626',
+                            borderRadius: '999px',
+                            transition: 'width 0.4s',
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          minWidth: '34px',
+                          textAlign: 'right',
+                          color: 'var(--text-tertiary)',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {count}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {reviewsStats.total > 0 && (
+            <div className="rest-v2-filter-row">
+              {[
+                { value: 'all', label: `All (${reviewsStats.total})` },
+                { value: '5', label: `5★ (${reviewsStats.dist[5] || 0})` },
+                { value: '4', label: `4★ (${reviewsStats.dist[4] || 0})` },
+                { value: '3', label: `3★ (${reviewsStats.dist[3] || 0})` },
+                { value: '2', label: `2★ (${reviewsStats.dist[2] || 0})` },
+                { value: '1', label: `1★ (${reviewsStats.dist[1] || 0})` },
+              ].map((f) => (
+                <button
+                  key={f.value}
+                  className={`rest-v2-filter-btn ${
+                    reviewRatingFilter === f.value ? 'active' : ''
+                  }`}
+                  onClick={() => setReviewRatingFilter(f.value)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filteredReviews.length === 0 ? (
+            <div className="rest-v2-empty">
+              <div className="rest-v2-empty-icon">📝</div>
+              <h3>
+                {reviewsStats.total === 0
+                  ? 'No reviews yet'
+                  : 'No reviews match filter'}
+              </h3>
+              <p>
+                {reviewsStats.total === 0
+                  ? 'Customer reviews will appear here after orders are delivered'
+                  : 'Try a different rating filter'}
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              {filteredReviews.map((r) => (
+                <div
+                  key={r.firebaseId}
+                  style={{
+                    padding: '18px',
+                    borderRadius: '20px',
+                    background: 'var(--glass-bg)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid var(--glass-border)',
+                    boxShadow: 'var(--shadow-soft)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background:
+                          'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '18px',
+                        fontWeight: 900,
+                        color: '#047857',
+                        fontFamily: 'var(--font-heading)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(r.customerName || 'U')[0].toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong
+                        style={{
+                          display: 'block',
+                          fontFamily: 'var(--font-heading)',
+                          fontSize: '14.5px',
+                          fontWeight: 800,
+                          color: 'var(--text-primary)',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        {r.customerName || 'Anonymous'}
+                      </strong>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        {renderReadOnlyStars(r.rating || 0, 14)}
+                        <span
+                          style={{
+                            fontSize: '11.5px',
+                            color: 'var(--text-tertiary)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {formatDate(r.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {r.comment && (
+                    <p
+                      style={{
+                        margin: '0 0 8px',
+                        fontSize: '13.5px',
+                        color: 'var(--text-secondary)',
+                        lineHeight: 1.5,
+                        fontWeight: 500,
+                        paddingLeft: '56px',
+                      }}
+                    >
+                      {r.comment}
+                    </p>
+                  )}
+
+                  {r.riderName && r.riderRating && (
+                    <div
+                      style={{
+                        marginLeft: '56px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: 'var(--surface-soft)',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        color: 'var(--text-secondary)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      🛵 Rider {r.riderName}: {r.riderRating}⭐
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1480,9 +1880,7 @@ function RestaurantPanel() {
             </div>
 
             <div className="rest-v2-form-group">
-              <label style={{ opacity: 0.6 }}>
-                Email (locked)
-              </label>
+              <label style={{ opacity: 0.6 }}>Email (locked)</label>
               <input
                 type="email"
                 value={restaurant.email || ''}
@@ -1591,6 +1989,18 @@ function RestaurantPanel() {
         >
           <span className="rest-v2-navbtn-icon">🍔</span>
           Menu
+        </button>
+        <button
+          className={`rest-v2-navbtn ${
+            view === 'reviews' ? 'active' : ''
+          }`}
+          onClick={() => setView('reviews')}
+        >
+          <span className="rest-v2-navbtn-icon">⭐</span>
+          Reviews
+          {unreadReviewsCount > 0 && view !== 'reviews' && (
+            <span className="rest-v2-navbadge">{unreadReviewsCount}</span>
+          )}
         </button>
         <button
           className={`rest-v2-navbtn ${

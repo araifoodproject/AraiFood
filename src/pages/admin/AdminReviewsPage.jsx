@@ -1,6 +1,17 @@
+// ============================================================
+// src/pages/admin/AdminReviewsPage.jsx — V2
+// With rider rating display
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { db } from '../../firebase'
-import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from 'firebase/firestore'
 import AdminSidebar from '../../components/AdminSidebar'
 import { toast } from 'react-toastify'
 import {
@@ -68,12 +79,18 @@ function AdminReviewsPage() {
       result = result.filter((r) => r.hidden !== true)
     } else if (statusFilter === 'hidden') {
       result = result.filter((r) => r.hidden === true)
+    } else if (statusFilter === 'with-rider') {
+      result = result.filter(
+        (r) => r.riderId && typeof r.riderRating === 'number' && r.riderRating > 0
+      )
     }
 
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter((r) =>
-        `${r.customerName || ''} ${r.comment || ''} ${r.restaurantName || ''}`
+        `${r.customerName || ''} ${r.comment || ''} ${
+          r.restaurantName || ''
+        } ${r.riderName || ''}`
           .toLowerCase()
           .includes(q)
       )
@@ -88,6 +105,17 @@ function AdminReviewsPage() {
       total > 0
         ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / total
         : 0
+
+    // Rider ratings
+    const riderReviews = reviews.filter(
+      (r) => r.riderId && typeof r.riderRating === 'number' && r.riderRating > 0
+    )
+    const riderAvg =
+      riderReviews.length > 0
+        ? riderReviews.reduce((sum, r) => sum + r.riderRating, 0) /
+          riderReviews.length
+        : 0
+
     const flagged = reviews.filter((r) => r.flagged === true).length
     const hidden = reviews.filter((r) => r.hidden === true).length
 
@@ -98,7 +126,15 @@ function AdminReviewsPage() {
       if (star >= 1 && star <= 5) dist[star]++
     })
 
-    return { total, avgRating, flagged, hidden, dist }
+    return {
+      total,
+      avgRating,
+      riderAvg,
+      riderCount: riderReviews.length,
+      flagged,
+      hidden,
+      dist,
+    }
   }, [reviews])
 
   const toggleFlag = async (firebaseId, current) => {
@@ -119,6 +155,9 @@ function AdminReviewsPage() {
         hidden: !current,
       })
       toast.success(`Review ${!current ? 'hidden' : 'visible'}`)
+
+      // Optionally recalculate restaurant.rating — done client-side in OrderHistory
+      // when new review is submitted; hidden reviews are excluded there.
     } catch (err) {
       console.error(err)
       toast.error('Failed to update')
@@ -147,15 +186,16 @@ function AdminReviewsPage() {
     )
   }
 
-  const renderStars = (rating) => {
+  const renderStars = (rating, size = 14) => {
+    const rounded = Math.round(Number(rating) || 0)
     const stars = []
     for (let i = 1; i <= 5; i++) {
       stars.push(
         <Star
           key={i}
-          size={14}
-          fill={i <= rating ? '#F59E0B' : 'transparent'}
-          color={i <= rating ? '#F59E0B' : '#D1D5DB'}
+          size={size}
+          fill={i <= rounded ? '#F59E0B' : 'transparent'}
+          color={i <= rounded ? '#F59E0B' : '#D1D5DB'}
           strokeWidth={2}
         />
       )
@@ -192,7 +232,7 @@ function AdminReviewsPage() {
             <span className="admin-page-label">ADMIN PANEL</span>
             <h1 className="admin-page-title">Reviews</h1>
             <p className="admin-page-sub">
-              Moderate customer reviews and ratings.
+              Moderate customer reviews for restaurants and riders.
             </p>
           </div>
         </div>
@@ -213,28 +253,30 @@ function AdminReviewsPage() {
               <Star size={24} strokeWidth={2.2} fill="#FFFFFF" />
             </div>
             <div className="admin-stat-content">
-              <span className="admin-stat-label">Average Rating</span>
+              <span className="admin-stat-label">Avg Restaurant</span>
               <strong className="admin-stat-value">
                 {stats.avgRating.toFixed(1)} ⭐
               </strong>
             </div>
           </div>
           <div className="admin-stat-card glass-stat orange">
+            <div className="admin-stat-icon">🛵</div>
+            <div className="admin-stat-content">
+              <span className="admin-stat-label">
+                Avg Rider ({stats.riderCount})
+              </span>
+              <strong className="admin-stat-value">
+                {stats.riderCount > 0 ? stats.riderAvg.toFixed(1) : '—'}
+              </strong>
+            </div>
+          </div>
+          <div className="admin-stat-card glass-stat pink">
             <div className="admin-stat-icon">
               <Flag size={24} strokeWidth={2.2} />
             </div>
             <div className="admin-stat-content">
               <span className="admin-stat-label">Flagged</span>
               <strong className="admin-stat-value">{stats.flagged}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card glass-stat pink">
-            <div className="admin-stat-icon">
-              <X size={24} strokeWidth={2.2} />
-            </div>
-            <div className="admin-stat-content">
-              <span className="admin-stat-label">Hidden</span>
-              <strong className="admin-stat-value">{stats.hidden}</strong>
             </div>
           </div>
         </div>
@@ -262,7 +304,8 @@ function AdminReviewsPage() {
             >
               {[5, 4, 3, 2, 1].map((star) => {
                 const count = stats.dist[star] || 0
-                const percent = stats.total > 0 ? (count / stats.total) * 100 : 0
+                const percent =
+                  stats.total > 0 ? (count / stats.total) * 100 : 0
                 return (
                   <div
                     key={star}
@@ -349,7 +392,7 @@ function AdminReviewsPage() {
               <Search size={18} strokeWidth={2.2} />
               <input
                 type="text"
-                placeholder="Search by customer, comment, restaurant..."
+                placeholder="Search by customer, comment, restaurant, rider..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
@@ -411,6 +454,7 @@ function AdminReviewsPage() {
               {[
                 { value: 'all', label: 'All' },
                 { value: 'visible', label: '👁️ Visible' },
+                { value: 'with-rider', label: '🛵 Rider' },
                 { value: 'flagged', label: '🚩 Flagged' },
                 { value: 'hidden', label: '❌ Hidden' },
               ].map((opt) => (
@@ -418,7 +462,7 @@ function AdminReviewsPage() {
                   key={opt.value}
                   onClick={() => setStatusFilter(opt.value)}
                   style={{
-                    padding: '8px 16px',
+                    padding: '8px 14px',
                     borderRadius: '999px',
                     background:
                       statusFilter === opt.value
@@ -527,7 +571,7 @@ function AdminReviewsPage() {
                       >
                         {r.customerName || 'Anonymous'}
                       </strong>
-                      {renderStars(r.rating || 0)}
+                      {renderStars(r.rating || 0, 14)}
                       {isFlagged && (
                         <span
                           style={{
@@ -568,6 +612,28 @@ function AdminReviewsPage() {
                     >
                       {r.comment || '—'}
                     </p>
+
+                    {/* Rider rating line */}
+                    {r.riderId && r.riderRating > 0 && (
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '999px',
+                          background: 'rgba(249, 115, 22, 0.1)',
+                          border: '1px solid rgba(249, 115, 22, 0.25)',
+                          color: '#EA580C',
+                          fontSize: '11.5px',
+                          fontWeight: 800,
+                          marginBottom: '6px',
+                        }}
+                      >
+                        🛵 Rider {r.riderName || 'Unknown'} · {r.riderRating}⭐
+                      </div>
+                    )}
+
                     <div
                       style={{
                         display: 'flex',
@@ -766,7 +832,7 @@ function AdminReviewsPage() {
                   {selected.customerName || 'Anonymous'}
                 </strong>
                 <div style={{ marginTop: '8px' }}>
-                  {renderStars(selected.rating || 0)}
+                  {renderStars(selected.rating || 0, 18)}
                 </div>
               </div>
 
@@ -816,6 +882,44 @@ function AdminReviewsPage() {
                   style={{ display: 'flex', justifyContent: 'space-between' }}
                 >
                   <span style={{ color: 'var(--text-secondary)' }}>
+                    ⭐ Restaurant Rating
+                  </span>
+                  <strong>{selected.rating || 0} / 5</strong>
+                </div>
+                {selected.riderName && (
+                  <>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        🛵 Rider
+                      </span>
+                      <strong>{selected.riderName}</strong>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        ⭐ Rider Rating
+                      </span>
+                      <strong>
+                        {selected.riderRating
+                          ? `${selected.riderRating} / 5`
+                          : 'Not rated'}
+                      </strong>
+                    </div>
+                  </>
+                )}
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between' }}
+                >
+                  <span style={{ color: 'var(--text-secondary)' }}>
                     🕐 Created
                   </span>
                   <strong>{formatDate(selected.createdAt)}</strong>
@@ -824,9 +928,9 @@ function AdminReviewsPage() {
                   style={{ display: 'flex', justifyContent: 'space-between' }}
                 >
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    ⭐ Rating
+                    📋 Order ID
                   </span>
-                  <strong>{selected.rating || 0} / 5</strong>
+                  <strong>{selected.orderId || '—'}</strong>
                 </div>
               </div>
             </div>

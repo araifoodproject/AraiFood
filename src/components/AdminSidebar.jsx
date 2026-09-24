@@ -1,3 +1,8 @@
+// ============================================================
+// src/components/AdminSidebar.jsx
+// With Pharmacy + Medicines menu items
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { auth, db } from '../firebase'
@@ -24,6 +29,8 @@ import {
   X,
   Gamepad2,
   UserCog,
+  Pill,
+  Briefcase,
 } from 'lucide-react'
 
 function AdminSidebar({ mobileOpen, onMobileClose }) {
@@ -36,6 +43,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     gamingOrders: 0,
     support: 0,
     reviews: 0,
+    pharmacies: 0,
   })
 
   const location = useLocation()
@@ -110,6 +118,13 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       setCounts((c) => ({ ...c, reviews: flagged }))
     })
 
+    const unsub8 = onSnapshot(collection(db, 'pharmacies'), (snap) => {
+      const pending = snap.docs.filter(
+        (d) => d.data().status === 'pending'
+      ).length
+      setCounts((c) => ({ ...c, pharmacies: pending }))
+    })
+
     return () => {
       unsub1()
       unsub2()
@@ -118,6 +133,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       unsub5()
       unsub6()
       unsub7()
+      unsub8()
     }
   }, [])
 
@@ -143,6 +159,21 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       label: 'Food Menu',
       icon: UtensilsCrossed,
       path: '/admin/foods',
+      key: 'foods',
+    },
+    // ✅ NEW: PHARMACY
+    {
+      label: 'Pharmacies',
+      icon: Pill,
+      path: '/admin/pharmacies',
+      badge: counts.pharmacies,
+      badgeClass: 'green',
+      key: 'restaurants',
+    },
+    {
+      label: 'Medicines',
+      icon: Briefcase,
+      path: '/admin/medicines',
       key: 'foods',
     },
     {
@@ -250,7 +281,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
 
   // Filter based on permissions
   const menuItems = allMenuItems.filter((item) => {
-    if (item.key === null) return true // Dashboard always visible
+    if (item.key === null) return true
     if (item.superAdminOnly && !isSuperAdmin) return false
     return canAccess(item.key)
   })
