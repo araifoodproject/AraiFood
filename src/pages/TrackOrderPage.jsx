@@ -1,10 +1,23 @@
-import { useState, useEffect } from 'react'
+// ============================================================
+// src/pages/TrackOrderPage.jsx
+// FULLY REAL-TIME — no hard-coded restaurant locations or rider info.
+// Reads: orders/{orderId}, restaurants/{restaurantId}, riders/{riderId}
+// ============================================================
+
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { db } from '../firebase'
-import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  getDoc,
+} from 'firebase/firestore'
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
-import { restaurantLocations } from '../utils/locationTracker'
 import PageBackButton from '../components/PageBackButton'
+import useSettings from '../hooks/useSettings'
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
@@ -22,12 +35,16 @@ const restaurantIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="55" he
 function TrackOrderPage() {
   const [searchParams] = useSearchParams()
   const orderIdParam = searchParams.get('id')
+  const { settings } = useSettings()
 
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [riderLocation, setRiderLocation] = useState(null)
   const [restaurantLocation, setRestaurantLocation] = useState(null)
+  const [rider, setRider] = useState(null) // full rider doc
+
+  const mapRef = useRef(null)
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -35,6 +52,9 @@ function TrackOrderPage() {
     libraries: ['places'],
   })
 
+  // ------------------------------------------------------------
+  // Load order (live)
+  // ------------------------------------------------------------
   useEffect(() => {
     if (!orderIdParam) {
       setNotFound(true)
@@ -58,13 +78,6 @@ function TrackOrderPage() {
       const orderData = { firebaseId: orderDoc.id, ...orderDoc.data() }
       setOrder(orderData)
 
-      if (orderData.restaurantName) {
-        const restLoc =
-          restaurantLocations[orderData.restaurantName] ||
-          restaurantLocations.default
-        setRestaurantLocation(restLoc)
-      }
-
       if (orderData.riderLocation) {
         setRiderLocation(orderData.riderLocation)
       } else {
@@ -78,11 +91,74 @@ function TrackOrderPage() {
     return () => unsubscribe()
   }, [orderIdParam])
 
-  const getTrackingStage = (order) => {
-    if (!order) return 0
-    if (order.status === 'delivered' || order.riderStatus === 'delivered') {
-      return 2
+  // ------------------------------------------------------------
+  // Load restaurant doc (for location)
+  // ------------------------------------------------------------
+  useEffect(() => {
+    if (!order?.restaurantId) return
+
+    const unsub = onSnapshot(
+      doc(db, 'restaurants', order.restaurantId),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data()
+          if (data.location?.lat && data.location?.lng) {
+            setRestaurantLocation(data.location)
+          } else {
+            // fallback to settings map default center
+            setRestaurantLocation(settings.mapDefaultCenter || null)
+          }
+        }
+      },
+      (err) => console.error('Restaurant load error:', err)
+    )
+    return () => unsub()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.restaurantId])
+
+  // ------------------------------------------------------------
+  // Load rider doc (for rating, total deliveries)
+  // ------------------------------------------------------------
+  useEffect(() => {
+    if (!order?.riderId) {
+      setRider(null)
+      return
     }
+
+    const unsub = onSnapshot(
+      doc(db, 'riders', order.riderId),
+      (snap) => {
+        if (snap.exists()) setRider({ firebaseId: snap.id, ...snap.data() })
+      },
+      (err) => console.error('Rider load error:', err)
+    )
+    return () => unsub()
+  }, [order?.riderId])
+
+  // ------------------------------------------------------------
+  // Auto-fit map bounds when markers change
+  // ------------------------------------------------------------
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return
+    const points = [restaurantLocation, riderLocation, order?.location].filter(
+      (p) => p && p.lat && p.lng
+    )
+    if (points.length < 2) return
+    try {
+      const bounds = new window.google.maps.LatLngBounds()
+      points.forEach((p) => bounds.extend(p))
+      mapRef.current.fitBounds(bounds, { padding: 60 })
+    } catch (e) {
+      // ignore
+    }
+  }, [restaurantLocation, riderLocation, order?.location, isLoaded])
+
+  // ------------------------------------------------------------
+  // Tracking stage from status
+  // ------------------------------------------------------------
+  const getTrackingStage = (ord) => {
+    if (!ord) return 0
+    if (ord.status === 'delivered' || ord.riderStatus === 'delivered') return 2
     if (
       [
         'accepted',
@@ -90,45 +166,57 @@ function TrackOrderPage() {
         'arrived_at_restaurant',
         'picked_up',
         'going_to_customer',
-      ].includes(order.riderStatus)
+      ].includes(ord.riderStatus)
     ) {
       return 1
     }
     return 0
   }
 
-  const getStatusLabel = (order) => {
-    if (!order) return '⏳ Waiting for order...'
+  const getStatusLabel = (ord) => {
+    if (!ord) return '⏳ Waiting for order...'
 
-    if (order.riderStatus === 'delivered')
+    if (ord.riderStatus === 'delivered')
       return '✅ Your food has been delivered. Enjoy!'
-    if (order.riderStatus === 'going_to_customer')
+    if (ord.riderStatus === 'going_to_customer')
       return '🛵 Rider is on the way to you!'
-    if (order.riderStatus === 'picked_up')
+    if (ord.riderStatus === 'picked_up')
       return '📦 Food picked up. Heading to you!'
-    if (order.riderStatus === 'arrived_at_restaurant')
+    if (ord.riderStatus === 'arrived_at_restaurant')
       return '📍 Rider arrived at restaurant.'
-    if (order.riderStatus === 'going_to_restaurant')
+    if (ord.riderStatus === 'going_to_restaurant')
       return '🛵 Rider is going to the restaurant.'
-    if (order.riderStatus === 'accepted')
+    if (ord.riderStatus === 'accepted')
       return '👤 Rider assigned. Waiting for food pickup.'
 
-    if (order.status === 'delivered')
+    if (ord.status === 'delivered')
       return '✅ Your food has been delivered. Enjoy!'
-    if (order.status === 'delivering')
+    if (ord.status === 'delivering')
       return '🛵 Food is ready! Waiting for rider.'
-    if (order.status === 'preparing')
+    if (ord.status === 'preparing')
       return '👨‍🍳 Restaurant is preparing your order...'
-    if (order.status === 'pending')
+    if (ord.status === 'pending')
       return '⏳ Waiting for restaurant confirmation...'
-    if (order.status === 'cancelled') return '❌ This order was cancelled.'
+    if (ord.status === 'cancelled') return '❌ This order was cancelled.'
 
     return '⏳ Processing your order...'
   }
 
   const trackingStage = getTrackingStage(order)
-  const customerLoc = order?.location
 
+  const mapCenter = useMemo(() => {
+    return (
+      riderLocation ||
+      order?.location ||
+      restaurantLocation ||
+      settings.mapDefaultCenter || { lat: 23.78, lng: 90.64 }
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riderLocation, order?.location, restaurantLocation, settings.mapDefaultCenter])
+
+  // ------------------------------------------------------------
+  // Loading / Not found
+  // ------------------------------------------------------------
   if (loading) {
     return (
       <div className="restaurants-page">
@@ -155,7 +243,11 @@ function TrackOrderPage() {
             <Link
               to="/order-history"
               className="checkout-button"
-              style={{ textDecoration: 'none', display: 'inline-block', marginTop: '20px' }}
+              style={{
+                textDecoration: 'none',
+                display: 'inline-block',
+                marginTop: '20px',
+              }}
             >
               Back to Orders
             </Link>
@@ -164,6 +256,12 @@ function TrackOrderPage() {
       </div>
     )
   }
+
+  // Real rider info from rider doc (with order fallback)
+  const riderName = rider?.fullName || order.riderName || 'Assigning...'
+  const riderPhone = rider?.phone || order.riderPhone || ''
+  const riderRating = rider?.rating ?? order.riderRating ?? null
+  const riderTotal = rider?.totalDeliveries ?? null
 
   return (
     <div className="restaurants-page">
@@ -214,10 +312,11 @@ function TrackOrderPage() {
               <>
                 <GoogleMap
                   mapContainerStyle={containerStyle}
-                  center={
-                    riderLocation || customerLoc || { lat: 23.78, lng: 90.64 }
-                  }
-                  zoom={14}
+                  center={mapCenter}
+                  zoom={settings.mapDefaultZoom || 14}
+                  onLoad={(map) => {
+                    mapRef.current = map
+                  }}
                   options={{
                     mapTypeControl: true,
                     mapTypeControlOptions: { style: 2, position: 3 },
@@ -228,9 +327,9 @@ function TrackOrderPage() {
                     clickableIcons: false,
                   }}
                 >
-                  {customerLoc && (
+                  {order.location && (
                     <Marker
-                      position={customerLoc}
+                      position={order.location}
                       icon={{
                         url:
                           'data:image/svg+xml;charset=UTF-8,' +
@@ -342,22 +441,42 @@ function TrackOrderPage() {
             <p className="tracking-status-text">{getStatusLabel(order)}</p>
           </div>
 
-          {/* RIDER INFO */}
-          {(order.riderName || trackingStage >= 1) && (
+          {/* RIDER INFO — real from riders collection */}
+          {(riderName !== 'Assigning...' || trackingStage >= 1) && (
             <div className="rider-profile-card">
-              <div className="rider-avatar">🛵</div>
+              <div className="rider-avatar">
+                {rider?.profileImage ? (
+                  <img
+                    src={rider.profileImage}
+                    alt={riderName}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      borderRadius: '50%',
+                    }}
+                  />
+                ) : (
+                  '🛵'
+                )}
+              </div>
               <div className="rider-info">
-                <strong>Rider: {order.riderName || 'Assigning...'}</strong>
+                <strong>Rider: {riderName}</strong>
                 <small>
-                  {order.riderPhone
-                    ? `📞 ${order.riderPhone}`
-                    : '⏳ Waiting for rider'}
+                  {riderRating != null && (
+                    <span>
+                      ⭐ {Number(riderRating).toFixed(1)}
+                      {riderTotal != null && ` (${riderTotal}+ deliveries)`}
+                    </span>
+                  )}
+                  {riderRating == null && riderPhone && `📞 ${riderPhone}`}
+                  {riderRating == null && !riderPhone && '⏳ Waiting for rider'}
                 </small>
               </div>
-              {order.riderPhone && (
+              {riderPhone && (
                 <button
                   className="call-rider-button"
-                  onClick={() => (window.location.href = `tel:${order.riderPhone}`)}
+                  onClick={() => (window.location.href = `tel:${riderPhone}`)}
                 >
                   📞 Call
                 </button>
@@ -394,6 +513,12 @@ function TrackOrderPage() {
               <div className="track-detail-row">
                 <span>📞 {order.phone}</span>
               </div>
+              {order.zoneName && (
+                <div className="track-detail-row">
+                  <span>🗺️ Zone</span>
+                  <strong>{order.zoneName}</strong>
+                </div>
+              )}
             </div>
 
             <div className="track-detail-section">

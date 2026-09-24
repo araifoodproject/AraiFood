@@ -1,5 +1,9 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+} from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -16,8 +20,9 @@ const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const db = getFirestore(app)
 
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error('Firebase persistence error:', error)
-})
+// Force LOCAL persistence — session survives tabs/browser restart
+setPersistence(auth, browserLocalPersistence)
+  .then(() => console.log('✅ Firebase persistence: LOCAL'))
+  .catch((err) => console.error('❌ Persistence error:', err))
 
 export { auth, db }

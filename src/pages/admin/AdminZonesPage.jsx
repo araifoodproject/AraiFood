@@ -1,3 +1,8 @@
+// ============================================================
+// src/pages/admin/AdminZonesPage.jsx
+// SIMPLIFIED — no polygon, just zone name + delivery fee
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { db } from '../../firebase'
 import {
@@ -10,7 +15,6 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import AdminSidebar from '../../components/AdminSidebar'
-import { GoogleMap, Polygon, Marker, useJsApiLoader } from '@react-google-maps/api'
 import { toast } from 'react-toastify'
 import {
   Menu,
@@ -20,36 +24,14 @@ import {
   Plus,
   Trash2,
   Edit,
-  Check,
   Power,
 } from 'lucide-react'
-
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-
-const containerStyle = {
-  width: '100%',
-  height: '450px',
-  borderRadius: '16px',
-  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-}
-
-// Default Araihazar polygon
-const defaultPolygon = [
-  { lat: 23.7681, lng: 90.617 },
-  { lat: 23.7923, lng: 90.6089 },
-  { lat: 23.812, lng: 90.6606 },
-  { lat: 23.7976, lng: 90.6923 },
-  { lat: 23.7762, lng: 90.6594 },
-  { lat: 23.7598, lng: 90.63 },
-  { lat: 23.7681, lng: 90.617 },
-]
 
 function AdminZonesPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState(null)
 
   // Form
   const [showForm, setShowForm] = useState(false)
@@ -59,11 +41,6 @@ function AdminZonesPage() {
   const [zoneDescription, setZoneDescription] = useState('')
   const [zoneActive, setZoneActive] = useState(true)
   const [saving, setSaving] = useState(false)
-
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: API_KEY,
-  })
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -103,13 +80,14 @@ function AdminZonesPage() {
     )
   }, [zones, search])
 
-  const stats = useMemo(() => {
-    return {
+  const stats = useMemo(
+    () => ({
       total: zones.length,
       active: zones.filter((z) => z.active !== false).length,
       inactive: zones.filter((z) => z.active === false).length,
-    }
-  }, [zones])
+    }),
+    [zones]
+  )
 
   const resetForm = () => {
     setEditingId(null)
@@ -146,7 +124,6 @@ function AdminZonesPage() {
           deliveryFee: parseFloat(zoneFee),
           description: zoneDescription.trim(),
           active: zoneActive,
-          polygon: defaultPolygon,
           createdAt: serverTimestamp(),
         })
         toast.success('Zone created!')
@@ -188,7 +165,6 @@ function AdminZonesPage() {
     try {
       await deleteDoc(doc(db, 'deliveryZones', firebaseId))
       toast.success('Zone deleted')
-      if (selected?.firebaseId === firebaseId) setSelected(null)
     } catch (err) {
       console.error(err)
       toast.error('Failed to delete')
@@ -230,7 +206,8 @@ function AdminZonesPage() {
             <span className="admin-page-label">ADMIN PANEL</span>
             <h1 className="admin-page-title">Delivery Zones</h1>
             <p className="admin-page-sub">
-              Manage service areas and delivery fees by zone.
+              Manage delivery areas and fees. Customer will select their zone
+              at checkout.
             </p>
           </div>
           <button
@@ -285,64 +262,39 @@ function AdminZonesPage() {
           </div>
         </div>
 
-        {/* Map Preview */}
-        <div className="admin-section" style={{ padding: '20px', marginBottom: '20px' }}>
-          <h3
+        {/* Info Banner */}
+        <div
+          className="admin-section"
+          style={{
+            padding: '16px 20px',
+            marginBottom: '20px',
+            background:
+              'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.04))',
+            border: '1px solid rgba(5,150,105,0.2)',
+          }}
+        >
+          <p
             style={{
-              fontFamily: 'var(--font-heading)',
-              fontSize: '16px',
-              fontWeight: 800,
-              marginBottom: '14px',
-              color: 'var(--text-primary)',
+              margin: 0,
+              fontSize: '13.5px',
+              fontWeight: 600,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.6,
             }}
           >
-            🗺️ Default Service Area (Araihazar)
-          </h3>
-          {!isLoaded ? (
-            <div
-              style={{
-                height: '300px',
-                borderRadius: '16px',
-                background: 'var(--surface-soft)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              Loading map...
-            </div>
-          ) : (
-            <GoogleMap
-              mapContainerStyle={{ ...containerStyle, height: '350px' }}
-              center={{ lat: 23.78, lng: 90.64 }}
-              zoom={12}
-              options={{
-                mapTypeControl: true,
-                mapTypeControlOptions: { style: 2, position: 3 },
-                streetViewControl: false,
-                fullscreenControl: true,
-                zoomControl: true,
-              }}
-            >
-              <Polygon
-                paths={defaultPolygon}
-                options={{
-                  strokeColor: '#13a89e',
-                  strokeOpacity: 0.9,
-                  strokeWeight: 3,
-                  fillColor: '#13a89e',
-                  fillOpacity: 0.15,
-                }}
-              />
-              <Marker position={{ lat: 23.78, lng: 90.64 }} />
-            </GoogleMap>
-          )}
+            💡 <strong>How it works:</strong> Add zones with their delivery
+            fees. Customers will pick their zone at checkout, then drop a
+            pin on the map. Riders see the zone + location and decide to
+            accept.
+          </p>
         </div>
 
         {/* Form */}
         {showForm && (
-          <div className="admin-section" style={{ padding: '24px', marginBottom: '20px' }}>
+          <div
+            className="admin-section"
+            style={{ padding: '24px', marginBottom: '20px' }}
+          >
             <h3
               style={{
                 fontFamily: 'var(--font-heading)',
@@ -356,7 +308,13 @@ function AdminZonesPage() {
             </h3>
 
             <div style={{ display: 'grid', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr',
+                  gap: '14px',
+                }}
+              >
                 <div>
                   <label
                     style={{
@@ -371,7 +329,7 @@ function AdminZonesPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g., Araihazar Central"
+                    placeholder="e.g., Digholdi Union Parishad"
                     value={zoneName}
                     onChange={(e) => setZoneName(e.target.value)}
                     style={{
@@ -432,7 +390,7 @@ function AdminZonesPage() {
                     marginBottom: '6px',
                   }}
                 >
-                  Description
+                  Description (Optional)
                 </label>
                 <textarea
                   placeholder="Brief description about this zone..."
@@ -474,7 +432,11 @@ function AdminZonesPage() {
                   type="checkbox"
                   checked={zoneActive}
                   onChange={(e) => setZoneActive(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#059669' }}
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    accentColor: '#059669',
+                  }}
                 />
                 Active (available for orders)
               </label>
@@ -495,7 +457,11 @@ function AdminZonesPage() {
                   boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
                 }}
               >
-                {saving ? 'Saving...' : editingId ? '✅ Update Zone' : '✅ Create Zone'}
+                {saving
+                  ? 'Saving...'
+                  : editingId
+                  ? '✅ Update Zone'
+                  : '✅ Create Zone'}
               </button>
             </div>
           </div>
@@ -560,7 +526,10 @@ function AdminZonesPage() {
             <p>Loading zones...</p>
           </div>
         ) : filteredZones.length === 0 ? (
-          <div className="admin-section" style={{ textAlign: 'center', padding: '60px' }}>
+          <div
+            className="admin-section"
+            style={{ textAlign: 'center', padding: '60px' }}
+          >
             <p style={{ fontSize: '48px', marginBottom: '12px' }}>🗺️</p>
             <h3>No delivery zones yet</h3>
             <p style={{ color: 'var(--text-secondary)' }}>

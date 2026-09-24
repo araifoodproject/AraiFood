@@ -1,5 +1,11 @@
+// ============================================================
+// src/App.jsx
+// FULLY REAL-TIME — RestaurantCard + HomePage section titles
+// from settings.platform (nested). Routes unchanged.
+// ============================================================
+
 import { useState, useEffect } from 'react'
-import { Routes, Route, useLocation, Link } from 'react-router-dom'
+import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
@@ -15,12 +21,9 @@ import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Hero from './components/Hero'
 import Categories from './components/Categories'
-import DeliveryStats from './components/DeliveryStats'
-import RestaurantCard from './components/RestaurantCard'
-import TrendingDishes from './components/TrendingDishes'
-import ItemsYouLove from './components/ItemsYouLove'
-import CouponSection from './components/CouponSection'
-import Offers from './components/Offers'
+import GamingBanner from './components/GamingBanner'
+import PartnerCTA from './components/PartnerCTA'
+import DeliveryAreas from './components/DeliveryAreas'
 import LiveChat from './components/LiveChat'
 import ScrollToTop from './components/ScrollToTop'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -69,11 +72,111 @@ import AdminWalletRequestsPage from './pages/admin/AdminWalletRequestsPage'
 import AdminManagementPage from './pages/admin/AdminManagementPage'
 
 // ============================================================
+// HOME PAGE — Restaurant Card Component
+// ============================================================
+function RestaurantCardHome({ restaurant }) {
+  const navigate = useNavigate()
+  const { settings } = useSettings()
+
+  const rating = restaurant.rating ?? null
+  const isOpen =
+    restaurant.restaurantStatus === 'online' ||
+    restaurant.restaurantStatus === 'busy'
+
+  // Real delivery time from Firestore (fallback from settings)
+  const deliveryTime =
+    restaurant.deliveryTime ||
+    restaurant.delivery ||
+    settings.defaultDeliveryTime
+
+  const deliveryFee =
+    restaurant.deliveryFee != null
+      ? restaurant.deliveryFee
+      : settings.defaultDeliveryFee
+
+  // Format 24h time to 12h AM/PM
+  const formatTime = (time24) => {
+    if (!time24) return '10 AM'
+    try {
+      const [h, m] = time24.split(':')
+      const hour = parseInt(h)
+      const ampm = hour >= 12 ? 'PM' : 'AM'
+      const displayHour = hour % 12 || 12
+      return `${displayHour}${m === '00' ? '' : ':' + m} ${ampm}`
+    } catch (e) {
+      return '10 AM'
+    }
+  }
+
+  // Status message
+  const getStatusMessage = () => {
+    if (isOpen) return 'Open · Now'
+    if (restaurant.openingTime) {
+      return `Closed · Opens ${formatTime(restaurant.openingTime)}`
+    }
+    return 'Closed'
+  }
+
+  const getCuisineEmoji = (cuisine) => {
+    if (!cuisine) return '🍽️'
+    const c = cuisine.toLowerCase()
+    if (c.includes('biryani') || c.includes('biriyani')) return '🍛'
+    if (c.includes('burger')) return '🍔'
+    if (c.includes('pizza')) return '🍕'
+    if (c.includes('chinese')) return '🍜'
+    if (c.includes('chicken')) return '🍗'
+    if (c.includes('snack')) return '🍟'
+    if (c.includes('drink') || c.includes('beverage')) return '🥤'
+    if (c.includes('dessert') || c.includes('sweet')) return '🍰'
+    if (c.includes('rice') || c.includes('curry')) return '🍚'
+    return '🍽️'
+  }
+
+  return (
+    <div
+      className="aa-restaurant-card"
+      onClick={() => navigate(`/restaurant?id=${restaurant.firebaseId}`)}
+    >
+      <div className="aa-restaurant-image">
+        {restaurant.logo ? (
+          <img src={restaurant.logo} alt={restaurant.restaurantName} />
+        ) : (
+          <span>{getCuisineEmoji(restaurant.cuisine)}</span>
+        )}
+        {rating != null && (
+          <div className="aa-restaurant-rating">⭐ {rating}</div>
+        )}
+      </div>
+
+      <div className="aa-restaurant-info">
+        <h3 className="aa-restaurant-name">{restaurant.restaurantName}</h3>
+        <p className="aa-restaurant-cuisine">
+          {rating != null && `⭐ ${rating} · `}
+          {restaurant.cuisine || 'Restaurant'}
+        </p>
+
+        <div className="aa-restaurant-meta">
+          <span>🕐 {deliveryTime}</span>
+          <span>🚚 ৳{deliveryFee}</span>
+          <span className={`aa-status-badge ${isOpen ? 'open' : 'closed'}`}>
+            {getStatusMessage()}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
 // HOME PAGE
 // ============================================================
 function HomePage() {
+  const { settings } = useSettings()
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
+
+  const home = settings.home || {}
+  const popularLimit = home.popularLimit || 6
 
   useEffect(() => {
     const restaurantQuery = query(
@@ -86,47 +189,55 @@ function HomePage() {
         firebaseId: d.id,
         ...d.data(),
       }))
-      setRestaurants(list.slice(0, 4))
+      setRestaurants(list.slice(0, popularLimit))
       setLoading(false)
     })
 
     return () => unsubscribe()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popularLimit])
 
   return (
     <>
-      <Categories />
       <Hero />
-      <DeliveryStats />
+      <Categories />
 
-      <section className="glass-restaurants-section">
-        <div className="glass-restaurants-header">
+      {/* Popular Restaurants */}
+      <section className="aa-section">
+        <div className="aa-section-header">
           <div>
-            <span className="glass-section-label">LOCAL FAVOURITES</span>
-            <h2 className="glass-restaurants-header-title">
-              Popular Restaurants
-            </h2>
-            <p className="glass-restaurants-header-sub">
-              Discover popular food spots around Araihazar.
-            </p>
+            <h2 className="aa-section-title">{home.popularTitle}</h2>
+            <p className="aa-section-sub">{home.popularSubtitle}</p>
           </div>
-          <Link to="/restaurants" className="glass-view-all">
-            View All <span>→</span>
+          <Link to="/restaurants" className="aa-section-link">
+            See all <span>→</span>
           </Link>
         </div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              padding: '40px',
+              color: 'var(--text-tertiary)',
+            }}
+          >
             Loading restaurants...
           </p>
         ) : restaurants.length === 0 ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              padding: '40px',
+              color: 'var(--text-tertiary)',
+            }}
+          >
             No restaurants available yet.
           </p>
         ) : (
-          <div className="glass-restaurants-grid">
+          <div className="aa-restaurant-grid">
             {restaurants.map((restaurant) => (
-              <RestaurantCard
+              <RestaurantCardHome
                 key={restaurant.firebaseId}
                 restaurant={restaurant}
               />
@@ -135,10 +246,14 @@ function HomePage() {
         )}
       </section>
 
-      <TrendingDishes />
-      <ItemsYouLove />
-      <CouponSection />
-      <Offers />
+      {/* Gaming Banner */}
+      <GamingBanner />
+
+      {/* Partner CTA */}
+      <PartnerCTA />
+
+      {/* Delivery Areas */}
+      <DeliveryAreas />
     </>
   )
 }
@@ -162,7 +277,6 @@ function OffersPage() {
             Araihazar.
           </p>
         </div>
-        <Offers />
       </div>
     </div>
   )

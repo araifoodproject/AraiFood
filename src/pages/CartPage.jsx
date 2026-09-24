@@ -46,6 +46,7 @@ function CartPage() {
           restaurantLogo: cartItems[0].restaurantLogo || '',
           deliveryFee: cartItems[0].deliveryFee || 30,
           minimumOrder: cartItems[0].minimumOrder || 100,
+          deliveryTime: cartItems[0].deliveryTime || '30-40 min',
         }
       : null
 
@@ -64,10 +65,8 @@ function CartPage() {
   return (
     <div className="cart-page">
       <div className="cart-page-container">
-        {/* Back Button */}
         <PageBackButton label="Back" fallback="/restaurants" />
 
-        {/* Header */}
         <div className="cart-page-header">
           <span className="glass-section-label">YOUR ORDER</span>
           <h1>Your Cart</h1>
@@ -100,9 +99,7 @@ function CartPage() {
           </div>
         ) : (
           <div className="cart-page-layout">
-            {/* Left: Items */}
             <div className="cart-page-items-wrapper">
-              {/* Restaurant Bar */}
               <div className="cart-page-restaurant">
                 <div className="cart-page-restaurant-logo">
                   {restaurant.restaurantLogo ? (
@@ -116,14 +113,15 @@ function CartPage() {
                 </div>
                 <div className="cart-page-restaurant-info">
                   <h3>{restaurant.restaurantName}</h3>
-                  <small>Delivery Fee: ৳{restaurant.deliveryFee}</small>
+                  <small>
+                    Delivery Fee: ৳{restaurant.deliveryFee} • {restaurant.deliveryTime}
+                  </small>
                 </div>
                 <span className="cart-page-item-count">
                   {cartItems.reduce((s, i) => s + i.quantity, 0)} item(s)
                 </span>
               </div>
 
-              {/* Items List */}
               <div className="cart-page-items-list">
                 {cartItems.map((item) => (
                   <div className="cart-page-item" key={item.id}>
@@ -161,7 +159,6 @@ function CartPage() {
               </div>
             </div>
 
-            {/* Right: Summary */}
             <div className="cart-page-summary">
               <h3>Order Summary</h3>
 

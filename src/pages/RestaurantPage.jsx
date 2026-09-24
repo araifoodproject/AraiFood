@@ -1,3 +1,9 @@
+// ============================================================
+// src/pages/RestaurantPage.jsx
+// FULLY REAL-TIME — no hard-coded rating/deliveryTime/fee fallback.
+// Reads: restaurants/{id}, foods (menu), settings/platform
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -13,11 +19,13 @@ import {
 } from 'firebase/firestore'
 import { Search, X } from 'lucide-react'
 import PageBackButton from '../components/PageBackButton'
+import useSettings from '../hooks/useSettings'
 
 function RestaurantPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const restaurantId = searchParams.get('id') || ''
+  const { settings } = useSettings()
 
   const [restaurant, setRestaurant] = useState(null)
   const [menuItems, setMenuItems] = useState([])
@@ -31,37 +39,37 @@ function RestaurantPage() {
   const [showConflictModal, setShowConflictModal] = useState(false)
   const [pendingFood, setPendingFood] = useState(null)
 
-  // Load Restaurant
+  // ------------------------------------------------------------
+  // Load restaurant (live subscribe — so rating/status update instantly)
+  // ------------------------------------------------------------
   useEffect(() => {
-    const fetchRestaurant = async () => {
-      if (!restaurantId) {
-        console.warn('No restaurant ID in URL')
-        setLoading(false)
-        return
-      }
-
-      try {
-        console.log('Fetching restaurant:', restaurantId)
-        const restaurantDoc = await getDoc(doc(db, 'restaurants', restaurantId))
-
-        if (restaurantDoc.exists()) {
-          const data = restaurantDoc.data()
-          console.log('Restaurant loaded:', data)
-          setRestaurant({ firebaseId: restaurantDoc.id, ...data })
-        } else {
-          console.warn('Restaurant doc not found:', restaurantId)
-          toast.error('Restaurant not found!')
-        }
-      } catch (error) {
-        console.error('Restaurant fetch error:', error)
-        toast.error('Failed to load restaurant')
-      }
+    if (!restaurantId) {
       setLoading(false)
+      return
     }
-    fetchRestaurant()
+
+    const unsub = onSnapshot(
+      doc(db, 'restaurants', restaurantId),
+      (snap) => {
+        if (snap.exists()) {
+          setRestaurant({ firebaseId: snap.id, ...snap.data() })
+        } else {
+          toast.error('Restaurant not found!')
+          setRestaurant(null)
+        }
+        setLoading(false)
+      },
+      (err) => {
+        console.error('Restaurant load error:', err)
+        setLoading(false)
+      }
+    )
+    return () => unsub()
   }, [restaurantId])
 
-  // Load Menu (real-time)
+  // ------------------------------------------------------------
+  // Load menu items (live)
+  // ------------------------------------------------------------
   useEffect(() => {
     if (!restaurantId) return
     const menuQuery = query(
@@ -73,7 +81,6 @@ function RestaurantPage() {
         firebaseId: d.id,
         ...d.data(),
       }))
-      console.log('Menu items loaded:', menuList.length)
       setMenuItems(menuList)
     })
     return () => unsubscribe()
@@ -84,6 +91,29 @@ function RestaurantPage() {
     setCartItems(items)
     window.dispatchEvent(new Event('cartUpdated'))
     return items
+  }
+
+  // ------------------------------------------------------------
+  // Helper — get resolved restaurant values with settings fallback
+  // ------------------------------------------------------------
+  const getResolvedRestaurantValues = () => {
+    if (!restaurant) return {}
+    return {
+      rating: restaurant.rating ?? null, // no fake fallback
+      deliveryTime:
+        restaurant.deliveryTime ||
+        restaurant.delivery ||
+        settings.defaultDeliveryTime,
+      deliveryFee:
+        restaurant.deliveryFee != null
+          ? restaurant.deliveryFee
+          : settings.defaultDeliveryFee,
+      minimumOrder:
+        restaurant.minimumOrder != null
+          ? restaurant.minimumOrder
+          : settings.minOrderAmount,
+      cuisine: restaurant.cuisine || 'Restaurant',
+    }
   }
 
   const checkCartConflict = (food) => {
@@ -100,6 +130,24 @@ function RestaurantPage() {
     }
   }
 
+  const buildCartItem = (food) => {
+    const vals = getResolvedRestaurantValues()
+    return {
+      id: food.firebaseId,
+      name: food.name,
+      price: food.discountPrice || food.price,
+      emoji: food.emoji || '🍽️',
+      image: food.image || '',
+      quantity: 1,
+      restaurantId: restaurant.firebaseId,
+      restaurantName: restaurant.restaurantName,
+      restaurantLogo: restaurant.logo || '',
+      deliveryFee: vals.deliveryFee,
+      minimumOrder: vals.minimumOrder,
+      deliveryTime: vals.deliveryTime,
+    }
+  }
+
   const addToCartDirect = (food) => {
     const existingItem = cartItems.find((item) => item.id === food.firebaseId)
     const updatedItems = existingItem
@@ -108,22 +156,7 @@ function RestaurantPage() {
             ? { ...item, quantity: item.quantity + 1 }
             : item
         )
-      : [
-          ...cartItems,
-          {
-            id: food.firebaseId,
-            name: food.name,
-            price: food.discountPrice || food.price,
-            emoji: food.emoji || '🍽️',
-            image: food.image || '',
-            quantity: 1,
-            restaurantId: restaurant.firebaseId,
-            restaurantName: restaurant.restaurantName,
-            restaurantLogo: restaurant.logo || '',
-            deliveryFee: restaurant.deliveryFee || 30,
-            minimumOrder: restaurant.minimumOrder || 100,
-          },
-        ]
+      : [...cartItems, buildCartItem(food)]
 
     saveCart(updatedItems)
     toast.success(`${food.name} added to cart!`, { autoClose: 2000 })
@@ -131,20 +164,7 @@ function RestaurantPage() {
 
   const handleClearAndAdd = () => {
     if (!pendingFood) return
-    const newItem = {
-      id: pendingFood.firebaseId,
-      name: pendingFood.name,
-      price: pendingFood.discountPrice || pendingFood.price,
-      emoji: pendingFood.emoji || '🍽️',
-      image: pendingFood.image || '',
-      quantity: 1,
-      restaurantId: restaurant.firebaseId,
-      restaurantName: restaurant.restaurantName,
-      restaurantLogo: restaurant.logo || '',
-      deliveryFee: restaurant.deliveryFee || 30,
-      minimumOrder: restaurant.minimumOrder || 100,
-    }
-    saveCart([newItem])
+    saveCart([buildCartItem(pendingFood)])
     toast.success(`Cart cleared! ${pendingFood.name} added.`)
     setShowConflictModal(false)
     setPendingFood(null)
@@ -172,6 +192,19 @@ function RestaurantPage() {
   const availableItems = filteredMenu.filter(
     (item) => item.available !== false
   )
+
+  const formatTime = (time24) => {
+    if (!time24) return '10 AM'
+    try {
+      const [h, m] = time24.split(':')
+      const hour = parseInt(h)
+      const ampm = hour >= 12 ? 'PM' : 'AM'
+      const displayHour = hour % 12 || 12
+      return `${displayHour}${m === '00' ? '' : ':' + m} ${ampm}`
+    } catch (e) {
+      return '10 AM'
+    }
+  }
 
   if (loading) {
     return (
@@ -202,11 +235,16 @@ function RestaurantPage() {
     )
   }
 
+  // Resolved values
+  const vals = getResolvedRestaurantValues()
+  const isOpen =
+    restaurant.restaurantStatus === 'online' ||
+    restaurant.restaurantStatus === 'busy'
+
   return (
     <div className="restaurant-page">
       <PageBackButton label="Back" fallback="/restaurants" />
 
-      {/* Header */}
       <div className="restaurant-page-header">
         <div className="restaurant-header-with-logo">
           <div className="restaurant-header-logo">
@@ -218,10 +256,11 @@ function RestaurantPage() {
           </div>
           <div className="restaurant-header-info">
             <h1>{restaurant.restaurantName}</h1>
-            <p>🍽️ {restaurant.cuisine || 'Restaurant'}</p>
+            <p>🍽️ {vals.cuisine}</p>
             <span>
-              ⭐ {restaurant.rating || '4.5'} • 🚴 30-40 min • 📦 Min ৳
-              {restaurant.minimumOrder || 100}
+              {vals.rating != null && `⭐ ${vals.rating} • `}
+              🕐 {vals.deliveryTime} • 🚚 ৳{vals.deliveryFee} • 📦 Min ৳
+              {vals.minimumOrder}
             </span>
           </div>
         </div>
@@ -232,15 +271,12 @@ function RestaurantPage() {
               restaurant.restaurantStatus || 'offline'
             }`}
           ></span>
-          {restaurant.restaurantStatus === 'online'
-            ? 'Open'
-            : restaurant.restaurantStatus === 'busy'
-            ? 'Busy'
-            : 'Closed'}
+          {isOpen
+            ? 'Open Now'
+            : `Closed · Opens ${formatTime(restaurant.openingTime)}`}
         </div>
       </div>
 
-      {/* Menu */}
       <div className="menu-section">
         <div className="menu-heading">
           <span className="glass-section-label">MENU</span>
@@ -313,7 +349,6 @@ function RestaurantPage() {
         )}
       </div>
 
-      {/* Cart Modal */}
       {cartOpen && (
         <Cart
           items={cartItems}
@@ -323,7 +358,6 @@ function RestaurantPage() {
         />
       )}
 
-      {/* Conflict Modal */}
       {showConflictModal && (
         <div className="outside-area-modal">
           <div className="outside-area-modal-content">

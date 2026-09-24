@@ -1,6 +1,15 @@
+// ============================================================
+// src/components/Cart.jsx
+// FULLY REAL-TIME — delivery fee comes from settings when missing.
+// Reads: settings/platform (via useSettings)
+// ============================================================
+
 import { createPortal } from 'react-dom'
+import useSettings from '../hooks/useSettings'
 
 function Cart({ items, onClose, onIncrease, onDecrease }) {
+  const { settings } = useSettings()
+
   const total = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
@@ -9,6 +18,15 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
   const goToCheckout = () => {
     window.location.href = '/checkout'
   }
+
+  // Restaurant from first item
+  const restaurant = items.length > 0 ? items[0] : null
+
+  // Resolved delivery fee — item's own fee wins, else settings default
+  const resolvedDeliveryFee =
+    restaurant?.deliveryFee != null
+      ? restaurant.deliveryFee
+      : settings.defaultDeliveryFee
 
   const S = {
     overlay: {
@@ -22,7 +40,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       display: 'flex',
       justifyContent: 'flex-end',
       margin: 0,
-      padding: 0
+      padding: 0,
     },
     panel: {
       width: '100%',
@@ -33,7 +51,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       flexDirection: 'column',
       boxShadow: '-5px 0 25px rgba(0,0,0,0.15)',
       margin: 0,
-      padding: 0
+      padding: 0,
     },
     header: {
       display: 'flex',
@@ -42,7 +60,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       padding: '20px',
       borderBottom: '1px solid #e2e8f0',
       background: '#ffffff',
-      flexShrink: 0
+      flexShrink: 0,
     },
     label: {
       fontSize: '11px',
@@ -50,13 +68,13 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       color: '#13a89e',
       letterSpacing: '1px',
       display: 'block',
-      marginBottom: '4px'
+      marginBottom: '4px',
     },
     headerTitle: {
       fontSize: '22px',
       color: '#1a202c',
       margin: 0,
-      fontWeight: 800
+      fontWeight: 800,
     },
     closeBtn: {
       background: '#f8fafc',
@@ -69,7 +87,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       color: '#1a202c',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
     },
     restaurantBar: {
       display: 'flex',
@@ -78,7 +96,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       padding: '14px 20px',
       background: '#e6f7f6',
       borderBottom: '1px solid #e2e8f0',
-      flexShrink: 0
+      flexShrink: 0,
     },
     logoBox: {
       width: '45px',
@@ -92,31 +110,31 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       alignItems: 'center',
       justifyContent: 'center',
       fontSize: '22px',
-      flexShrink: 0
+      flexShrink: 0,
     },
     logoImg: {
       width: '45px',
       height: '45px',
       objectFit: 'cover',
-      display: 'block'
+      display: 'block',
     },
     restName: {
       fontSize: '15px',
       color: '#1a202c',
       marginBottom: '3px',
       fontWeight: 800,
-      display: 'block'
+      display: 'block',
     },
     restSub: {
       fontSize: '12px',
       color: '#13a89e',
       fontWeight: 600,
-      display: 'block'
+      display: 'block',
     },
     itemsArea: {
       flex: 1,
       overflowY: 'auto',
-      padding: '10px 20px'
+      padding: '10px 20px',
     },
     itemRow: {
       display: 'flex',
@@ -124,7 +142,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       gap: '14px',
       padding: '14px 0',
       borderBottom: '1px solid #e2e8f0',
-      width: '100%'
+      width: '100%',
     },
     foodImgBox: {
       width: '65px',
@@ -138,13 +156,13 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       alignItems: 'center',
       justifyContent: 'center',
       fontSize: '28px',
-      flexShrink: 0
+      flexShrink: 0,
     },
     foodImg: {
       width: '65px',
       height: '65px',
       objectFit: 'cover',
-      display: 'block'
+      display: 'block',
     },
     infoCol: {
       flex: 1,
@@ -152,7 +170,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       display: 'flex',
       flexDirection: 'column',
       gap: '4px',
-      overflow: 'hidden'
+      overflow: 'hidden',
     },
     foodName: {
       fontSize: '14px',
@@ -166,7 +184,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       whiteSpace: 'nowrap',
       width: '100%',
       display: 'block',
-      minHeight: '18px'
+      minHeight: '18px',
     },
     eachPrice: {
       fontSize: '11px',
@@ -175,7 +193,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       padding: 0,
       fontWeight: 600,
       display: 'block',
-      minHeight: '14px'
+      minHeight: '14px',
     },
     qtyBox: {
       display: 'flex',
@@ -186,7 +204,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       width: 'fit-content',
       marginTop: '2px',
       overflow: 'hidden',
-      height: '28px'
+      height: '28px',
     },
     qtyBtn: {
       background: 'transparent',
@@ -201,7 +219,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      lineHeight: 1
+      lineHeight: 1,
     },
     qtyNum: {
       padding: '0 10px',
@@ -211,7 +229,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       minWidth: '24px',
       textAlign: 'center',
       display: 'block',
-      lineHeight: '28px'
+      lineHeight: '28px',
     },
     itemTotal: {
       fontSize: '15px',
@@ -220,7 +238,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       flexShrink: 0,
       whiteSpace: 'nowrap',
       minWidth: '70px',
-      textAlign: 'right'
+      textAlign: 'right',
     },
     totalBar: {
       padding: '18px 20px',
@@ -229,17 +247,17 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       justifyContent: 'space-between',
       alignItems: 'center',
       flexShrink: 0,
-      background: '#ffffff'
+      background: '#ffffff',
     },
     totalLabel: {
       fontSize: '15px',
       fontWeight: 600,
-      color: '#4a5568'
+      color: '#4a5568',
     },
     totalValue: {
       fontSize: '22px',
       color: '#1a202c',
-      fontWeight: 900
+      fontWeight: 900,
     },
     checkoutBtn: {
       background: 'linear-gradient(135deg, #13a89e, #0e7f78)',
@@ -252,7 +270,7 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       fontWeight: 800,
       cursor: 'pointer',
       boxShadow: '0 6px 18px rgba(19,168,158,0.35)',
-      flexShrink: 0
+      flexShrink: 0,
     },
     emptyBox: {
       flex: 1,
@@ -260,44 +278,66 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px'
-    }
+      padding: '20px',
+    },
   }
 
   const cartContent = (
     <div style={S.overlay}>
       <div style={S.panel}>
-
         {/* Header */}
         <div style={S.header}>
           <div>
             <span style={S.label}>YOUR ORDER</span>
             <h2 style={S.headerTitle}>Your Cart</h2>
           </div>
-          <button style={S.closeBtn} onClick={onClose}>×</button>
+          <button style={S.closeBtn} onClick={onClose}>
+            ×
+          </button>
         </div>
 
         {items.length === 0 ? (
           <div style={S.emptyBox}>
             <div style={{ fontSize: '60px', marginBottom: '20px' }}>🛒</div>
-            <h3 style={{ fontSize: '18px', color: '#1a202c', marginBottom: '8px' }}>Your cart is empty</h3>
-            <p style={{ color: '#4a5568' }}>Add some delicious food to get started.</p>
+            <h3
+              style={{
+                fontSize: '18px',
+                color: '#1a202c',
+                marginBottom: '8px',
+              }}
+            >
+              Your cart is empty
+            </h3>
+            <p style={{ color: '#4a5568' }}>
+              Add some delicious food to get started.
+            </p>
           </div>
         ) : (
           <>
             {/* Restaurant Bar */}
-            {items[0].restaurantName && (
+            {restaurant?.restaurantName && (
               <div style={S.restaurantBar}>
                 <div style={S.logoBox}>
-                  {items[0].restaurantLogo ? (
-                    <img src={items[0].restaurantLogo} alt="logo" style={S.logoImg} />
+                  {restaurant.restaurantLogo ? (
+                    <img
+                      src={restaurant.restaurantLogo}
+                      alt="logo"
+                      style={S.logoImg}
+                    />
                   ) : (
                     <span>🏪</span>
                   )}
                 </div>
                 <div>
-                  <span style={S.restName}>{items[0].restaurantName}</span>
-                  <span style={S.restSub}>Delivery: ৳{items[0].deliveryFee || 30}</span>
+                  <span style={S.restName}>{restaurant.restaurantName}</span>
+                  <span style={S.restSub}>
+                    Delivery:{' '}
+                    {resolvedDeliveryFee === 0
+                      ? 'FREE'
+                      : `৳${resolvedDeliveryFee}`}
+                    {restaurant.deliveryTime &&
+                      ` · ${restaurant.deliveryTime}`}
+                  </span>
                 </div>
               </div>
             )}
@@ -308,7 +348,11 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
                 <div key={item.id} style={S.itemRow}>
                   <div style={S.foodImgBox}>
                     {item.image ? (
-                      <img src={item.image} alt={item.name} style={S.foodImg} />
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        style={S.foodImg}
+                      />
                     ) : (
                       <span>{item.emoji || '🍽️'}</span>
                     )}
@@ -318,13 +362,25 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
                     <span style={S.foodName}>{item.name}</span>
                     <span style={S.eachPrice}>৳{item.price} each</span>
                     <div style={S.qtyBox}>
-                      <button style={S.qtyBtn} onClick={() => onDecrease(item.id)}>−</button>
+                      <button
+                        style={S.qtyBtn}
+                        onClick={() => onDecrease(item.id)}
+                      >
+                        −
+                      </button>
                       <span style={S.qtyNum}>{item.quantity}</span>
-                      <button style={S.qtyBtn} onClick={() => onIncrease(item.id)}>+</button>
+                      <button
+                        style={S.qtyBtn}
+                        onClick={() => onIncrease(item.id)}
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
 
-                  <div style={S.itemTotal}>৳{item.price * item.quantity}</div>
+                  <div style={S.itemTotal}>
+                    ৳{item.price * item.quantity}
+                  </div>
                 </div>
               ))}
             </div>
@@ -340,7 +396,6 @@ function Cart({ items, onClose, onIncrease, onDecrease }) {
             </button>
           </>
         )}
-
       </div>
     </div>
   )

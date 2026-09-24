@@ -1,7 +1,20 @@
+// ============================================================
+// src/pages/admin/AdminRestaurantsPage.jsx
+// FULLY REAL-TIME — with Edit form (rating, deliveryTime, isOpen,
+// location via map picker, deliveryFee, minimumOrder)
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { db } from '../../firebase'
-import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import {
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from 'firebase/firestore'
 import AdminSidebar from '../../components/AdminSidebar'
+import MapPicker from '../../components/MapPicker'
 import { toast } from 'react-toastify'
 import {
   Menu,
@@ -12,10 +25,9 @@ import {
   Store,
   Clock,
   Eye,
-  MapPin,
-  Phone,
-  Mail,
   Trash2,
+  Pencil,
+  Save,
 } from 'lucide-react'
 
 function AdminRestaurantsPage() {
@@ -25,6 +37,20 @@ function AdminRestaurantsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selected, setSelected] = useState(null)
+
+  // ------------------------------------------------------------
+  // Edit state
+  // ------------------------------------------------------------
+  const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    rating: '',
+    deliveryTime: '',
+    isOpen: true,
+    location: null,
+    deliveryFee: '',
+    minimumOrder: '',
+  })
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -58,7 +84,9 @@ function AdminRestaurantsPage() {
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter((r) =>
-        `${r.restaurantName || ''} ${r.email || ''} ${r.phone || ''} ${r.cuisine || ''}`
+        `${r.restaurantName || ''} ${r.email || ''} ${r.phone || ''} ${
+          r.cuisine || ''
+        }`
           .toLowerCase()
           .includes(q)
       )
@@ -76,7 +104,12 @@ function AdminRestaurantsPage() {
   }, [restaurants])
 
   const updateStatus = async (firebaseId, newStatus, name) => {
-    if (!window.confirm(`${newStatus === 'approved' ? 'Approve' : 'Reject'} "${name}"?`)) return
+    if (
+      !window.confirm(
+        `${newStatus === 'approved' ? 'Approve' : 'Reject'} "${name}"?`
+      )
+    )
+      return
     try {
       await updateDoc(doc(db, 'restaurants', firebaseId), {
         status: newStatus,
@@ -89,7 +122,12 @@ function AdminRestaurantsPage() {
   }
 
   const deleteRestaurant = async (firebaseId, name) => {
-    if (!window.confirm(`Delete "${name}" permanently? This will NOT delete their food items or orders.`)) return
+    if (
+      !window.confirm(
+        `Delete "${name}" permanently? This will NOT delete their food items or orders.`
+      )
+    )
+      return
     try {
       await deleteDoc(doc(db, 'restaurants', firebaseId))
       toast.success(`"${name}" deleted`)
@@ -100,11 +138,86 @@ function AdminRestaurantsPage() {
     }
   }
 
+  // ------------------------------------------------------------
+  // Edit handlers
+  // ------------------------------------------------------------
+  const openEdit = (r) => {
+    setEditing(r)
+    setForm({
+      rating: r.rating != null ? String(r.rating) : '',
+      deliveryTime: r.deliveryTime || r.delivery || '',
+      isOpen:
+        r.isOpen != null
+          ? r.isOpen
+          : r.restaurantStatus === 'online' ||
+            r.restaurantStatus === 'busy',
+      location: r.location?.lat && r.location?.lng ? r.location : null,
+      deliveryFee: r.deliveryFee != null ? String(r.deliveryFee) : '',
+      minimumOrder: r.minimumOrder != null ? String(r.minimumOrder) : '',
+    })
+  }
+
+  const closeEdit = () => {
+    setEditing(null)
+    setForm({
+      rating: '',
+      deliveryTime: '',
+      isOpen: true,
+      location: null,
+      deliveryFee: '',
+      minimumOrder: '',
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    setSaving(true)
+    try {
+      const updateData = {
+        rating: form.rating !== '' ? parseFloat(form.rating) : 0,
+        deliveryTime: form.deliveryTime.trim(),
+        isOpen: form.isOpen,
+        restaurantStatus: form.isOpen ? 'online' : 'offline',
+        deliveryFee:
+          form.deliveryFee !== '' ? parseFloat(form.deliveryFee) : 0,
+        minimumOrder:
+          form.minimumOrder !== '' ? parseFloat(form.minimumOrder) : 0,
+      }
+      // Only set location if valid
+      if (form.location?.lat && form.location?.lng) {
+        updateData.location = {
+          lat: form.location.lat,
+          lng: form.location.lng,
+        }
+      }
+      await updateDoc(doc(db, 'restaurants', editing.firebaseId), updateData)
+      toast.success('✅ Restaurant updated!')
+      closeEdit()
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const getStatusBadge = (status) => {
     const map = {
-      pending: { label: 'Pending', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-      approved: { label: 'Approved', color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
-      rejected: { label: 'Rejected', color: '#dc2626', bg: 'rgba(220,38,38,0.12)' },
+      pending: {
+        label: 'Pending',
+        color: '#f59e0b',
+        bg: 'rgba(245,158,11,0.12)',
+      },
+      approved: {
+        label: 'Approved',
+        color: '#16a34a',
+        bg: 'rgba(22,163,74,0.12)',
+      },
+      rejected: {
+        label: 'Rejected',
+        color: '#dc2626',
+        bg: 'rgba(220,38,38,0.12)',
+      },
     }
     return map[status] || map.pending
   }
@@ -113,6 +226,34 @@ function AdminRestaurantsPage() {
     if (!ts) return '—'
     const d = ts.toDate ? ts.toDate() : new Date(ts)
     return d.toLocaleDateString()
+  }
+
+  // ------------------------------------------------------------
+  // Styles for edit form
+  // ------------------------------------------------------------
+  const inputStyle = {
+    width: '100%',
+    padding: '11px 14px',
+    borderRadius: '10px',
+    border: '1px solid var(--border-strong)',
+    background: 'var(--surface)',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  }
+  const labelStyle = {
+    display: 'block',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: 'var(--text-secondary)',
+    marginBottom: '6px',
+  }
+  const gridTwo = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: '12px',
   }
 
   return (
@@ -268,7 +409,9 @@ function AdminRestaurantsPage() {
                         ? 'linear-gradient(135deg, #059669, #047857)'
                         : 'var(--surface)',
                     color:
-                      statusFilter === opt.value ? '#FFFFFF' : 'var(--text-secondary)',
+                      statusFilter === opt.value
+                        ? '#FFFFFF'
+                        : 'var(--text-secondary)',
                     border:
                       statusFilter === opt.value
                         ? 'none'
@@ -292,7 +435,10 @@ function AdminRestaurantsPage() {
             <p>Loading restaurants...</p>
           </div>
         ) : filteredRestaurants.length === 0 ? (
-          <div className="admin-section" style={{ textAlign: 'center', padding: '60px' }}>
+          <div
+            className="admin-section"
+            style={{ textAlign: 'center', padding: '60px' }}
+          >
             <p style={{ fontSize: '48px', marginBottom: '12px' }}>🏪</p>
             <h3>No restaurants found</h3>
           </div>
@@ -300,6 +446,7 @@ function AdminRestaurantsPage() {
           <div className="admin-section" style={{ padding: '10px' }}>
             {filteredRestaurants.map((r) => {
               const badge = getStatusBadge(r.status)
+              const hasLocation = r.location?.lat && r.location?.lng
               return (
                 <div
                   key={r.firebaseId}
@@ -315,13 +462,13 @@ function AdminRestaurantsPage() {
                     alignItems: 'center',
                   }}
                 >
-                  {/* Logo/Emoji */}
                   <div
                     style={{
                       width: '56px',
                       height: '56px',
                       borderRadius: '14px',
-                      background: 'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
+                      background:
+                        'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -334,14 +481,17 @@ function AdminRestaurantsPage() {
                       <img
                         src={r.logo}
                         alt={r.restaurantName}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                        }}
                       />
                     ) : (
                       '🏪'
                     )}
                   </div>
 
-                  {/* Info */}
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <strong
                       style={{
@@ -366,20 +516,37 @@ function AdminRestaurantsPage() {
                     >
                       <span>🍽️ {r.cuisine || 'Restaurant'}</span>
                       <span>📧 {r.email}</span>
+                      {r.rating != null && <span>⭐ {r.rating}</span>}
+                      {r.deliveryTime && <span>🕐 {r.deliveryTime}</span>}
                     </div>
+                    {!hasLocation && (
+                      <div
+                        style={{
+                          marginTop: '6px',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          color: '#dc2626',
+                        }}
+                      >
+                        ⚠️ No location set — click ✏️ to add
+                      </div>
+                    )}
                   </div>
 
-                  {/* Contact */}
                   <div style={{ minWidth: '140px', fontSize: '12.5px' }}>
                     <div style={{ color: 'var(--text-secondary)' }}>
                       📞 {r.phone || '—'}
                     </div>
-                    <div style={{ color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                    <div
+                      style={{
+                        color: 'var(--text-tertiary)',
+                        marginTop: '4px',
+                      }}
+                    >
                       Joined {formatDate(r.createdAt)}
                     </div>
                   </div>
 
-                  {/* Status */}
                   <div>
                     <span
                       style={{
@@ -399,8 +566,26 @@ function AdminRestaurantsPage() {
                     </span>
                   </div>
 
-                  {/* Actions */}
                   <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      onClick={() => openEdit(r)}
+                      title="Edit Details"
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: 'rgba(5,150,105,0.12)',
+                        border: '1px solid rgba(5,150,105,0.3)',
+                        color: '#059669',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Pencil size={16} />
+                    </button>
+
                     <button
                       onClick={() => setSelected(r)}
                       title="View Details"
@@ -422,7 +607,13 @@ function AdminRestaurantsPage() {
 
                     {r.status !== 'approved' && (
                       <button
-                        onClick={() => updateStatus(r.firebaseId, 'approved', r.restaurantName)}
+                        onClick={() =>
+                          updateStatus(
+                            r.firebaseId,
+                            'approved',
+                            r.restaurantName
+                          )
+                        }
                         title="Approve"
                         style={{
                           width: '36px',
@@ -443,7 +634,13 @@ function AdminRestaurantsPage() {
 
                     {r.status !== 'rejected' && (
                       <button
-                        onClick={() => updateStatus(r.firebaseId, 'rejected', r.restaurantName)}
+                        onClick={() =>
+                          updateStatus(
+                            r.firebaseId,
+                            'rejected',
+                            r.restaurantName
+                          )
+                        }
                         title="Reject"
                         style={{
                           width: '36px',
@@ -463,7 +660,9 @@ function AdminRestaurantsPage() {
                     )}
 
                     <button
-                      onClick={() => deleteRestaurant(r.firebaseId, r.restaurantName)}
+                      onClick={() =>
+                        deleteRestaurant(r.firebaseId, r.restaurantName)
+                      }
                       title="Delete"
                       style={{
                         width: '36px',
@@ -488,7 +687,9 @@ function AdminRestaurantsPage() {
         )}
       </main>
 
-      {/* Detail Modal */}
+      {/* ============================================================ */}
+      {/* VIEW DETAILS MODAL (unchanged) */}
+      {/* ============================================================ */}
       {selected && (
         <div
           className="outside-area-modal"
@@ -507,7 +708,9 @@ function AdminRestaurantsPage() {
                 marginBottom: '20px',
               }}
             >
-              <h2 style={{ margin: 0, textAlign: 'left' }}>{selected.restaurantName}</h2>
+              <h2 style={{ margin: 0, textAlign: 'left' }}>
+                {selected.restaurantName}
+              </h2>
               <button
                 onClick={() => setSelected(null)}
                 style={{
@@ -523,7 +726,13 @@ function AdminRestaurantsPage() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
+            >
               {selected.logo && (
                 <img
                   src={selected.logo}
@@ -538,66 +747,341 @@ function AdminRestaurantsPage() {
               )}
 
               <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
                   📧 EMAIL
                 </strong>
                 <p style={{ margin: '4px 0' }}>{selected.email}</p>
               </div>
 
               <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
                   👤 OWNER
                 </strong>
-                <p style={{ margin: '4px 0' }}>{selected.ownerName || '—'}</p>
+                <p style={{ margin: '4px 0' }}>
+                  {selected.ownerName || '—'}
+                </p>
               </div>
 
               <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
                   📞 PHONE
                 </strong>
                 <p style={{ margin: '4px 0' }}>{selected.phone || '—'}</p>
               </div>
 
               <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
                   🍽️ CUISINE
                 </strong>
-                <p style={{ margin: '4px 0' }}>{selected.cuisine || '—'}</p>
-              </div>
-
-              <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                  📍 ADDRESS
-                </strong>
-                <p style={{ margin: '4px 0' }}>{selected.address || '—'}</p>
-              </div>
-
-              <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                  🕐 HOURS
-                </strong>
                 <p style={{ margin: '4px 0' }}>
-                  {selected.openingTime || '10:00'} - {selected.closingTime || '22:00'}
+                  {selected.cuisine || '—'}
                 </p>
               </div>
 
               <div>
-                <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
+                  📍 ADDRESS
+                </strong>
+                <p style={{ margin: '4px 0' }}>
+                  {selected.address || '—'}
+                </p>
+              </div>
+
+              <div>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
+                  🕐 HOURS
+                </strong>
+                <p style={{ margin: '4px 0' }}>
+                  {selected.openingTime || '10:00'} -{' '}
+                  {selected.closingTime || '22:00'}
+                </p>
+              </div>
+
+              <div>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
                   📦 MIN ORDER / DELIVERY FEE
                 </strong>
                 <p style={{ margin: '4px 0' }}>
-                  ৳{selected.minimumOrder || 100} / ৳{selected.deliveryFee || 30}
+                  ৳{selected.minimumOrder || 100} / ৳
+                  {selected.deliveryFee || 30}
                 </p>
               </div>
 
               {selected.description && (
                 <div>
-                  <strong style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  <strong
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
                     📝 DESCRIPTION
                   </strong>
-                  <p style={{ margin: '4px 0' }}>{selected.description}</p>
+                  <p style={{ margin: '4px 0' }}>
+                    {selected.description}
+                  </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* EDIT MODAL */}
+      {/* ============================================================ */}
+      {editing && (
+        <div className="outside-area-modal" onClick={closeEdit}>
+          <div
+            className="outside-area-modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '720px',
+              textAlign: 'left',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, textAlign: 'left' }}>
+                  Edit {editing.restaurantName}
+                </h2>
+                <p
+                  style={{
+                    margin: '4px 0 0',
+                    fontSize: '12.5px',
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  Owner info cannot be edited here — owner edits via their
+                  panel.
+                </p>
+              </div>
+              <button
+                onClick={closeEdit}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'var(--surface-soft)',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+              }}
+            >
+              {/* Rating + Delivery Time */}
+              <div style={gridTwo}>
+                <div>
+                  <label style={labelStyle}>⭐ Rating (0 - 5)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    value={form.rating}
+                    onChange={(e) =>
+                      setForm({ ...form, rating: e.target.value })
+                    }
+                    placeholder="4.5"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>🕐 Delivery Time</label>
+                  <input
+                    type="text"
+                    value={form.deliveryTime}
+                    onChange={(e) =>
+                      setForm({ ...form, deliveryTime: e.target.value })
+                    }
+                    placeholder="30-40 min"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              {/* Delivery Fee + Min Order */}
+              <div style={gridTwo}>
+                <div>
+                  <label style={labelStyle}>🚚 Delivery Fee (৳)</label>
+                  <input
+                    type="number"
+                    value={form.deliveryFee}
+                    onChange={(e) =>
+                      setForm({ ...form, deliveryFee: e.target.value })
+                    }
+                    placeholder="30"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>📦 Minimum Order (৳)</label>
+                  <input
+                    type="number"
+                    value={form.minimumOrder}
+                    onChange={(e) =>
+                      setForm({ ...form, minimumOrder: e.target.value })
+                    }
+                    placeholder="100"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              {/* isOpen toggle */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '14px 16px',
+                  borderRadius: '12px',
+                  background: 'var(--surface-soft)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <button
+                  onClick={() => setForm({ ...form, isOpen: !form.isOpen })}
+                  style={{
+                    width: '48px',
+                    height: '28px',
+                    borderRadius: '999px',
+                    border: 'none',
+                    background: form.isOpen ? '#059669' : '#cbd5e1',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '3px',
+                      left: form.isOpen ? '23px' : '3px',
+                      width: '22px',
+                      height: '22px',
+                      borderRadius: '50%',
+                      background: '#FFFFFF',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                      transition: 'left 0.2s',
+                    }}
+                  />
+                </button>
+                <div>
+                  <strong
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 800,
+                      display: 'block',
+                    }}
+                  >
+                    {form.isOpen ? '🟢 Open Now' : '🔴 Closed'}
+                  </strong>
+                  <small
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
+                    Toggle to show the restaurant as open for customers
+                  </small>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label style={labelStyle}>
+                  📍 Restaurant Location (click on map to set)
+                </label>
+                <MapPicker
+                  position={form.location}
+                  setPosition={(loc) => setForm({ ...form, location: loc })}
+                  height={300}
+                  helperText="👆 Click on the map to set the restaurant's exact location"
+                />
+              </div>
+
+              {/* Save / Cancel */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '10px',
+                  justifyContent: 'flex-end',
+                  marginTop: '6px',
+                }}
+              >
+                <button
+                  onClick={closeEdit}
+                  disabled={saving}
+                  style={{
+                    padding: '12px 22px',
+                    borderRadius: '999px',
+                    background: 'var(--surface-soft)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13.5px',
+                    fontWeight: 800,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEdit}
+                  disabled={saving}
+                  style={{
+                    padding: '12px 22px',
+                    borderRadius: '999px',
+                    background: saving
+                      ? 'var(--surface-soft)'
+                      : 'linear-gradient(135deg, #059669, #047857)',
+                    color: saving ? 'var(--text-tertiary)' : '#FFFFFF',
+                    border: 'none',
+                    fontSize: '13.5px',
+                    fontWeight: 800,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Save size={16} />
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,74 +1,41 @@
-import { GoogleMap, Marker, useJsApiLoader, Polygon } from '@react-google-maps/api'
-import { toast } from 'react-toastify'
+// ============================================================
+// src/components/MapPicker.jsx
+// Generic Google Maps location picker.
+// Zone check / hard-coded polygon REMOVED.
+// (Checkout handles zone validation separately via deliveryZones)
+// ============================================================
 
-const containerStyle = {
-  width: '100%',
-  height: '450px',
-  borderRadius: '16px',
-  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-}
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
-// Delivery zone polygon (Araihazar area)
-const deliveryZone = [
-  { lat: 23.7681, lng: 90.6170 },
-  { lat: 23.7923, lng: 90.6089 },
-  { lat: 23.8120, lng: 90.6606 },
-  { lat: 23.7976, lng: 90.6923 },
-  { lat: 23.7762, lng: 90.6594 },
-  { lat: 23.7598, lng: 90.6300 },
-  { lat: 23.7681, lng: 90.6170 },
-]
-
-// Ray casting point-in-polygon (correct lat/lng roles)
-const isInsideDeliveryZone = (point) => {
-  let isInside = false
-  const { lat, lng } = point
-
-  for (let i = 0, j = deliveryZone.length - 1; i < deliveryZone.length; j = i++) {
-    const xi = deliveryZone[i].lng
-    const yi = deliveryZone[i].lat
-    const xj = deliveryZone[j].lng
-    const yj = deliveryZone[j].lat
-
-    const intersect =
-      yi > lat !== yj > lat &&
-      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
-
-    if (intersect) isInside = !isInside
-  }
-
-  return isInside
-}
-
-function MapPicker({ position, setPosition }) {
+function MapPicker({
+  position,
+  setPosition,
+  height = 450,
+  defaultCenter = { lat: 23.78, lng: 90.64 },
+  defaultZoom = 14,
+  helperText = '👆 Click on the map to select your location',
+}) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: API_KEY,
     libraries: ['places'],
   })
 
-  const defaultCenter = { lat: 23.78, lng: 90.64 }
+  const containerStyle = {
+    width: '100%',
+    height: `${height}px`,
+    borderRadius: '16px',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+  }
 
   const onMapClick = (e) => {
     if (!e.latLng) return
-
-    const clickedLocation = {
+    setPosition({
       lat: e.latLng.lat(),
       lng: e.latLng.lng(),
-    }
-
-    setPosition(clickedLocation)
-
-    if (isInsideDeliveryZone(clickedLocation)) {
-      toast.success('📍 Location selected!', { autoClose: 1500 })
-    } else {
-      toast.warning(
-        '⚠️ Outside delivery area. We deliver within Araihazar only.',
-        { autoClose: 3000 }
-      )
-    }
+    })
   }
 
   // Loading
@@ -77,7 +44,7 @@ function MapPicker({ position, setPosition }) {
       <div
         style={{
           width: '100%',
-          height: '450px',
+          height: `${height}px`,
           borderRadius: '16px',
           background:
             'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(249,115,22,0.08))',
@@ -118,7 +85,7 @@ function MapPicker({ position, setPosition }) {
       <div
         style={{
           width: '100%',
-          height: '450px',
+          height: `${height}px`,
           borderRadius: '16px',
           background: 'rgba(239,68,68,0.08)',
           display: 'flex',
@@ -148,7 +115,7 @@ function MapPicker({ position, setPosition }) {
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={position || defaultCenter}
-        zoom={14}
+        zoom={defaultZoom}
         onClick={onMapClick}
         options={{
           mapTypeControl: true,
@@ -163,20 +130,6 @@ function MapPicker({ position, setPosition }) {
           clickableIcons: false,
         }}
       >
-        {/* Delivery Zone */}
-        <Polygon
-          paths={deliveryZone}
-          options={{
-            strokeColor: '#13a89e',
-            strokeOpacity: 0.9,
-            strokeWeight: 3,
-            fillColor: '#13a89e',
-            fillOpacity: 0.12,
-            clickable: false,
-          }}
-        />
-
-        {/* Marker */}
         {position && (
           <Marker
             position={position}
@@ -187,7 +140,6 @@ function MapPicker({ position, setPosition }) {
         )}
       </GoogleMap>
 
-      {/* Selected Location Info */}
       {position ? (
         <div
           style={{
@@ -255,7 +207,7 @@ function MapPicker({ position, setPosition }) {
             textAlign: 'center',
           }}
         >
-          👆 Click on the map to select your delivery location
+          {helperText}
         </div>
       )}
     </div>

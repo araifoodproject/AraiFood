@@ -1,5 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+// ============================================================
+// src/pages/RiderPanel.jsx — PREMIUM V2.2
+// Full rebuild — bottom nav, distance/ETA, zone display
+// ============================================================
+
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { signOut, onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '../firebase'
 import {
@@ -18,12 +22,36 @@ import {
   startLocationTracking,
   stopLocationTracking,
   getCurrentLocation,
-  restaurantLocations,
   getSimulatedLocation,
   getProgressFromStatus,
 } from '../utils/locationTracker'
+import useSettings from '../hooks/useSettings'
+
+// ------------------------------------------------------------
+// Distance helper — Haversine
+// ------------------------------------------------------------
+const calculateDistanceKm = (a, b) => {
+  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return null
+  const R = 6371
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180
+  const lat1 = (a.lat * Math.PI) / 180
+  const lat2 = (b.lat * Math.PI) / 180
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+// ETA: 10 km/h → 6 min per km
+const calculateEtaMin = (km) => {
+  if (km == null) return null
+  return Math.max(1, Math.round(km * 6))
+}
 
 function RiderPanel() {
+  const { settings } = useSettings()
+
   const [user, setUser] = useState(null)
   const [rider, setRider] = useState(null)
   const [orders, setOrders] = useState([])
@@ -36,7 +64,12 @@ function RiderPanel() {
   const [gpsMode, setGpsMode] = useState('simulated')
   const [currentGPSLocation, setCurrentGPSLocation] = useState(null)
   const [gpsError, setGpsError] = useState('')
+  const [gpsLoading, setGpsLoading] = useState(false)
 
+  // Restaurant location cache
+  const [restaurantLocCache, setRestaurantLocCache] = useState({})
+
+  // Profile edit
   const [editMode, setEditMode] = useState(false)
   const [editProfileImage, setEditProfileImage] = useState('')
   const [editPhone, setEditPhone] = useState('')
@@ -49,7 +82,31 @@ function RiderPanel() {
   const watchIdRef = useRef(null)
   const authCheckedRef = useRef(false)
 
-  // ============ AUTH LOADING (SINGLE CHECK) ============
+  // ------------------------------------------------------------
+  // Restaurant location fetch (with cache)
+  // ------------------------------------------------------------
+  const getRestaurantLocation = async (restaurantId) => {
+    if (!restaurantId) return settings.mapDefaultCenter || null
+    if (restaurantLocCache[restaurantId]) return restaurantLocCache[restaurantId]
+    try {
+      const snap = await getDoc(doc(db, 'restaurants', restaurantId))
+      if (snap.exists()) {
+        const data = snap.data()
+        if (data.location?.lat && data.location?.lng) {
+          setRestaurantLocCache((prev) => ({
+            ...prev,
+            [restaurantId]: data.location,
+          }))
+          return data.location
+        }
+      }
+    } catch (err) {
+      console.error('Restaurant location error:', err)
+    }
+    return settings.mapDefaultCenter || null
+  }
+
+  // ============ AUTH LOADING ============
   useEffect(() => {
     let isMounted = true
 
@@ -86,7 +143,7 @@ function RiderPanel() {
             data = foundDoc.data()
             actualRiderId = foundDoc.id
           } else {
-            setError('No rider account found. Please sign up as a rider first.')
+            setError('No rider account found.')
             setLoading(false)
             return
           }
@@ -97,13 +154,12 @@ function RiderPanel() {
         if (!isMounted) return
 
         if (data.status === 'pending') {
-          setError('⏳ Your account is pending Admin approval. Please wait.')
+          setError('⏳ Your account is pending Admin approval.')
           setLoading(false)
           return
         }
-
         if (data.status === 'rejected') {
-          setError('❌ Your rider application was rejected. Please contact support.')
+          setError('❌ Your rider application was rejected.')
           setLoading(false)
           return
         }
@@ -117,14 +173,11 @@ function RiderPanel() {
         setEditLicenseNumber(data.licenseNumber || '')
         setGpsMode(data.gpsMode || 'simulated')
         setError('')
-
-        // Sync role
         localStorage.setItem('userRole', 'rider')
       } catch (err) {
         console.error('Error loading rider:', err)
-        if (isMounted) setError('Failed to load rider data. Please try again.')
+        if (isMounted) setError('Failed to load rider data.')
       }
-
       if (isMounted) setLoading(false)
     })
 
@@ -133,6 +186,27 @@ function RiderPanel() {
       unsubscribe()
     }
   }, [])
+
+  // ============ AUTO-REQUEST GPS (real mode) ============
+  useEffect(() => {
+    if (!rider || gpsMode !== 'real') return
+    if (currentGPSLocation) return
+
+    const autoFetch = async () => {
+      setGpsLoading(true)
+      try {
+        const loc = await getCurrentLocation()
+        setCurrentGPSLocation(loc)
+        setGpsError('')
+      } catch (err) {
+        setGpsError(err || 'Location permission denied.')
+      } finally {
+        setGpsLoading(false)
+      }
+    }
+    autoFetch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rider?.firebaseId, gpsMode])
 
   // ============ GPS TRACKING ============
   useEffect(() => {
@@ -166,7 +240,7 @@ function RiderPanel() {
             },
           })
         } catch (err) {
-          console.error('Error saving GPS location:', err)
+          console.error('Save GPS error:', err)
         }
       },
       (errMsg) => {
@@ -186,14 +260,43 @@ function RiderPanel() {
   // ============ LIVE ORDERS ============
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      const allOrders = snapshot.docs.map((d) => ({
-        firebaseId: d.id,
-        ...d.data(),
-      }))
-      setOrders(allOrders)
+      const list = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+      list.sort((a, b) => {
+        const aT = a.createdAt?.toDate?.()?.getTime() || 0
+        const bT = b.createdAt?.toDate?.()?.getTime() || 0
+        return bT - aT
+      })
+      setOrders(list)
     })
     return () => unsubscribe()
   }, [])
+
+  // ============ AUTO-FETCH restaurant locations for available orders ============
+  const availableOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          !o.riderId &&
+          (o.riderStatus === 'available' || !o.riderStatus) &&
+          o.status !== 'delivered' &&
+          o.status !== 'cancelled'
+      ),
+    [orders]
+  )
+
+  useEffect(() => {
+    if (availableOrders.length === 0) return
+    availableOrders.forEach((order) => {
+      if (
+        order.restaurantId &&
+        !order.restaurantLocation &&
+        !restaurantLocCache[order.restaurantId]
+      ) {
+        getRestaurantLocation(order.restaurantId)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableOrders])
 
   // ============ MY ORDERS ============
   useEffect(() => {
@@ -204,6 +307,30 @@ function RiderPanel() {
     )
     const unsubscribe = onSnapshot(myQuery, (snapshot) => {
       const list = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+      list.sort((a, b) => {
+        const aActive = [
+          'accepted',
+          'going_to_restaurant',
+          'arrived_at_restaurant',
+          'picked_up',
+          'going_to_customer',
+        ].includes(a.riderStatus)
+          ? 1
+          : 0
+        const bActive = [
+          'accepted',
+          'going_to_restaurant',
+          'arrived_at_restaurant',
+          'picked_up',
+          'going_to_customer',
+        ].includes(b.riderStatus)
+          ? 1
+          : 0
+        if (aActive !== bActive) return bActive - aActive
+        const aT = a.acceptedAt?.toDate?.()?.getTime() || 0
+        const bT = b.acceptedAt?.toDate?.()?.getTime() || 0
+        return bT - aT
+      })
       setMyOrders(list)
     })
     return () => unsubscribe()
@@ -213,22 +340,24 @@ function RiderPanel() {
   const toggleGPSMode = async () => {
     if (!rider) return
     const newMode = gpsMode === 'real' ? 'simulated' : 'real'
-
     if (newMode === 'real') {
+      setGpsLoading(true)
       try {
         const loc = await getCurrentLocation()
         setCurrentGPSLocation(loc)
+        setGpsError('')
       } catch (err) {
-        toast.error('Location permission denied. Please allow location access.')
+        toast.error('Location permission denied.')
+        setGpsLoading(false)
         return
       }
+      setGpsLoading(false)
     }
-
     try {
       await updateDoc(doc(db, 'riders', rider.firebaseId), { gpsMode: newMode })
       setGpsMode(newMode)
       toast.success(
-        `Switched to ${newMode === 'real' ? '📍 Real GPS' : '🎭 Simulated'} mode`
+        `Switched to ${newMode === 'real' ? '📍 Real GPS' : '🎭 Simulated'}`
       )
     } catch (err) {
       console.error(err)
@@ -241,14 +370,13 @@ function RiderPanel() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file.')
+      toast.error('Please select an image.')
       return
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image is too large.')
+      toast.error('Image too large.')
       return
     }
-
     const reader = new FileReader()
     reader.onload = (event) => {
       const img = new Image()
@@ -263,11 +391,9 @@ function RiderPanel() {
             height = Math.round((height * maxSize) / width)
             width = maxSize
           }
-        } else {
-          if (height > maxSize) {
-            width = Math.round((width * maxSize) / height)
-            height = maxSize
-          }
+        } else if (height > maxSize) {
+          width = Math.round((width * maxSize) / height)
+          height = maxSize
         }
         canvas.width = width
         canvas.height = height
@@ -276,9 +402,8 @@ function RiderPanel() {
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, width, height)
         ctx.drawImage(img, 0, 0, width, height)
-        const compressed = canvas.toDataURL('image/jpeg', 0.8)
-        setEditProfileImage(compressed)
-        toast.success('📷 Profile photo ready!')
+        setEditProfileImage(canvas.toDataURL('image/jpeg', 0.8))
+        toast.success('📷 Photo ready!')
       }
       img.src = event.target.result
     }
@@ -288,14 +413,13 @@ function RiderPanel() {
   // ============ SAVE PROFILE ============
   const saveProfile = async () => {
     if (!editPhone.trim()) {
-      toast.error('Please enter phone number.')
+      toast.error('Phone required.')
       return
     }
     if (!editAddress.trim()) {
-      toast.error('Please enter address.')
+      toast.error('Address required.')
       return
     }
-
     setSaving(true)
     try {
       await updateDoc(doc(db, 'riders', rider.firebaseId), {
@@ -315,11 +439,10 @@ function RiderPanel() {
         vehicleNumber: editVehicleNumber.trim() || 'N/A',
         licenseNumber: editLicenseNumber.trim() || 'N/A',
       })
-      toast.success('✅ Profile updated successfully!')
+      toast.success('✅ Profile updated!')
       setEditMode(false)
     } catch (error) {
-      console.error(error)
-      toast.error('Failed to update profile!')
+      toast.error('Failed to update.')
     } finally {
       setSaving(false)
     }
@@ -335,15 +458,16 @@ function RiderPanel() {
     setEditMode(false)
   }
 
-  // ============ TOGGLE ONLINE/OFFLINE ============
+  // ============ TOGGLE ONLINE ============
   const toggleOnlineStatus = async () => {
     if (!rider) return
     const newStatus = rider.riderStatus === 'online' ? 'offline' : 'online'
     try {
       const updateData = { riderStatus: newStatus }
-      if (newStatus === 'online' && gpsMode === 'real') {
+      if (newStatus === 'online' && gpsMode === 'real' && !currentGPSLocation) {
         try {
           const loc = await getCurrentLocation()
+          setCurrentGPSLocation(loc)
           updateData.currentLocation = {
             lat: loc.lat,
             lng: loc.lng,
@@ -357,7 +481,6 @@ function RiderPanel() {
       setRider({ ...rider, riderStatus: newStatus })
       toast.success(`You are now ${newStatus}!`)
     } catch (error) {
-      console.error(error)
       toast.error('Failed to update status!')
     }
   }
@@ -369,17 +492,17 @@ function RiderPanel() {
       toast.error('Please go Online first!')
       return
     }
-
     try {
-      const restaurantLoc =
-        restaurantLocations[order.restaurantName] || restaurantLocations.default
+      const restaurantLoc = await getRestaurantLocation(order.restaurantId)
       const updateData = {
         riderId: user.uid,
         riderName: rider.fullName,
         riderPhone: rider.phone,
+        riderRating: rider.rating || 0,
         riderStatus: 'accepted',
         status: 'preparing',
         acceptedAt: new Date(),
+        restaurantLocation: restaurantLoc,
         riderLocation: restaurantLoc,
         riderLocationUpdatedAt: new Date(),
         simulationProgress: 0,
@@ -411,6 +534,7 @@ function RiderPanel() {
         )
       }
       toast.success('✅ Order Accepted!')
+      setView('my-orders')
     } catch (error) {
       console.error(error)
       toast.error('Failed to accept order!')
@@ -423,16 +547,15 @@ function RiderPanel() {
       const updateData = { riderStatus: newStatus }
       if (gpsMode === 'simulated') {
         const restaurantLoc =
-          restaurantLocations[order.restaurantName] ||
-          restaurantLocations.default
+          order.restaurantLocation ||
+          (await getRestaurantLocation(order.restaurantId))
         const customerLoc = order.location || restaurantLoc
         const progress = getProgressFromStatus(newStatus)
-        const simLoc = getSimulatedLocation(
+        updateData.riderLocation = getSimulatedLocation(
           restaurantLoc,
           customerLoc,
           progress
         )
-        updateData.riderLocation = simLoc
         updateData.riderLocationUpdatedAt = new Date()
         updateData.simulationProgress = progress
       } else if (gpsMode === 'real' && currentGPSLocation) {
@@ -445,7 +568,6 @@ function RiderPanel() {
       await updateDoc(doc(db, 'orders', order.firebaseId), updateData)
       toast.success(`Status: ${newStatus}`)
     } catch (error) {
-      console.error(error)
       toast.error('Failed to update status!')
     }
   }
@@ -457,7 +579,6 @@ function RiderPanel() {
       toast.error('Invalid OTP!')
       return
     }
-
     try {
       const updateData = {
         riderStatus: 'delivered',
@@ -465,10 +586,9 @@ function RiderPanel() {
         deliveredAt: new Date(),
       }
       if (gpsMode === 'simulated') {
-        updateData.riderLocation = order.location || {
-          lat: 23.78,
-          lng: 90.64,
-        }
+        updateData.riderLocation =
+          order.location ||
+          settings.mapDefaultCenter || { lat: 23.78, lng: 90.64 }
         updateData.simulationProgress = 1
       } else if (gpsMode === 'real' && currentGPSLocation) {
         updateData.riderLocation = {
@@ -478,13 +598,18 @@ function RiderPanel() {
       }
       await updateDoc(doc(db, 'orders', order.firebaseId), updateData)
 
-      const earnings = (rider.totalEarnings || 0) + 30
+      const earnings =
+        (rider.totalEarnings || 0) + (settings.riderEarningPerDelivery || 30)
       const deliveries = (rider.totalDeliveries || 0) + 1
       await updateDoc(doc(db, 'riders', rider.firebaseId), {
         totalEarnings: earnings,
         totalDeliveries: deliveries,
       })
-      setRider({ ...rider, totalEarnings: earnings, totalDeliveries: deliveries })
+      setRider({
+        ...rider,
+        totalEarnings: earnings,
+        totalDeliveries: deliveries,
+      })
 
       if (order.userId) {
         await sendNotification(
@@ -499,7 +624,7 @@ function RiderPanel() {
         await sendNotification(
           order.restaurantId,
           '✅ Order Delivered',
-          `Order ${order.orderId} has been delivered successfully.`,
+          `Order ${order.orderId} has been delivered.`,
           'order',
           { orderId: order.orderId }
         )
@@ -507,7 +632,6 @@ function RiderPanel() {
       setOtpInput('')
       toast.success('✅ Delivery Completed!')
     } catch (error) {
-      console.error(error)
       toast.error('Failed to complete delivery!')
     }
   }
@@ -543,20 +667,20 @@ function RiderPanel() {
   const completedDeliveries = myOrders.filter(
     (o) => o.riderStatus === 'delivered'
   ).length
-  const todayEarnings = todayDeliveries * 30
+  const todayEarnings =
+    todayDeliveries * (settings.riderEarningPerDelivery || 30)
   const totalEarnings = rider?.totalEarnings || 0
+  const rating = rider?.rating || 0
 
-  const availableOrders = orders.filter(
-    (o) =>
-      !o.riderId &&
-      (o.riderStatus === 'available' || !o.riderStatus) &&
-      o.status !== 'delivered' &&
-      o.status !== 'cancelled'
-  )
+  const myLocation =
+    gpsMode === 'real' && currentGPSLocation
+      ? currentGPSLocation
+      : rider?.currentLocation || null
 
+  // ============ RENDER GUARDS ============
   if (loading) {
     return (
-      <div className="rider-panel">
+      <div className="rider-v2">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
           <p>Loading your dashboard...</p>
@@ -567,7 +691,7 @@ function RiderPanel() {
 
   if (error) {
     return (
-      <div className="rider-panel">
+      <div className="rider-v2">
         <div className="panel-error-box">
           <div className="panel-error-icon">⚠️</div>
           <h2>Access Restricted</h2>
@@ -575,9 +699,7 @@ function RiderPanel() {
           <div className="panel-error-actions">
             <button
               className="account-home-btn"
-              onClick={() => {
-                window.location.href = '/'
-              }}
+              onClick={() => (window.location.href = '/')}
             >
               ← Go Home
             </button>
@@ -592,7 +714,7 @@ function RiderPanel() {
 
   if (!rider) {
     return (
-      <div className="rider-panel">
+      <div className="rider-v2">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
           <p>Redirecting...</p>
@@ -601,459 +723,669 @@ function RiderPanel() {
     )
   }
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
-    <div className="rider-panel">
-      {/* ============ FIXED TOP BAR WITH LOGOUT ============ */}
-      <div className="rider-top-bar">
-        <div className="rider-top-bar-left">
-          <div className="rider-top-bar-avatar">
-            {rider.profileImage ? (
-              <img src={rider.profileImage} alt="Profile" />
-            ) : (
-              <span>🛵</span>
-            )}
+    <div className="rider-v2">
+      {/* ============ TOP BAR ============ */}
+      <div className="rider-v2-topbar">
+        <div className="rider-v2-topbar-left">
+          <div className="rider-v2-avatar-wrap">
+            <div className="rider-v2-avatar">
+              {rider.profileImage ? (
+                <img src={rider.profileImage} alt="Profile" />
+              ) : (
+                <span>🛵</span>
+              )}
+            </div>
+            <span
+              className={`rider-v2-avatar-pulse ${
+                rider.riderStatus === 'online' ? '' : 'offline'
+              }`}
+            />
           </div>
           <div>
-            <strong>{rider.fullName}</strong>
-            <small>
-              <span className={`rider-status-dot ${rider.riderStatus}`}></span>
-              {rider.riderStatus === 'online' ? 'Online' : 'Offline'}
-            </small>
+            <strong className="rider-v2-name">{rider.fullName}</strong>
+            <span
+              className={`rider-v2-status ${
+                rider.riderStatus === 'online' ? 'online' : ''
+              }`}
+            >
+              {rider.riderStatus === 'online' ? '● Online' : '○ Offline'}
+            </span>
           </div>
         </div>
 
-        <div className="rider-top-bar-right">
+        <div className="rider-v2-topbar-actions">
           <button
-            className={`gps-mode-toggle ${gpsMode}`}
+            className={`rider-v2-pill-btn gps ${
+              gpsMode === 'real' ? 'real' : 'simulated'
+            }`}
             onClick={toggleGPSMode}
+            disabled={gpsLoading}
           >
-            {gpsMode === 'real' ? '📍 Real GPS' : '🎭 Simulated'}
+            {gpsLoading
+              ? '⏳ Loading'
+              : gpsMode === 'real'
+              ? '📍 Real'
+              : '🎭 Sim'}
           </button>
-
           <button
-            className={`rider-online-toggle ${
-              rider.riderStatus === 'online' ? 'online' : ''
+            className={`rider-v2-pill-btn ${
+              rider.riderStatus === 'online' ? 'online' : 'offline'
             }`}
             onClick={toggleOnlineStatus}
           >
             {rider.riderStatus === 'online' ? '🟢 Online' : '🔴 Offline'}
           </button>
-
-          <button className="rider-logout-btn" onClick={handleLogout}>
+          <button className="rider-v2-pill-btn logout" onClick={handleLogout}>
             🚪 Logout
           </button>
         </div>
       </div>
 
-      {/* GPS Error Banner */}
-      {gpsError && (
-        <div className="gps-error-banner">⚠️ GPS Error: {gpsError}</div>
-      )}
+      {gpsError && <div className="rider-v2-gps-error">⚠️ {gpsError}</div>}
 
-      {/* View Toggle */}
-      <div className="admin-view-toggle">
-        <button
-          className={view === 'dashboard' ? 'view-btn active' : 'view-btn'}
-          onClick={() => setView('dashboard')}
-        >
-          📊 Dashboard
-        </button>
-        <button
-          className={view === 'available' ? 'view-btn active' : 'view-btn'}
-          onClick={() => setView('available')}
-        >
-          📦 Available ({availableOrders.length})
-        </button>
-        <button
-          className={view === 'my-orders' ? 'view-btn active' : 'view-btn'}
-          onClick={() => setView('my-orders')}
-        >
-          🛵 My Deliveries ({myOrders.length})
-        </button>
-        <button
-          className={view === 'profile' ? 'view-btn active' : 'view-btn'}
-          onClick={() => setView('profile')}
-        >
-          👤 Profile
-        </button>
-      </div>
-
-      {/* DASHBOARD */}
+      {/* ============ DASHBOARD ============ */}
       {view === 'dashboard' && (
-        <div className="admin-dashboard">
-          <div className="admin-stats">
-            <div className="admin-stat">
-              <strong>৳{todayEarnings}</strong>
-              <span>Today's Earnings</span>
-            </div>
-            <div className="admin-stat">
-              <strong>৳{totalEarnings}</strong>
-              <span>Total Earnings</span>
-            </div>
-            <div className="admin-stat">
-              <strong>{todayDeliveries}</strong>
-              <span>Today's Deliveries</span>
-            </div>
-            <div className="admin-stat">
-              <strong>{completedDeliveries}</strong>
-              <span>Total Deliveries</span>
-            </div>
+        <div className="rider-v2-view">
+          <h2 className="rider-v2-view-title">📊 Dashboard</h2>
+
+          <div className="rider-v2-hero-card">
+            <p className="rider-v2-hero-card-label">Today's Earnings</p>
+            <p className="rider-v2-hero-card-value">
+              ৳{todayEarnings.toFixed(0)}
+            </p>
+            <p className="rider-v2-hero-card-sub">
+              From {todayDeliveries}{' '}
+              {todayDeliveries === 1 ? 'delivery' : 'deliveries'} today
+            </p>
           </div>
 
-          <div className="admin-stats secondary">
-            <div className="admin-stat">
-              <strong>{activeDeliveries}</strong>
-              <span>🛵 Active Now</span>
+          <div className="rider-v2-stat-grid">
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon green">💰</div>
+              <div>
+                <div className="rider-v2-stat-value">
+                  ৳{totalEarnings.toFixed(0)}
+                </div>
+                <div className="rider-v2-stat-label">Total Earnings</div>
+              </div>
             </div>
-            <div className="admin-stat">
-              <strong>⭐ {rider.rating || 0}</strong>
-              <span>Your Rating</span>
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon orange">🛵</div>
+              <div>
+                <div className="rider-v2-stat-value">{activeDeliveries}</div>
+                <div className="rider-v2-stat-label">Active Now</div>
+              </div>
             </div>
-            <div className="admin-stat">
-              <strong>{rider.totalDeliveries || 0}</strong>
-              <span>All Time</span>
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon blue">📦</div>
+              <div>
+                <div className="rider-v2-stat-value">
+                  {completedDeliveries}
+                </div>
+                <div className="rider-v2-stat-label">Total Deliveries</div>
+              </div>
             </div>
-            <div className="admin-stat">
-              <strong>{gpsMode === 'real' ? '📍' : '🎭'}</strong>
-              <span>GPS Mode</span>
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon purple">⭐</div>
+              <div>
+                <div className="rider-v2-stat-value">{rating.toFixed(1)}</div>
+                <div className="rider-v2-stat-label">Your Rating</div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* AVAILABLE ORDERS */}
+      {/* ============ AVAILABLE ORDERS ============ */}
       {view === 'available' && (
-        <div className="admin-orders">
-          <h2>
-            Available Orders{' '}
+        <div className="rider-v2-view">
+          <h2 className="rider-v2-view-title">
+            📦 Available Orders
             {rider.riderStatus !== 'online' && (
-              <span style={{ fontSize: '13px', color: '#dc2626' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#DC2626',
+                  marginLeft: 'auto',
+                }}
+              >
                 (Go Online to accept)
               </span>
             )}
           </h2>
 
           {availableOrders.length === 0 ? (
-            <p className="no-orders">No available orders right now.</p>
+            <div className="rider-v2-empty">
+              <div className="rider-v2-empty-icon">📭</div>
+              <h3>No orders right now</h3>
+              <p>New orders will appear here automatically</p>
+            </div>
           ) : (
-            <div className="admin-order-list">
-              {availableOrders.map((order) => (
-                <div className="admin-order-card" key={order.firebaseId}>
-                  <div className="admin-order-header">
-                    <strong>Order ID: {order.orderId}</strong>
-                    <span>{order.date || ''}</span>
-                  </div>
+            <div className="rider-v2-order-list">
+              {availableOrders.map((order) => {
+                const restLoc =
+                  order.restaurantLocation ||
+                  restaurantLocCache[order.restaurantId] ||
+                  null
+                const distanceKm = restLoc
+                  ? calculateDistanceKm(myLocation, restLoc)
+                  : null
+                const etaMin = calculateEtaMin(distanceKm)
 
-                  <div className="admin-order-info" style={{ marginTop: '8px' }}>
-                    <p>
-                      🏪 <strong>{order.restaurantName}</strong>
-                    </p>
-                    <p>📍 {order.address}</p>
-                    <p>📞 {order.phone}</p>
-                    <p>👤 {order.fullName}</p>
-                  </div>
-
-                  <div className="admin-order-items">
-                    {order.items?.map((item, idx) => (
-                      <div key={idx}>
-                        <span>
-                          {item.emoji} {item.name}
-                        </span>
-                        <span>× {item.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="admin-order-total">
-                    <span>Total:</span>
-                    <strong>৳{order.total}</strong>
-                  </div>
-
+                return (
                   <div
-                    className="admin-order-total"
-                    style={{ marginTop: '5px' }}
+                    className="rider-v2-order new-order"
+                    key={order.firebaseId}
                   >
-                    <span>Your Earning:</span>
-                    <strong style={{ color: '#16a34a' }}>৳30</strong>
-                  </div>
+                    {/* Header */}
+                    <div className="rider-v2-order-header">
+                      <div className="rider-v2-order-thumb">
+                        {order.restaurantLogo ? (
+                          <img src={order.restaurantLogo} alt="" />
+                        ) : (
+                          '🏪'
+                        )}
+                      </div>
+                      <div className="rider-v2-order-title">
+                        <strong>
+                          {order.restaurantName || 'Restaurant'}
+                        </strong>
+                        <small>Order #{order.orderId}</small>
+                      </div>
+                    </div>
 
-                  <div className="admin-order-actions">
+                    {/* Info */}
+                    <div className="rider-v2-order-info">
+                      {order.zoneName && (
+                        <div className="rider-v2-info-row">
+                          <span className="rider-v2-info-row-icon">🗺️</span>
+                          <span className="rider-v2-info-row-text">
+                            <strong>Zone:</strong> {order.zoneName}
+                            {order.zoneDeliveryFee != null &&
+                              ` · Delivery ৳${order.zoneDeliveryFee}`}
+                          </span>
+                        </div>
+                      )}
+                      <div className="rider-v2-info-row">
+                        <span className="rider-v2-info-row-icon">📍</span>
+                        <span className="rider-v2-info-row-text">
+                          {order.address}
+                        </span>
+                      </div>
+                      <div className="rider-v2-info-row">
+                        <span className="rider-v2-info-row-icon">👤</span>
+                        <span className="rider-v2-info-row-text">
+                          {order.fullName} · {order.phone}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Distance / ETA */}
+                    {distanceKm != null && (
+                      <div className="rider-v2-distance-badge">
+                        <span className="rider-v2-distance-chip">
+                          📏 {distanceKm.toFixed(1)} km
+                        </span>
+                        <span className="rider-v2-distance-chip orange">
+                          ⏱️ ~{etaMin} min
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Items */}
+                    {order.items?.length > 0 && (
+                      <div className="rider-v2-order-items">
+                        {order.items.map((item, idx) => (
+                          <div className="rider-v2-order-item" key={idx}>
+                            <span>
+                              {item.emoji || '🍽️'} {item.name}
+                            </span>
+                            <strong>×{item.quantity}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Totals */}
+                    <div className="rider-v2-order-totals">
+                      <div className="rider-v2-total-block">
+                        <span className="rider-v2-total-label">
+                          Order Total
+                        </span>
+                        <span className="rider-v2-total-value">
+                          ৳{order.total}
+                        </span>
+                      </div>
+                      <div className="rider-v2-total-block">
+                        <span className="rider-v2-total-label">You Earn</span>
+                        <span className="rider-v2-total-value earning">
+                          ৳{settings.riderEarningPerDelivery || 30}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Accept */}
                     <button
-                      className="accept-btn"
+                      className="rider-v2-action-btn"
                       onClick={() => acceptOrder(order)}
                       disabled={rider.riderStatus !== 'online'}
                     >
                       ✅ Accept Order
                     </button>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* MY ORDERS */}
+      {/* ============ MY DELIVERIES ============ */}
       {view === 'my-orders' && (
-        <div className="admin-orders">
-          <h2>My Deliveries</h2>
+        <div className="rider-v2-view">
+          <h2 className="rider-v2-view-title">🛵 My Deliveries</h2>
 
           {myOrders.length === 0 ? (
-            <p className="no-orders">You haven't accepted any order yet.</p>
+            <div className="rider-v2-empty">
+              <div className="rider-v2-empty-icon">🚴</div>
+              <h3>No deliveries yet</h3>
+              <p>Accept an order to get started</p>
+            </div>
           ) : (
-            <div className="admin-order-list">
-              {myOrders.map((order) => (
-                <div className="admin-order-card" key={order.firebaseId}>
-                  <div className="admin-order-header">
-                    <strong>Order ID: {order.orderId}</strong>
-                    <span
-                      className={`status-badge ${
-                        order.riderStatus === 'delivered'
-                          ? 'approved'
-                          : 'pending'
-                      }`}
-                    >
-                      {order.riderStatus?.toUpperCase().replace(/_/g, ' ')}
-                    </span>
-                  </div>
+            <div className="rider-v2-order-list">
+              {myOrders.map((order) => {
+                const isActive = [
+                  'accepted',
+                  'going_to_restaurant',
+                  'arrived_at_restaurant',
+                  'picked_up',
+                  'going_to_customer',
+                ].includes(order.riderStatus)
+                const isDelivered = order.riderStatus === 'delivered'
 
-                  <div className="admin-order-info" style={{ marginTop: '8px' }}>
-                    <p>
-                      🏪 <strong>{order.restaurantName}</strong>
-                    </p>
-                    <p>📍 {order.address}</p>
-                    <p>📞 {order.phone}</p>
-                    <p>👤 {order.fullName}</p>
-                  </div>
+                const distToCustomer =
+                  isActive && order.location && myLocation
+                    ? calculateDistanceKm(myLocation, order.location)
+                    : null
+                const etaToCustomer = calculateEtaMin(distToCustomer)
 
-                  <div className="admin-order-items">
-                    {order.items?.map((item, idx) => (
-                      <div key={idx}>
-                        <span>
-                          {item.emoji} {item.name}
-                        </span>
-                        <span>× {item.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
+                const steps = [
+                  {
+                    key: 'accepted',
+                    label: 'Accepted',
+                    sub: 'Waiting for pickup',
+                    icon: '✅',
+                  },
+                  {
+                    key: 'going_to_restaurant',
+                    label: 'Going to Restaurant',
+                    sub: 'On the way',
+                    icon: '🛵',
+                  },
+                  {
+                    key: 'arrived_at_restaurant',
+                    label: 'Arrived',
+                    sub: 'At restaurant',
+                    icon: '📍',
+                  },
+                  {
+                    key: 'picked_up',
+                    label: 'Picked Up',
+                    sub: 'Food collected',
+                    icon: '📦',
+                  },
+                  {
+                    key: 'going_to_customer',
+                    label: 'Going to Customer',
+                    sub: 'On the way',
+                    icon: '🚴',
+                  },
+                ]
+                const stageOrder = [
+                  'accepted',
+                  'going_to_restaurant',
+                  'arrived_at_restaurant',
+                  'picked_up',
+                  'going_to_customer',
+                  'delivered',
+                ]
+                const currentIdx = stageOrder.indexOf(order.riderStatus)
 
-                  <div className="admin-order-total">
-                    <span>Total:</span>
-                    <strong>৳{order.total}</strong>
-                  </div>
-
-                  {order.riderStatus !== 'delivered' && (
-                    <div className="delivery-status-flow">
-                      <div className="delivery-status-steps">
-                        <div
-                          className={`delivery-step ${
-                            [
-                              'accepted',
-                              'going_to_restaurant',
-                              'arrived_at_restaurant',
-                              'picked_up',
-                              'going_to_customer',
-                              'delivered',
-                            ].includes(order.riderStatus)
-                              ? 'active'
-                              : ''
-                          }`}
-                        >
-                          ✅ Accepted
-                        </div>
-                        <div
-                          className={`delivery-step ${
-                            [
-                              'going_to_restaurant',
-                              'arrived_at_restaurant',
-                              'picked_up',
-                              'going_to_customer',
-                              'delivered',
-                            ].includes(order.riderStatus)
-                              ? 'active'
-                              : ''
-                          }`}
-                        >
-                          🛵 Going to Restaurant
-                        </div>
-                        <div
-                          className={`delivery-step ${
-                            [
-                              'arrived_at_restaurant',
-                              'picked_up',
-                              'going_to_customer',
-                              'delivered',
-                            ].includes(order.riderStatus)
-                              ? 'active'
-                              : ''
-                          }`}
-                        >
-                          📍 Arrived
-                        </div>
-                        <div
-                          className={`delivery-step ${
-                            [
-                              'picked_up',
-                              'going_to_customer',
-                              'delivered',
-                            ].includes(order.riderStatus)
-                              ? 'active'
-                              : ''
-                          }`}
-                        >
-                          📦 Picked Up
-                        </div>
-                        <div
-                          className={`delivery-step ${
-                            ['going_to_customer', 'delivered'].includes(
-                              order.riderStatus
-                            )
-                              ? 'active'
-                              : ''
-                          }`}
-                        >
-                          🛵 Going to Customer
-                        </div>
-                      </div>
-
-                      <div className="delivery-next-btn-wrap">
-                        {order.riderStatus === 'accepted' && (
-                          <button
-                            className="complete-btn"
-                            onClick={() =>
-                              updateDeliveryStatus(order, 'going_to_restaurant')
-                            }
-                          >
-                            Start → Going to Restaurant
-                          </button>
-                        )}
-                        {order.riderStatus === 'going_to_restaurant' && (
-                          <button
-                            className="complete-btn"
-                            onClick={() =>
-                              updateDeliveryStatus(
-                                order,
-                                'arrived_at_restaurant'
-                              )
-                            }
-                          >
-                            Reached Restaurant
-                          </button>
-                        )}
-                        {order.riderStatus === 'arrived_at_restaurant' && (
-                          <button
-                            className="complete-btn"
-                            onClick={() =>
-                              updateDeliveryStatus(order, 'picked_up')
-                            }
-                          >
-                            Food Picked Up
-                          </button>
-                        )}
-                        {order.riderStatus === 'picked_up' && (
-                          <button
-                            className="complete-btn"
-                            onClick={() =>
-                              updateDeliveryStatus(order, 'going_to_customer')
-                            }
-                          >
-                            On the Way to Customer
-                          </button>
-                        )}
-                        {order.riderStatus === 'going_to_customer' && (
-                          <div className="otp-verification-box">
-                            <label>🔐 Customer OTP</label>
-                            <input
-                              type="text"
-                              placeholder="Enter 4-digit OTP"
-                              value={otpInput}
-                              onChange={(e) =>
-                                setOtpInput(e.target.value.replace(/\D/g, ''))
-                              }
-                              maxLength={4}
-                            />
-                            <button
-                              className="complete-btn"
-                              onClick={() => completeDelivery(order)}
-                            >
-                              ✅ Complete Delivery
-                            </button>
-                          </div>
+                return (
+                  <div
+                    className={`rider-v2-order ${
+                      isActive ? 'new-order' : ''
+                    }`}
+                    key={order.firebaseId}
+                  >
+                    {/* Header */}
+                    <div className="rider-v2-order-header">
+                      <div className="rider-v2-order-thumb">
+                        {order.restaurantLogo ? (
+                          <img src={order.restaurantLogo} alt="" />
+                        ) : (
+                          '🏪'
                         )}
                       </div>
-                    </div>
-                  )}
-
-                  {order.riderStatus === 'delivered' && (
-                    <div className="delivered-label-wrap">
-                      <span className="delivered-label">
-                        ✅ Delivered — You earned ৳30
+                      <div className="rider-v2-order-title">
+                        <strong>
+                          {order.restaurantName || 'Restaurant'}
+                        </strong>
+                        <small>Order #{order.orderId}</small>
+                      </div>
+                      <span
+                        className={`rider-v2-order-status ${
+                          isDelivered ? 'delivered' : 'active'
+                        }`}
+                      >
+                        {order.riderStatus?.replace(/_/g, ' ').toUpperCase()}
                       </span>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {/* Info */}
+                    <div className="rider-v2-order-info">
+                      {order.zoneName && (
+                        <div className="rider-v2-info-row">
+                          <span className="rider-v2-info-row-icon">🗺️</span>
+                          <span className="rider-v2-info-row-text">
+                            <strong>Zone:</strong> {order.zoneName}
+                          </span>
+                        </div>
+                      )}
+                      <div className="rider-v2-info-row">
+                        <span className="rider-v2-info-row-icon">📍</span>
+                        <span className="rider-v2-info-row-text">
+                          {order.address}
+                        </span>
+                      </div>
+                      <div className="rider-v2-info-row">
+                        <span className="rider-v2-info-row-icon">👤</span>
+                        <span className="rider-v2-info-row-text">
+                          {order.fullName} · {order.phone}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Distance to customer */}
+                    {distToCustomer != null && (
+                      <div className="rider-v2-distance-badge">
+                        <span className="rider-v2-distance-chip orange">
+                          📏 {distToCustomer.toFixed(1)} km to customer
+                        </span>
+                        <span className="rider-v2-distance-chip orange">
+                          ⏱️ ~{etaToCustomer} min
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Items */}
+                    {order.items?.length > 0 && (
+                      <div className="rider-v2-order-items">
+                        {order.items.map((item, idx) => (
+                          <div className="rider-v2-order-item" key={idx}>
+                            <span>
+                              {item.emoji || '🍽️'} {item.name}
+                            </span>
+                            <strong>×{item.quantity}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Totals */}
+                    <div className="rider-v2-order-totals">
+                      <div className="rider-v2-total-block">
+                        <span className="rider-v2-total-label">
+                          Order Total
+                        </span>
+                        <span className="rider-v2-total-value">
+                          ৳{order.total}
+                        </span>
+                      </div>
+                      <div className="rider-v2-total-block">
+                        <span className="rider-v2-total-label">
+                          You Earn
+                        </span>
+                        <span className="rider-v2-total-value earning">
+                          ৳{settings.riderEarningPerDelivery || 30}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Timeline */}
+                    {isActive && (
+                      <div className="rider-v2-timeline">
+                        {steps.map((step, idx) => (
+                          <div
+                            className={`rider-v2-step ${
+                              idx <= currentIdx ? 'active' : ''
+                            }`}
+                            key={step.key}
+                          >
+                            <span className="rider-v2-step-marker">
+                              {step.icon}
+                            </span>
+                            {idx < steps.length - 1 && (
+                              <span className="rider-v2-step-line" />
+                            )}
+                            <div className="rider-v2-step-text">
+                              <strong>{step.label}</strong>
+                              <small>{step.sub}</small>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    {order.riderStatus === 'accepted' && (
+                      <button
+                        className="rider-v2-action-btn"
+                        onClick={() =>
+                          updateDeliveryStatus(
+                            order,
+                            'going_to_restaurant'
+                          )
+                        }
+                      >
+                        🛵 Start → Going to Restaurant
+                      </button>
+                    )}
+                    {order.riderStatus === 'going_to_restaurant' && (
+                      <button
+                        className="rider-v2-action-btn"
+                        onClick={() =>
+                          updateDeliveryStatus(
+                            order,
+                            'arrived_at_restaurant'
+                          )
+                        }
+                      >
+                        📍 Reached Restaurant
+                      </button>
+                    )}
+                    {order.riderStatus === 'arrived_at_restaurant' && (
+                      <button
+                        className="rider-v2-action-btn"
+                        onClick={() =>
+                          updateDeliveryStatus(order, 'picked_up')
+                        }
+                      >
+                        📦 Food Picked Up
+                      </button>
+                    )}
+                    {order.riderStatus === 'picked_up' && (
+                      <button
+                        className="rider-v2-action-btn"
+                        onClick={() =>
+                          updateDeliveryStatus(order, 'going_to_customer')
+                        }
+                      >
+                        🚴 On the Way to Customer
+                      </button>
+                    )}
+
+                    {/* OTP */}
+                    {order.riderStatus === 'going_to_customer' && (
+                      <div className="rider-v2-otp-box">
+                        <label className="rider-v2-otp-label">
+                          🔐 Customer OTP
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="rider-v2-otp-input"
+                          placeholder="4-digit"
+                          value={otpInput}
+                          onChange={(e) =>
+                            setOtpInput(
+                              e.target.value.replace(/\D/g, '')
+                            )
+                          }
+                          maxLength={4}
+                        />
+                        <button
+                          className="rider-v2-otp-submit"
+                          onClick={() => completeDelivery(order)}
+                        >
+                          ✅ Complete Delivery
+                        </button>
+                      </div>
+                    )}
+
+                    {isDelivered && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          background: 'rgba(16, 185, 129, 0.1)',
+                          textAlign: 'center',
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          color: '#059669',
+                        }}
+                      >
+                        ✅ Delivered — You earned ৳
+                        {settings.riderEarningPerDelivery || 30}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* PROFILE */}
+      {/* ============ PROFILE ============ */}
       {view === 'profile' && (
-        <div className="admin-orders">
-          <div className="rider-profile-header-row">
-            <h2>My Profile</h2>
-            {!editMode && (
-              <button
-                className="edit-profile-btn"
-                onClick={() => setEditMode(true)}
-              >
-                ✏️ Edit Profile
-              </button>
-            )}
+        <div className="rider-v2-view">
+          <h2 className="rider-v2-view-title">👤 Profile</h2>
+
+          <div className="rider-v2-profile-card">
+            <div className="rider-v2-profile-avatar">
+              {editMode ? (
+                editProfileImage ? (
+                  <img src={editProfileImage} alt="Profile" />
+                ) : (
+                  <span>🛵</span>
+                )
+              ) : rider.profileImage ? (
+                <img src={rider.profileImage} alt="Profile" />
+              ) : (
+                <span>🛵</span>
+              )}
+            </div>
+
+            <h3 className="rider-v2-profile-name">{rider.fullName}</h3>
+            <p className="rider-v2-profile-email">{rider.email}</p>
+
+            <div className="rider-v2-profile-stats">
+              <div className="rider-v2-profile-stat">
+                <span className="rider-v2-profile-stat-value">
+                  ⭐ {rating.toFixed(1)}
+                </span>
+                <span className="rider-v2-profile-stat-label">Rating</span>
+              </div>
+              <div className="rider-v2-profile-stat">
+                <span className="rider-v2-profile-stat-value">
+                  {rider.totalDeliveries || 0}
+                </span>
+                <span className="rider-v2-profile-stat-label">
+                  Deliveries
+                </span>
+              </div>
+              <div className="rider-v2-profile-stat">
+                <span className="rider-v2-profile-stat-value">
+                  ৳{totalEarnings.toFixed(0)}
+                </span>
+                <span className="rider-v2-profile-stat-label">Earned</span>
+              </div>
+            </div>
+
+            <div className="rider-v2-profile-actions">
+              {!editMode ? (
+                <button
+                  className="rider-v2-btn-primary"
+                  onClick={() => setEditMode(true)}
+                >
+                  ✏️ Edit Profile
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="rider-v2-btn-secondary"
+                    onClick={cancelEdit}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="rider-v2-btn-primary"
+                    onClick={saveProfile}
+                    disabled={saving}
+                  >
+                    {saving ? 'Saving...' : '✅ Save'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {editMode ? (
-            <div className="rider-profile-view">
-              <div className="profile-photo-edit">
-                <div className="rider-profile-avatar-large">
-                  {editProfileImage ? (
-                    <img src={editProfileImage} alt="Profile" />
-                  ) : (
-                    <span>🛵</span>
-                  )}
+            <div className="rider-v2-profile-card">
+              <div className="rider-v2-form">
+                <div className="rider-v2-form-group">
+                  <label>📷 Profile Photo</label>
+                  <label
+                    className="rider-v2-btn-secondary"
+                    style={{ padding: '12px', cursor: 'pointer' }}
+                  >
+                    Change Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileImageUpload}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
                 </div>
-                <label className="profile-photo-change-btn">
-                  📷 Change Photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleProfileImageUpload}
-                  />
-                </label>
-              </div>
-
-              <h3>{rider.fullName}</h3>
-              <p className="rider-profile-email">{rider.email}</p>
-              <p className="rider-profile-locked">
-                🔒 Name, Email, NID cannot be changed.
-              </p>
-
-              <div className="rider-profile-grid">
-                <div className="rider-profile-item">
-                  <span>📞 Phone</span>
+                <div className="rider-v2-form-group">
+                  <label>📞 Phone</label>
                   <input
                     type="tel"
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
                   />
                 </div>
-                <div className="rider-profile-item">
-                  <span>🎂 DOB</span>
-                  <strong>{rider.dob} 🔒</strong>
-                </div>
-                <div className="rider-profile-item">
-                  <span>🛵 Vehicle Type</span>
+                <div className="rider-v2-form-group">
+                  <label>🛵 Vehicle Type</label>
                   <select
                     value={editVehicleType}
                     onChange={(e) => setEditVehicleType(e.target.value)}
@@ -1064,99 +1396,147 @@ function RiderPanel() {
                     <option value="Electric Bike">Electric Bike</option>
                   </select>
                 </div>
-                <div className="rider-profile-item">
-                  <span>🔢 Vehicle Number</span>
+                <div className="rider-v2-form-group">
+                  <label>🔢 Vehicle Number</label>
                   <input
                     type="text"
                     value={editVehicleNumber}
                     onChange={(e) => setEditVehicleNumber(e.target.value)}
                   />
                 </div>
-                <div className="rider-profile-item">
-                  <span>🪪 License</span>
+                <div className="rider-v2-form-group">
+                  <label>🪪 License</label>
                   <input
                     type="text"
                     value={editLicenseNumber}
-                    onChange={(e) => setEditLicenseNumber(e.target.value)}
+                    onChange={(e) =>
+                      setEditLicenseNumber(e.target.value)
+                    }
                   />
                 </div>
-                <div className="rider-profile-item full">
-                  <span>📍 Address</span>
+                <div className="rider-v2-form-group">
+                  <label>📍 Address</label>
                   <textarea
                     rows="2"
                     value={editAddress}
                     onChange={(e) => setEditAddress(e.target.value)}
-                  ></textarea>
+                  />
                 </div>
-              </div>
-
-              <div className="rider-profile-edit-actions">
-                <button className="cancel-btn" onClick={cancelEdit}>
-                  Cancel
-                </button>
-                <button
-                  className="save-btn"
-                  onClick={saveProfile}
-                  disabled={saving}
-                >
-                  {saving ? 'Saving...' : '✅ Save Changes'}
-                </button>
               </div>
             </div>
           ) : (
-            <div className="rider-profile-view">
-              <div className="rider-profile-avatar-large">
-                {rider.profileImage ? (
-                  <img src={rider.profileImage} alt="Profile" />
-                ) : (
-                  <span>🛵</span>
-                )}
-              </div>
-              <h3>{rider.fullName}</h3>
-              <p className="rider-profile-email">{rider.email}</p>
-
-              <div className="rider-profile-grid">
-                <div className="rider-profile-item">
-                  <span>📞 Phone</span>
-                  <strong>{rider.phone}</strong>
+            <div className="rider-v2-profile-card">
+              <div className="rider-v2-profile-info">
+                <div className="rider-v2-profile-row">
+                  <span className="rider-v2-profile-row-label">
+                    📞 Phone
+                  </span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.phone || '—'}
+                  </span>
                 </div>
-                <div className="rider-profile-item">
-                  <span>🆔 NID Number</span>
-                  <strong>{rider.nidNumber}</strong>
+                <div className="rider-v2-profile-row">
+                  <span className="rider-v2-profile-row-label">🎂 DOB</span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.dob || '—'}
+                  </span>
                 </div>
-                <div className="rider-profile-item">
-                  <span>🎂 Date of Birth</span>
-                  <strong>{rider.dob}</strong>
+                <div className="rider-v2-profile-row">
+                  <span className="rider-v2-profile-row-label">
+                    🆔 NID Number
+                  </span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.nidNumber || '—'}
+                  </span>
                 </div>
-                <div className="rider-profile-item">
-                  <span>🛵 Vehicle Type</span>
-                  <strong>{rider.vehicleType}</strong>
+                <div className="rider-v2-profile-row">
+                  <span className="rider-v2-profile-row-label">
+                    🛵 Vehicle Type
+                  </span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.vehicleType || '—'}
+                  </span>
                 </div>
-                <div className="rider-profile-item">
-                  <span>🔢 Vehicle Number</span>
-                  <strong>{rider.vehicleNumber || 'N/A'}</strong>
+                <div className="rider-v2-profile-row">
+                  <span className="rider-v2-profile-row-label">
+                    🔢 Vehicle Number
+                  </span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.vehicleNumber || 'N/A'}
+                  </span>
                 </div>
-                <div className="rider-profile-item">
-                  <span>🪪 License</span>
-                  <strong>{rider.licenseNumber || 'N/A'}</strong>
+                <div className="rider-v2-profile-row">
+                  <span className="rider-v2-profile-row-label">
+                    🪪 License
+                  </span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.licenseNumber || 'N/A'}
+                  </span>
                 </div>
-                <div className="rider-profile-item full">
-                  <span>📍 Address</span>
-                  <strong>{rider.address}</strong>
-                </div>
-                <div className="rider-profile-item">
-                  <span>⭐ Rating</span>
-                  <strong>{rider.rating || 0}/5</strong>
-                </div>
-                <div className="rider-profile-item">
-                  <span>📦 Total Deliveries</span>
-                  <strong>{rider.totalDeliveries || 0}</strong>
+                <div
+                  className="rider-v2-profile-row"
+                  style={{ gridColumn: '1 / -1' }}
+                >
+                  <span className="rider-v2-profile-row-label">
+                    📍 Address
+                  </span>
+                  <span className="rider-v2-profile-row-value">
+                    {rider.address || '—'}
+                  </span>
                 </div>
               </div>
             </div>
           )}
         </div>
       )}
+
+      {/* ============ BOTTOM NAV ============ */}
+      <div className="rider-v2-botnav">
+        <button
+          className={`rider-v2-navbtn ${
+            view === 'dashboard' ? 'active' : ''
+          }`}
+          onClick={() => setView('dashboard')}
+        >
+          <span className="rider-v2-navbtn-icon">📊</span>
+          Dashboard
+        </button>
+        <button
+          className={`rider-v2-navbtn ${
+            view === 'available' ? 'active' : ''
+          }`}
+          onClick={() => setView('available')}
+        >
+          <span className="rider-v2-navbtn-icon">📦</span>
+          Available
+          {availableOrders.length > 0 && (
+            <span className="rider-v2-navbadge">
+              {availableOrders.length}
+            </span>
+          )}
+        </button>
+        <button
+          className={`rider-v2-navbtn ${
+            view === 'my-orders' ? 'active' : ''
+          }`}
+          onClick={() => setView('my-orders')}
+        >
+          <span className="rider-v2-navbtn-icon">🛵</span>
+          Deliveries
+          {activeDeliveries > 0 && (
+            <span className="rider-v2-navbadge">{activeDeliveries}</span>
+          )}
+        </button>
+        <button
+          className={`rider-v2-navbtn ${
+            view === 'profile' ? 'active' : ''
+          }`}
+          onClick={() => setView('profile')}
+        >
+          <span className="rider-v2-navbtn-icon">👤</span>
+          Profile
+        </button>
+      </div>
     </div>
   )
 }

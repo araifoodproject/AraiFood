@@ -1,181 +1,148 @@
+// ============================================================
+// src/components/Hero.jsx
+// FULLY REAL-TIME — reads hero title, trust bar, and 4 features
+// from settings.platform (nested structure).
+// Services (Food / Pharmacy / Gaming) are fixed in code.
+// ============================================================
+
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import {
-  MapPin,
-  Search,
-  Rocket,
-  Star,
-  ShieldCheck,
-  Bike,
-  Award,
-} from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Search, SlidersHorizontal, ArrowRight } from 'lucide-react'
+import serviceFood from '../assets/images/service-food.png'
+import servicePharmacy from '../assets/images/service-pharmacy.png'
+import serviceGaming from '../assets/images/service-gaming.png'
+import useSettings from '../hooks/useSettings'
 
 function Hero() {
-  const [searchQuery, setSearchQuery] = useState('')
+  const [query, setQuery] = useState('')
   const navigate = useNavigate()
+  const { settings } = useSettings()
 
   const handleSearch = () => {
-    const q = searchQuery.trim()
-    if (!q) {
+    const q = query.trim()
+    if (q) {
+      navigate(`/restaurants?search=${encodeURIComponent(q)}`)
+    } else {
       navigate('/restaurants')
-      return
     }
-    navigate(`/restaurants?search=${encodeURIComponent(q)}`)
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch()
-    }
+    if (e.key === 'Enter') handleSearch()
   }
 
+  // ------------------------------------------------------------
+  // Service cards — fixed (3 services: food, pharmacy, gaming)
+  // ------------------------------------------------------------
+  const services = [
+    {
+      key: 'food',
+      title: 'Food',
+      subtitle: 'Restaurants & Groceries',
+      image: serviceFood,
+      button: 'Order Food',
+      path: '/restaurants',
+    },
+    {
+      key: 'pharmacy',
+      title: 'Pharmacy',
+      subtitle: 'Medicines & Wellness',
+      image: servicePharmacy,
+      button: 'Shop Pharmacy',
+      path: '/pharmacy',
+    },
+    {
+      key: 'gaming',
+      title: 'Gaming',
+      subtitle: 'Games & Entertainment',
+      image: serviceGaming,
+      button: 'Play Games',
+      path: '/gaming',
+    },
+  ]
+
+  // ------------------------------------------------------------
+  // Hero text + trust bar + features from settings
+  // ------------------------------------------------------------
+  const hero = settings.hero || {}
+  const trustBar = settings.trustBar || {}
+  const features = settings.features || []
+
   return (
-    <section className="glass-hero">
-      <div className="glass-hero-container">
-        {/* Left Content */}
-        <div className="glass-hero-content">
-          <div className="glass-hero-badge">
-            <span className="glass-hero-badge-icon">
-              <Rocket size={14} strokeWidth={2.5} />
-            </span>
-            <span>Fresh food, right at your door</span>
-          </div>
+    <>
+      {/* HERO SECTION */}
+      <section className="aa-hero">
+        <h1 className="aa-hero-title">
+          {hero.title1}{' '}
+          <span className="aa-hero-title-highlight">{hero.title2}</span>{' '}
+          {hero.title3}
+        </h1>
 
-          <h1 className="glass-hero-title">
-            Delicious Food.
-            <br />
-            <span className="glass-hero-title-highlight">
-              Delivered With Love.
-            </span>
-          </h1>
+        {/* Search Bar */}
+        <div className="aa-hero-search">
+          <Search size={22} strokeWidth={2.2} color="#059669" />
+          <input
+            type="text"
+            placeholder={hero.searchPlaceholder}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            className="aa-hero-search-btn"
+            onClick={handleSearch}
+            title="Search"
+          >
+            <SlidersHorizontal size={20} strokeWidth={2.2} />
+          </button>
+        </div>
+      </section>
 
-          <p className="glass-hero-description">
-            Discover the best restaurants and local food around{' '}
-            <strong>Araihazar</strong>. Order your favourite meals and enjoy
-            fast delivery at your doorstep.
-          </p>
-
-          {/* Search Bar */}
-          <div className="glass-hero-search">
-            <span className="glass-hero-search-icon">
-              <MapPin size={18} strokeWidth={2} />
-            </span>
-            <input
-              type="text"
-              placeholder="What are you craving today?"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-            />
+      {/* SERVICE CARDS */}
+      <div className="aa-services">
+        {services.map((service) => (
+          <div
+            key={service.key}
+            className={`aa-service-card ${service.key}`}
+          >
+            <div className="aa-service-image">
+              <img src={service.image} alt={service.title} />
+            </div>
+            <h3 className="aa-service-title">{service.title}</h3>
+            <p className="aa-service-desc">{service.subtitle}</p>
             <button
-              onClick={handleSearch}
-              className="glass-hero-search-btn"
+              className="aa-service-btn"
+              onClick={() => navigate(service.path)}
             >
-              <Search size={16} strokeWidth={2.5} />
-              Find Food
+              {service.button}
+              <ArrowRight size={14} strokeWidth={2.8} />
             </button>
           </div>
-
-          {/* Features */}
-          <div className="glass-hero-features">
-            <div className="glass-hero-feature">
-              <div className="glass-hero-feature-icon green">
-                <Rocket size={18} strokeWidth={2} />
-              </div>
-              <div className="glass-hero-feature-text">
-                <strong>Fast Delivery</strong>
-                <small>At your doorstep</small>
-              </div>
-            </div>
-
-            <div className="glass-hero-feature-divider"></div>
-
-            <div className="glass-hero-feature">
-              <div className="glass-hero-feature-icon orange">
-                <Star size={18} strokeWidth={2} />
-              </div>
-              <div className="glass-hero-feature-text">
-                <strong>Top Rated</strong>
-                <small>Local restaurants</small>
-              </div>
-            </div>
-
-            <div className="glass-hero-feature-divider"></div>
-
-            <div className="glass-hero-feature">
-              <div className="glass-hero-feature-icon green">
-                <ShieldCheck size={18} strokeWidth={2} />
-              </div>
-              <div className="glass-hero-feature-text">
-                <strong>100% Safe</strong>
-                <small>Secure ordering</small>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Visual */}
-        <div className="glass-hero-visual">
-          <div className="glass-hero-visual-shape shape-1"></div>
-          <div className="glass-hero-visual-shape shape-2"></div>
-
-          {/* Main Food Card */}
-          <div className="glass-food-card">
-            <div className="glass-food-card-glow"></div>
-
-            <div className="glass-food-image">🍛</div>
-
-            <div className="glass-food-info">
-              <span className="glass-food-category">CUSTOMER FAVOURITE</span>
-              <h3>Special Chicken Biryani</h3>
-
-              <div className="glass-food-bottom">
-                <span className="glass-food-price">৳180</span>
-                <span className="glass-food-rating">
-                  <Star size={12} strokeWidth={2.5} fill="#F59E0B" />
-                  4.9
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Floating Card 1 */}
-          <div className="glass-floating-card glass-floating-delivery">
-            <div className="glass-floating-icon green">
-              <Bike size={20} strokeWidth={2} />
-            </div>
-            <div>
-              <strong>On the way!</strong>
-              <small>Your food is coming</small>
-            </div>
-          </div>
-
-          {/* Floating Card 2 */}
-          <div className="glass-floating-card glass-floating-rating">
-            <div className="glass-floating-stars">
-              <Star size={12} strokeWidth={0} fill="#F59E0B" />
-              <Star size={12} strokeWidth={0} fill="#F59E0B" />
-              <Star size={12} strokeWidth={0} fill="#F59E0B" />
-              <Star size={12} strokeWidth={0} fill="#F59E0B" />
-              <Star size={12} strokeWidth={0} fill="#F59E0B" />
-            </div>
-            <strong>4.9/5</strong>
-            <small>Happy customers</small>
-          </div>
-
-          {/* Food Bubbles */}
-          <div className="glass-food-bubble bubble-1">🍕</div>
-          <div className="glass-food-bubble bubble-2">🍔</div>
-          <div className="glass-food-bubble bubble-3">🍗</div>
-
-          {/* Award Badge */}
-          <div className="glass-award-badge">
-            <Award size={16} strokeWidth={2.2} />
-            <span>#1 in Araihazar</span>
-          </div>
-        </div>
+        ))}
       </div>
-    </section>
+
+      {/* FEATURE STRIP — from settings.features array */}
+      <div className="aa-features">
+        {features.map((feature, idx) => (
+          <div className="aa-feature-item" key={idx}>
+            <div className={`aa-feature-icon ${feature.color || ''}`}>
+              {feature.icon}
+            </div>
+            <h4 className="aa-feature-title">{feature.title}</h4>
+            <p className="aa-feature-desc">{feature.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* TRUST BAR — from settings.trustBar */}
+      <div className="aa-trust-bar">
+        <span>{trustBar.text1}</span>
+        <span>•</span>
+        <span>{trustBar.text2}</span>
+        <span>•</span>
+        <span>{trustBar.text3}</span>
+      </div>
+    </>
   )
 }
 

@@ -1,14 +1,19 @@
-// =========================================
-// REAL GPS LOCATION TRACKER
-// =========================================
+// ============================================================
+// src/utils/locationTracker.js
+// GPS tracking utilities + simulation helpers.
+//
+// NOTE: The old hard-coded `restaurantLocations` map has been
+// removed. Restaurant coordinates are now read live from
+// Firestore: restaurants/{restaurantId}.location = { lat, lng }
+// ============================================================
 
 let watchId = null
 
 /**
  * Start watching rider's real GPS location
  * @param {string} riderId - Rider's UID
- * @param {function} onLocationUpdate - Callback with {lat, lng}
- * @param {function} onError - Callback with error
+ * @param {function} onLocationUpdate - Callback with {lat, lng, accuracy}
+ * @param {function} onError - Callback with error message
  */
 export const startLocationTracking = (riderId, onLocationUpdate, onError) => {
   if (!navigator.geolocation) {
@@ -92,17 +97,8 @@ export const getCurrentLocation = () => {
 }
 
 // =========================================
-// SIMULATED LOCATION (for testing)
+// SIMULATED LOCATION (for testing/demo)
 // =========================================
-
-// Restaurant Locations (Araihazar area)
-export const restaurantLocations = {
-  'Arai Biriyani House': { lat: 23.7791, lng: 90.6405 },
-  'Araihazar Food Corner': { lat: 23.7725, lng: 90.6543 },
-  'Digholdi Restaurant': { lat: 23.7855, lng: 90.6620 },
-  'Local Taste': { lat: 23.7680, lng: 90.6350 },
-  default: { lat: 23.78, lng: 90.64 },
-}
 
 /**
  * Get a simulated location between two points based on progress (0-1)
@@ -111,6 +107,7 @@ export const restaurantLocations = {
  * @param {number} progress - 0 to 1
  */
 export const getSimulatedLocation = (start, end, progress) => {
+  if (!start || !end) return null
   const clampedProgress = Math.max(0, Math.min(1, progress))
   return {
     lat: start.lat + (end.lat - start.lat) * clampedProgress,
@@ -119,17 +116,24 @@ export const getSimulatedLocation = (start, end, progress) => {
 }
 
 /**
- * Map riderStatus to simulated progress
+ * Map riderStatus to simulated progress (0-1)
  * @param {string} riderStatus
  */
 export const getProgressFromStatus = (riderStatus) => {
   switch (riderStatus) {
-    case 'accepted': return 0
-    case 'going_to_restaurant': return 0.2
-    case 'arrived_at_restaurant': return 0.3
-    case 'picked_up': return 0.5
-    case 'going_to_customer': return 0.75
-    case 'delivered': return 1
-    default: return 0
+    case 'accepted':
+      return 0
+    case 'going_to_restaurant':
+      return 0.2
+    case 'arrived_at_restaurant':
+      return 0.3
+    case 'picked_up':
+      return 0.5
+    case 'going_to_customer':
+      return 0.75
+    case 'delivered':
+      return 1
+    default:
+      return 0
   }
 }

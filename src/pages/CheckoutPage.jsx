@@ -1,4 +1,9 @@
-import { useState, useEffect } from 'react'
+// ============================================================
+// src/pages/CheckoutPage.jsx
+// V3 — Zone dropdown + map marker (no polygon check)
+// ============================================================
+
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import MapPicker from '../components/MapPicker'
 import PageBackButton from '../components/PageBackButton'
@@ -18,16 +23,6 @@ import {
 import { db, auth } from '../firebase'
 import { toast } from 'react-toastify'
 import { sendNotification } from '../utils/sendNotification'
-
-const deliveryZone = [
-  { lat: 23.7681, lng: 90.617 },
-  { lat: 23.7923, lng: 90.6089 },
-  { lat: 23.812, lng: 90.6606 },
-  { lat: 23.7976, lng: 90.6923 },
-  { lat: 23.7762, lng: 90.6594 },
-  { lat: 23.7598, lng: 90.63 },
-  { lat: 23.7681, lng: 90.617 },
-]
 
 function CheckoutPage() {
   const navigate = useNavigate()
@@ -63,13 +58,49 @@ function CheckoutPage() {
 
   const [freeDelivery, setFreeDelivery] = useState(false)
   const [mapPosition, setMapPosition] = useState(null)
-  const [outsideArea, setOutsideArea] = useState(false)
   const [placing, setPlacing] = useState(false)
 
-  // Load cart + user data
+  // ✅ NEW: Selected zone
+  const [zones, setZones] = useState([])
+  const [selectedZoneId, setSelectedZoneId] = useState('')
+
+  // ------------------------------------------------------------
+  // LOAD zones (active only)
+  // ------------------------------------------------------------
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'deliveryZones'), where('active', '==', true)),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        setZones(list)
+      },
+      (err) => console.error('Zones load error:', err)
+    )
+    return () => unsub()
+  }, [])
+
+  const selectedZone = useMemo(
+    () => zones.find((z) => z.firebaseId === selectedZoneId) || null,
+    [zones, selectedZoneId]
+  )
+
+  // ------------------------------------------------------------
+  // Load cart + user data + saved zone
+  // ------------------------------------------------------------
   useEffect(() => {
     const items = JSON.parse(localStorage.getItem('cartItems') || '[]')
     setCartItems(items)
+
+    // Preload saved map location
+    const savedLoc = JSON.parse(
+      localStorage.getItem('deliveryLocation') || 'null'
+    )
+    if (savedLoc?.lat && savedLoc?.lng) setMapPosition(savedLoc)
+
+    // Preload saved zone
+    const savedZone = localStorage.getItem('deliveryZoneId')
+    if (savedZone) setSelectedZoneId(savedZone)
 
     const loadUserData = async () => {
       if (auth.currentUser?.uid) {
@@ -90,15 +121,12 @@ function CheckoutPage() {
     loadUserData()
   }, [])
 
-  // Load coupons from Firestore
+  // Load coupons
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'coupons'), where('active', '==', true)),
       (snap) => {
-        const list = snap.docs.map((d) => ({
-          firebaseId: d.id,
-          ...d.data(),
-        }))
+        const list = snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
         setAvailableCoupons(list)
       },
       (err) => console.error('Coupons load error:', err)
@@ -106,6 +134,9 @@ function CheckoutPage() {
     return () => unsub()
   }, [])
 
+  // ------------------------------------------------------------
+  // Restaurant info from cart
+  // ------------------------------------------------------------
   const restaurant =
     cartItems.length > 0
       ? {
@@ -113,6 +144,8 @@ function CheckoutPage() {
           restaurantName: cartItems[0].restaurantName,
           restaurantLogo: cartItems[0].restaurantLogo || '',
           deliveryFee: cartItems[0].deliveryFee ?? null,
+          deliveryTime:
+            cartItems[0].deliveryTime || settings.defaultDeliveryTime,
         }
       : null
 
@@ -121,30 +154,30 @@ function CheckoutPage() {
     0
   )
 
-  // Delivery fee: restaurant's fee > settings default > 30
-  const deliveryFee =
-    restaurant?.deliveryFee ?? settings.defaultDeliveryFee ?? 30
+  // ✅ Delivery fee: selected zone fee > restaurant fee > settings default
+  const deliveryFee = useMemo(() => {
+    if (selectedZone?.deliveryFee != null) return selectedZone.deliveryFee
+    if (restaurant?.deliveryFee != null) return restaurant.deliveryFee
+    return settings.defaultDeliveryFee
+  }, [selectedZone, restaurant, settings.defaultDeliveryFee])
 
   useEffect(() => {
-    setFreeDelivery(subtotal >= 500)
-  }, [subtotal])
+    const threshold = settings.freeDeliveryThreshold ?? 0
+    setFreeDelivery(threshold > 0 && subtotal >= threshold)
+  }, [subtotal, settings.freeDeliveryThreshold])
 
   const finalDeliveryFee = freeDelivery ? 0 : deliveryFee
 
   const applyCoupon = () => {
     setCouponError('')
     const code = couponCode.trim().toUpperCase()
-
     const coupon = availableCoupons.find((c) => c.code === code)
-
     if (!coupon) {
       setCouponError('Invalid coupon code. Please try again.')
       setCouponApplied(false)
       setCouponDiscount(0)
       return
     }
-
-    // Check min order
     if (coupon.minOrder && subtotal < coupon.minOrder) {
       setCouponError(
         `Minimum order ৳${coupon.minOrder} required for this coupon.`
@@ -153,7 +186,6 @@ function CheckoutPage() {
       setCouponDiscount(0)
       return
     }
-
     let discount = 0
     if (coupon.discountType === 'percent') {
       discount = Math.round((subtotal * coupon.discountValue) / 100)
@@ -163,7 +195,6 @@ function CheckoutPage() {
     } else {
       discount = Math.min(coupon.discountValue, subtotal)
     }
-
     setCouponDiscount(discount)
     setCouponApplied(true)
   }
@@ -172,10 +203,7 @@ function CheckoutPage() {
     ? Math.min(loyaltyPoints / 10, subtotal)
     : 0
   const walletDiscount = usingWallet
-    ? Math.min(
-        walletBalance,
-        subtotal - pointsDiscount - couponDiscount
-      )
+    ? Math.min(walletBalance, subtotal - pointsDiscount - couponDiscount)
     : 0
   const total =
     subtotal +
@@ -184,27 +212,9 @@ function CheckoutPage() {
     pointsDiscount -
     walletDiscount
 
-  const isInsideDeliveryZone = (point) => {
-    let isInside = false
-    const lat = point.lat
-    const lng = point.lng
-    for (
-      let i = 0, j = deliveryZone.length - 1;
-      i < deliveryZone.length;
-      j = i++
-    ) {
-      const xi = deliveryZone[i].lat
-      const yi = deliveryZone[i].lng
-      const xj = deliveryZone[j].lat
-      const yj = deliveryZone[j].lng
-      const intersect =
-        yi > lng !== yj > lng &&
-        lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi
-      if (intersect) isInside = !isInside
-    }
-    return isInside
-  }
-
+  // ============================================================
+  // PLACE ORDER
+  // ============================================================
   const placeOrder = async () => {
     if (!fullName.trim()) {
       toast.error('Please enter your full name.')
@@ -218,12 +228,26 @@ function CheckoutPage() {
       toast.error('Please enter your delivery address.')
       return
     }
-    if (cartItems.length === 0) {
-      toast.error('Your cart is empty.')
+    // ✅ Zone mandatory
+    if (!selectedZoneId) {
+      toast.error('📍 Please select your area / zone.')
+      const zoneSection = document.querySelector('.zone-selection-section')
+      if (zoneSection) {
+        zoneSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
       return
     }
-    if (mapPosition && !isInsideDeliveryZone(mapPosition)) {
-      setOutsideArea(true)
+    // ✅ Map mandatory
+    if (!mapPosition) {
+      toast.error('📍 Please drop a pin on the map for delivery location.')
+      const mapSection = document.querySelector('.map-selection-section')
+      if (mapSection) {
+        mapSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      return
+    }
+    if (cartItems.length === 0) {
+      toast.error('Your cart is empty.')
       return
     }
     if (paymentMethod === 'wallet' && walletBalance < total) {
@@ -244,6 +268,9 @@ function CheckoutPage() {
 
     if (mapPosition) {
       localStorage.setItem('deliveryLocation', JSON.stringify(mapPosition))
+    }
+    if (selectedZoneId) {
+      localStorage.setItem('deliveryZoneId', selectedZoneId)
     }
 
     const newOrderId = `AF-${Math.floor(100000 + Math.random() * 900000)}`
@@ -271,12 +298,22 @@ function CheckoutPage() {
         couponDiscount: couponDiscount,
         paymentMethod: paymentMethod,
         location: mapPosition,
+        // ✅ Zone info
+        zoneId: selectedZone.firebaseId,
+        zoneName: selectedZone.name,
+        zoneDeliveryFee: selectedZone.deliveryFee,
+        // Status
         status: 'pending',
         riderStatus: 'available',
+        riderId: null,
+        riderName: null,
+        riderPhone: null,
+        riderRating: null,
         deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
         createdAt: serverTimestamp(),
       })
 
+      // Update user wallet / points
       if (auth.currentUser?.uid) {
         const userDocRef = doc(db, 'users', auth.currentUser.uid)
         const userDoc = await getDoc(userDocRef)
@@ -291,7 +328,6 @@ function CheckoutPage() {
             const pointsUsed = pointsDiscount * 10
             newPoints = Math.max(0, newPoints - pointsUsed)
           }
-
           if (usingWallet) {
             newBalance = Math.max(0, newBalance - walletDiscount)
             newTransactions.push({
@@ -302,7 +338,6 @@ function CheckoutPage() {
               description: `Wallet used for order ${newOrderId}`,
             })
           }
-
           if (paymentMethod === 'wallet') {
             newBalance = Math.max(0, newBalance - total)
             newTransactions.push({
@@ -315,7 +350,7 @@ function CheckoutPage() {
           }
 
           const earnedPoints = Math.floor(total * 0.05)
-          newPoints = newPoints + earnedPoints
+          newPoints += earnedPoints
 
           const pointsLogEntry = {
             id: Date.now().toString() + '-earned',
@@ -339,6 +374,7 @@ function CheckoutPage() {
         }
       }
 
+      // Notifications
       const customerId = auth.currentUser?.uid || 'guest'
       await sendNotification(
         customerId,
@@ -362,6 +398,7 @@ function CheckoutPage() {
         { orderId: newOrderId }
       )
 
+      // Local history
       const orderHistory = JSON.parse(
         localStorage.getItem('orderHistory') || '[]'
       )
@@ -403,13 +440,14 @@ function CheckoutPage() {
     }
   }, [orderPlaced])
 
+  // ============================================================
   // SUCCESS SCREEN
+  // ============================================================
   if (orderPlaced) {
     return (
       <div className="checkout-page">
         <div className="order-success-container">
           <PageBackButton label="Back to Home" fallback="/" />
-
           <div className="order-success-icon">✅</div>
           <h1>Order Placed Successfully!</h1>
           <p>
@@ -468,23 +506,6 @@ function CheckoutPage() {
                 </div>
               </div>
             </div>
-
-            {trackingStage >= 1 && (
-              <div className="rider-profile-card">
-                <div className="rider-avatar">🛵</div>
-                <div className="rider-info">
-                  <strong>Rider: Rahim Uddin</strong>
-                  <small>⭐ 4.9 (200+ deliveries)</small>
-                </div>
-                <button
-                  className="call-rider-button"
-                  onClick={() => alert('Calling rider...')}
-                >
-                  📞 Call
-                </button>
-              </div>
-            )}
-
             <p className="tracking-status-text">
               {trackingStage === 0 && '⏳ Your order is being prepared...'}
               {trackingStage === 1 && '🛵 Your rider is on the way!'}
@@ -509,7 +530,9 @@ function CheckoutPage() {
     )
   }
 
+  // ============================================================
   // CHECKOUT FORM
+  // ============================================================
   return (
     <div className="checkout-page">
       <div className="checkout-container">
@@ -555,23 +578,132 @@ function CheckoutPage() {
               />
             </div>
 
+            {/* ============ ZONE SELECTION (NEW) ============ */}
+            <div className="zone-selection-section">
+              <h3
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  margin: '0 0 10px',
+                }}
+              >
+                📍 Select Your Area{' '}
+                <span style={{ color: '#DC2626', fontSize: '12px' }}>
+                  (Required)
+                </span>
+              </h3>
+              <select
+                value={selectedZoneId}
+                onChange={(e) => {
+                  setSelectedZoneId(e.target.value)
+                }}
+                style={{
+                  width: '100%',
+                  padding: '13px 16px',
+                  borderRadius: '12px',
+                  border: selectedZoneId
+                    ? '2px solid #059669'
+                    : '2px solid var(--border-strong)',
+                  background: 'var(--surface)',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <option value="">— Select your area —</option>
+                {zones.map((z) => (
+                  <option key={z.firebaseId} value={z.firebaseId}>
+                    {z.name} — ৳{z.deliveryFee} delivery
+                  </option>
+                ))}
+              </select>
+
+              {selectedZone && (
+                <p
+                  style={{
+                    marginTop: '10px',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    background:
+                      'linear-gradient(135deg, rgba(5,150,105,0.12), rgba(16,185,129,0.08))',
+                    border: '1px solid rgba(5,150,105,0.25)',
+                    color: '#059669',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                  }}
+                >
+                  ✅ {selectedZone.name} — Delivery ৳
+                  {selectedZone.deliveryFee}
+                </p>
+              )}
+
+              {!selectedZoneId && (
+                <p
+                  style={{
+                    marginTop: '10px',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    color: '#DC2626',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                  }}
+                >
+                  ⚠️ Please select your area to continue
+                </p>
+              )}
+            </div>
+
             <div className="form-group">
-              <label>Delivery Address</label>
+              <label>Delivery Address (Details)</label>
               <textarea
-                placeholder="Enter your full delivery address"
-                rows="4"
+                placeholder="House, road, landmark..."
+                rows="3"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
               ></textarea>
             </div>
 
+            {/* ============ MAP — only marker ============ */}
             <div className="map-selection-section">
-              <h3>Choose Location on Map</h3>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  margin: '0 0 10px',
+                }}
+              >
+                🗺️ Drop Pin on Map{' '}
+                <span style={{ color: '#DC2626', fontSize: '12px' }}>
+                  (Required)
+                </span>
+              </h3>
               <MapPicker position={mapPosition} setPosition={setMapPosition} />
-              {mapPosition && (
+              {mapPosition ? (
                 <p className="selected-location">
-                  📍 Location: {mapPosition.lat.toFixed(4)},{' '}
+                  ✅ Location set: {mapPosition.lat.toFixed(4)},{' '}
                   {mapPosition.lng.toFixed(4)}
+                </p>
+              ) : (
+                <p
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    color: '#DC2626',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                  }}
+                >
+                  ⚠️ Please click on the map to set your delivery location
                 </p>
               )}
             </div>
@@ -585,6 +717,7 @@ function CheckoutPage() {
               <span>💾 Save this address for future orders</span>
             </label>
 
+            {/* DELIVERY TIME */}
             <div className="delivery-time-section">
               <div className="checkout-icon-container">
                 <div className="checkout-icon">⏰</div>
@@ -593,7 +726,6 @@ function CheckoutPage() {
                   <p>When do you want your food?</p>
                 </div>
               </div>
-
               <div className="delivery-time-options">
                 <label
                   className={`delivery-time-option ${
@@ -608,10 +740,9 @@ function CheckoutPage() {
                   />
                   <div>
                     <strong>⚡ ASAP</strong>
-                    <small>30-40 minutes</small>
+                    <small>{restaurant?.deliveryTime}</small>
                   </div>
                 </label>
-
                 <label
                   className={`delivery-time-option ${
                     deliveryTime === '1hour' ? 'selected' : ''
@@ -628,7 +759,6 @@ function CheckoutPage() {
                     <small>Within 60 minutes</small>
                   </div>
                 </label>
-
                 <label
                   className={`delivery-time-option ${
                     deliveryTime === '2hours' ? 'selected' : ''
@@ -652,7 +782,7 @@ function CheckoutPage() {
               <div className="time-slot-section">
                 <label>Select Time Slot</label>
                 <div className="time-slot-options">
-                  {['6-7pm', '7-8pm', '8-9pm', '9-10pm'].map((slot) => (
+                  {(settings.deliverySlots || []).map((slot) => (
                     <button
                       key={slot}
                       className={`time-slot-btn ${
@@ -700,8 +830,6 @@ function CheckoutPage() {
                   Coupon applied! You saved ৳{couponDiscount}
                 </p>
               )}
-
-              {/* Available Coupons Hint */}
               {availableCoupons.length > 0 && !couponApplied && (
                 <div style={{ marginTop: '12px' }}>
                   <p
@@ -724,7 +852,8 @@ function CheckoutPage() {
                     }}
                   >
                     {availableCoupons.slice(0, 5).map((c) => {
-                      const isEligible = !c.minOrder || subtotal >= c.minOrder
+                      const isEligible =
+                        !c.minOrder || subtotal >= c.minOrder
                       return (
                         <button
                           key={c.firebaseId}
@@ -748,16 +877,11 @@ function CheckoutPage() {
                             fontSize: '11.5px',
                             fontWeight: 800,
                             letterSpacing: '0.5px',
-                            cursor: isEligible ? 'pointer' : 'not-allowed',
+                            cursor: isEligible
+                              ? 'pointer'
+                              : 'not-allowed',
                             opacity: isEligible ? 1 : 0.6,
                           }}
-                          title={
-                            isEligible
-                              ? `${c.discountValue}${
-                                  c.discountType === 'percent' ? '%' : '৳'
-                                } off`
-                              : `Min order ৳${c.minOrder}`
-                          }
                         >
                           🎟️ {c.code}
                           {c.minOrder > 0 && (
@@ -799,7 +923,6 @@ function CheckoutPage() {
                     </small>
                   </div>
                 </label>
-
                 <label
                   className={`reward-option ${usingWallet ? 'active' : ''}`}
                 >
@@ -825,7 +948,6 @@ function CheckoutPage() {
                   <p>Choose how you want to pay.</p>
                 </div>
               </div>
-
               <div className="payment-options">
                 <label
                   className={`payment-option ${
@@ -841,7 +963,6 @@ function CheckoutPage() {
                   <strong>💵 Cash on Delivery</strong>
                   <small>Pay when food arrives</small>
                 </label>
-
                 <label
                   className={`payment-option ${
                     paymentMethod === 'mobile' ? 'selected' : ''
@@ -856,7 +977,6 @@ function CheckoutPage() {
                   <strong>📱 Mobile Banking</strong>
                   <small>bKash / Nagad / Rocket</small>
                 </label>
-
                 <label
                   className={`payment-option ${
                     paymentMethod === 'wallet' ? 'selected' : ''
@@ -892,10 +1012,7 @@ function CheckoutPage() {
               <div className="summary-restaurant">
                 <div className="summary-restaurant-logo">
                   {restaurant.restaurantLogo ? (
-                    <img
-                      src={restaurant.restaurantLogo}
-                      alt="logo"
-                    />
+                    <img src={restaurant.restaurantLogo} alt="logo" />
                   ) : (
                     <span>🏪</span>
                   )}
@@ -907,8 +1024,28 @@ function CheckoutPage() {
                     {finalDeliveryFee === 0
                       ? 'FREE'
                       : `৳${finalDeliveryFee}`}
+                    {' · '}
+                    {restaurant.deliveryTime}
                   </small>
                 </div>
+              </div>
+            )}
+
+            {selectedZone && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  background:
+                    'linear-gradient(135deg, rgba(5,150,105,0.08), rgba(16,185,129,0.04))',
+                  border: '1px solid rgba(5,150,105,0.2)',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  color: '#059669',
+                  marginBottom: '14px',
+                }}
+              >
+                📍 Zone: {selectedZone.name}
               </div>
             )}
 
@@ -943,7 +1080,9 @@ function CheckoutPage() {
             <div className="summary-item">
               <span>
                 Delivery Fee{' '}
-                {freeDelivery && <small>(Free on ৳500+)</small>}
+                {settings.freeDeliveryThreshold > 0 && (
+                  <small>(Free on ৳{settings.freeDeliveryThreshold}+)</small>
+                )}
               </span>
               <strong>
                 {finalDeliveryFee === 0 ? 'FREE' : `৳${finalDeliveryFee}`}
@@ -956,14 +1095,12 @@ function CheckoutPage() {
                 <strong>-৳{couponDiscount}</strong>
               </div>
             )}
-
             {usingPoints && (
               <div className="summary-item discount-item">
                 <span>Points Discount</span>
                 <strong>-৳{pointsDiscount}</strong>
               </div>
             )}
-
             {usingWallet && (
               <div className="summary-item discount-item">
                 <span>Wallet Discount</span>
@@ -982,26 +1119,6 @@ function CheckoutPage() {
           </div>
         </div>
       </div>
-
-      {/* OUTSIDE AREA MODAL */}
-      {outsideArea && (
-        <div className="outside-area-modal">
-          <div className="outside-area-modal-content">
-            <div className="outside-area-icon">🚫</div>
-            <h2>Outside Delivery Area</h2>
-            <p>
-              Sorry! We currently only deliver within{' '}
-              <strong>Araihazar Thana</strong>.
-            </p>
-            <button
-              className="outside-area-close-btn"
-              onClick={() => setOutsideArea(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

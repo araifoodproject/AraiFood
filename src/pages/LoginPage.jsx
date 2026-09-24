@@ -4,8 +4,18 @@ import {
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence,
+  signOut,
 } from 'firebase/auth'
-import { auth } from '../firebase'
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from 'firebase/firestore'
+import { auth, db } from '../firebase'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -19,37 +29,185 @@ function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
+
+    console.log('=== LOGIN ATTEMPT ===')
+    console.log('Email:', email.trim().toLowerCase())
+    console.log('Password length:', password.length)
+
     setError('')
     setMessage('')
     setLoading(true)
 
+    const cleanEmail = email.trim().toLowerCase()
+
     try {
+      // ============================================================
+      // STEP 1: FORCE SIGN OUT any existing session
+      // ============================================================
+      try {
+        if (auth.currentUser) {
+          console.log('Signing out existing user:', auth.currentUser.email)
+          await signOut(auth)
+        }
+      } catch (signOutErr) {
+        console.warn('Sign out warning:', signOutErr)
+      }
+
+      // ============================================================
+      // STEP 2: CLEAR all role-related localStorage
+      // ============================================================
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('isPartner')
+      localStorage.removeItem('managementRole')
+      localStorage.removeItem('managementPermissions')
+      localStorage.removeItem('managementName')
+      localStorage.removeItem('managementId')
+
+      // ============================================================
+      // STEP 3: SET persistence
+      // ============================================================
       await setPersistence(auth, browserLocalPersistence)
+
+      // ============================================================
+      // STEP 4: Sign in
+      // ============================================================
       const userCred = await signInWithEmailAndPassword(
         auth,
-        email.trim(),
+        cleanEmail,
         password
       )
 
-      // 🔥 Role determine
-      const userEmail = userCred.user.email
-      if (userEmail === 'admin@araifood.com') {
+      const uid = userCred.user.uid
+
+      console.log('=== LOGIN SUCCESS ===')
+      console.log('Logged in as:', userCred.user.email)
+      console.log('UID:', uid)
+
+      // ============================================================
+      // STEP 5: Determine role
+      // ============================================================
+
+      // 5a. Admin email check
+      if (cleanEmail === 'admin@araifood.com') {
+        console.log('Role: ADMIN (email match)')
         localStorage.setItem('userRole', 'admin')
         window.location.href = '/admin'
-      } else {
-        localStorage.setItem('userRole', 'customer')
-        window.location.href = '/'
+        return
       }
-    } catch (error) {
+
+      // 5b. Partner check
+      try {
+        let memberData = null
+
+        const partnerQuery = query(
+          collection(db, 'managementMembers'),
+          where('firebaseUid', '==', uid)
+        )
+        const partnerSnap = await getDocs(partnerQuery)
+
+        if (!partnerSnap.empty) {
+          memberData = partnerSnap.docs[0].data()
+        } else {
+          const emailQuery = query(
+            collection(db, 'managementMembers'),
+            where('email', '==', cleanEmail)
+          )
+          const emailSnap = await getDocs(emailQuery)
+          if (!emailSnap.empty) {
+            memberData = emailSnap.docs[0].data()
+          }
+        }
+
+        if (memberData && memberData.status === 'active') {
+          console.log('Role: ADMIN (partner)')
+          localStorage.setItem('userRole', 'admin')
+          localStorage.setItem('isPartner', 'true')
+          localStorage.setItem(
+            'managementRole',
+            memberData.role || 'partner'
+          )
+          localStorage.setItem(
+            'managementPermissions',
+            JSON.stringify(memberData.permissions || {})
+          )
+          localStorage.setItem(
+            'managementName',
+            memberData.fullName || ''
+          )
+          localStorage.setItem(
+            'managementId',
+            memberData.memberId || ''
+          )
+          window.location.href = '/admin'
+          return
+        }
+      } catch (partnerErr) {
+        console.error('Partner check error:', partnerErr)
+      }
+
+      // 5c. Firestore users/{uid} doc check
+      try {
+        const userDocRef = doc(db, 'users', uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (userDoc.exists()) {
+          const data = userDoc.data()
+          const realRole = data.role || 'customer'
+          console.log('Role: from Firestore users doc:', realRole)
+
+          localStorage.setItem('userRole', realRole)
+
+          if (!data.email) {
+            await setDoc(
+              userDocRef,
+              {
+                email: cleanEmail,
+                role: realRole,
+              },
+              { merge: true }
+            )
+          }
+        } else {
+          console.log('Role: CUSTOMER (new user doc created)')
+          await setDoc(userDocRef, {
+            email: cleanEmail,
+            fullName: '',
+            phone: '',
+            address: '',
+            profileImage: '',
+            role: 'customer',
+            loyaltyPoints: 0,
+            walletBalance: 0,
+            walletTransactions: [],
+            pointsHistory: [],
+            createdAt: new Date(),
+          })
+          localStorage.setItem('userRole', 'customer')
+        }
+      } catch (userDocErr) {
+        console.error('User doc check error:', userDocErr)
+        localStorage.setItem('userRole', 'customer')
+      }
+
+      // ============================================================
+      // STEP 6: Redirect to Home
+      // ============================================================
+      console.log('Redirecting to home...')
+      window.location.href = '/'
+    } catch (err) {
+      console.error('=== LOGIN FAILED ===')
+      console.error('Code:', err.code)
+      console.error('Message:', err.message)
+
       if (
-        error.code === 'auth/invalid-credential' ||
-        error.code === 'auth/user-not-found' ||
-        error.code === 'auth/wrong-password'
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password'
       ) {
         setError('Invalid email or password.')
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (err.code === 'auth/invalid-email') {
         setError('Please enter a valid email address.')
-      } else if (error.code === 'auth/too-many-requests') {
+      } else if (err.code === 'auth/too-many-requests') {
         setError('Too many login attempts. Please try again later.')
       } else {
         setError('Login failed. Please try again.')

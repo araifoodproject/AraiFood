@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '../firebase'
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore'
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
+} from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell,
@@ -50,24 +59,33 @@ function NotificationPanel() {
       where('userId', 'in', userIds)
     )
 
-    const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
-      const list = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
-      list.sort((a, b) => {
-        const aTime = a.createdAt?.toDate?.()?.getTime() || 0
-        const bTime = b.createdAt?.toDate?.()?.getTime() || 0
-        return bTime - aTime
-      })
+    const unsubscribe = onSnapshot(
+      notifQuery,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({
+          firebaseId: d.id,
+          ...d.data(),
+        }))
+        list.sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.()?.getTime() || 0
+          const bTime = b.createdAt?.toDate?.()?.getTime() || 0
+          return bTime - aTime
+        })
 
-      const latestId = list[0]?.firebaseId
-      if (latestId && lastNotificationId && latestId !== lastNotificationId) {
-        setFlash(true)
-        setTimeout(() => setFlash(false), 2000)
+        const latestId = list[0]?.firebaseId
+        if (latestId && lastNotificationId && latestId !== lastNotificationId) {
+          setFlash(true)
+          setTimeout(() => setFlash(false), 2000)
+        }
+        setLastNotificationId(latestId)
+
+        setNotifications(list)
+        setUnreadCount(list.filter((n) => !n.read).length)
+      },
+      (err) => {
+        console.error('Notifications load error:', err)
       }
-      setLastNotificationId(latestId)
-
-      setNotifications(list)
-      setUnreadCount(list.filter((n) => !n.read).length)
-    })
+    )
 
     return () => unsubscribe()
   }, [user, userRole, lastNotificationId])
@@ -83,32 +101,46 @@ function NotificationPanel() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isOpen])
 
-  // Lock Body Scroll
+  // Lock Body Scroll (mobile)
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
     }
-    return () => { document.body.style.overflow = '' }
+    return () => {
+      document.body.style.overflow = ''
+    }
   }, [isOpen])
 
   const markAsRead = async (id) => {
-    try { await updateDoc(doc(db, 'notifications', id), { read: true }) } catch (e) { console.error(e) }
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true })
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const markAllAsRead = async () => {
     try {
       const batch = writeBatch(db)
-      notifications.filter((n) => !n.read).forEach((n) => {
-        batch.update(doc(db, 'notifications', n.firebaseId), { read: true })
-      })
+      notifications
+        .filter((n) => !n.read)
+        .forEach((n) => {
+          batch.update(doc(db, 'notifications', n.firebaseId), { read: true })
+        })
       await batch.commit()
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const deleteNotification = async (id) => {
-    try { await deleteDoc(doc(db, 'notifications', id)) } catch (e) { console.error(e) }
+    try {
+      await deleteDoc(doc(db, 'notifications', id))
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const clearAll = async () => {
@@ -119,7 +151,9 @@ function NotificationPanel() {
         batch.delete(doc(db, 'notifications', n.firebaseId))
       })
       await batch.commit()
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const handleClick = (notification) => {
@@ -152,31 +186,69 @@ function NotificationPanel() {
 
   const getIconComponent = (type) => {
     switch (type) {
-      case 'order': return Package
-      case 'restaurant': return Store
-      case 'rider': return Bike
-      case 'promotion': return Gift
-      default: return Bell
+      case 'order':
+        return Package
+      case 'restaurant':
+        return Store
+      case 'rider':
+        return Bike
+      case 'promotion':
+        return Gift
+      default:
+        return Bell
     }
   }
 
   const getIconColor = (type) => {
     switch (type) {
-      case 'order': return 'icon-blue'
-      case 'restaurant': return 'icon-green'
-      case 'rider': return 'icon-orange'
-      case 'promotion': return 'icon-pink'
-      default: return 'icon-gray'
+      case 'order':
+        return 'icon-blue'
+      case 'restaurant':
+        return 'icon-green'
+      case 'rider':
+        return 'icon-orange'
+      case 'promotion':
+        return 'icon-pink'
+      default:
+        return 'icon-gray'
     }
   }
 
-  if (!user) return null
+  // ============================================================
+  // GUEST USER — Show bell that prompts login
+  // ============================================================
+  if (!user) {
+    return (
+      <div className="glass-notification-wrapper">
+        <button
+          className="glass-notification-btn"
+          onClick={() => {
+            if (
+              window.confirm(
+                'Login to see your notifications. Go to login page?'
+              )
+            ) {
+              navigate('/login')
+            }
+          }}
+          title="Login to see notifications"
+        >
+          <Bell size={20} strokeWidth={1.8} />
+        </button>
+      </div>
+    )
+  }
 
+  // ============================================================
+  // LOGGED IN — Full Notification Panel
+  // ============================================================
   return (
     <div className="glass-notification-wrapper" ref={panelRef}>
       {/* Notification Button */}
       <button
-        className={`glass-icon-btn glass-notification-btn ${isOpen ? 'active' : ''} ${flash ? 'flash' : ''}`}
+        className={`glass-notification-btn ${
+          isOpen ? 'active' : ''
+        } ${flash ? 'flash' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         title="Notifications"
       >
@@ -198,7 +270,9 @@ function NotificationPanel() {
                 <Bell size={18} strokeWidth={2} />
               </div>
               <div>
-                <span className="glass-notification-title">Notifications</span>
+                <span className="glass-notification-title">
+                  Notifications
+                </span>
                 <span className="glass-notification-subtitle">
                   {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
                 </span>
@@ -206,12 +280,20 @@ function NotificationPanel() {
             </div>
             <div className="glass-notification-header-actions">
               {unreadCount > 0 && (
-                <button className="glass-notification-action-btn" onClick={markAllAsRead} title="Mark all read">
+                <button
+                  className="glass-notification-action-btn"
+                  onClick={markAllAsRead}
+                  title="Mark all read"
+                >
                   <Check size={14} strokeWidth={2.5} />
                 </button>
               )}
               {notifications.length > 0 && (
-                <button className="glass-notification-action-btn danger" onClick={clearAll} title="Clear all">
+                <button
+                  className="glass-notification-action-btn danger"
+                  onClick={clearAll}
+                  title="Clear all"
+                >
                   <X size={14} strokeWidth={2.5} />
                 </button>
               )}
@@ -225,8 +307,12 @@ function NotificationPanel() {
                 <div className="glass-notification-empty-icon">
                   <Bell size={40} strokeWidth={1.5} />
                 </div>
-                <span className="glass-notification-empty-title">No notifications yet</span>
-                <span className="glass-notification-empty-sub">You'll see updates here</span>
+                <span className="glass-notification-empty-title">
+                  No notifications yet
+                </span>
+                <span className="glass-notification-empty-sub">
+                  You'll see updates here
+                </span>
               </div>
             ) : (
               notifications.slice(0, 20).map((n) => {
@@ -234,18 +320,31 @@ function NotificationPanel() {
                 return (
                   <div
                     key={n.firebaseId}
-                    className={`glass-notification-item ${!n.read ? 'unread' : ''}`}
+                    className={`glass-notification-item ${
+                      !n.read ? 'unread' : ''
+                    }`}
                     onClick={() => handleClick(n)}
                   >
-                    <div className={`glass-notification-icon ${getIconColor(n.type)}`}>
+                    <div
+                      className={`glass-notification-icon ${getIconColor(
+                        n.type
+                      )}`}
+                    >
                       <IconComponent size={18} strokeWidth={2} />
                     </div>
                     <div className="glass-notification-content">
-                      <span className="glass-notification-item-title">{n.title}</span>
+                      <span className="glass-notification-item-title">
+                        {n.title}
+                      </span>
                       <p className="glass-notification-item-body">{n.body}</p>
-                      <span className="glass-notification-item-time">{formatTime(n.createdAt)}</span>
+                      <span className="glass-notification-item-time">
+                        {formatTime(n.createdAt)}
+                      </span>
                     </div>
-                    <div className="glass-notification-item-actions" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="glass-notification-item-actions"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {!n.read && (
                         <button
                           className="glass-notif-action-btn read"
@@ -272,7 +371,8 @@ function NotificationPanel() {
           {/* Footer */}
           {notifications.length > 0 && (
             <div className="glass-notification-footer">
-              Showing latest {Math.min(20, notifications.length)} of {notifications.length}
+              Showing latest {Math.min(20, notifications.length)} of{' '}
+              {notifications.length}
             </div>
           )}
         </div>
