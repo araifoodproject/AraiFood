@@ -1,7 +1,6 @@
 // ============================================================
-// src/pages/RiderPanel.jsx — PREMIUM V2.3
-// + Push Notification toggle in Dashboard + Settings
-// + In-App Notification Bell in Topbar
+// src/pages/RiderPanel.jsx — PREMIUM V5.0
+// ✅ Cash Tab + Request Settlement (riderPayments) + Zone-based Fee
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -13,6 +12,7 @@ import {
   updateDoc,
   collection,
   onSnapshot,
+  addDoc,
   query,
   where,
   getDocs,
@@ -29,9 +29,10 @@ import {
 import useSettings from '../hooks/useSettings'
 import PushToggleCard from '../components/PushToggleCard'
 import NotificationPanel from '../components/NotificationPanel'
+import { tk } from '../utils/settlementHelpers'
 
 // ------------------------------------------------------------
-// Distance helper — Haversine
+// Distance helpers
 // ------------------------------------------------------------
 const calculateDistanceKm = (a, b) => {
   if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return null
@@ -51,17 +52,56 @@ const calculateEtaMin = (km) => {
   return Math.max(1, Math.round(km * 6))
 }
 
+// ------------------------------------------------------------
+// PERIOD FILTER
+// ------------------------------------------------------------
+const filterByPeriod = (orders, period) => {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+  return orders.filter((o) => {
+    const raw = o.deliveredAt || o.acceptedAt || o.createdAt
+    let ts = null
+    if (raw?.toDate) ts = raw.toDate()
+    else if (raw) ts = new Date(raw)
+    if (!ts) return false
+
+    if (period === 'today') return ts >= today
+    if (period === 'week') {
+      const w = new Date(today)
+      w.setDate(w.getDate() - 7)
+      return ts >= w
+    }
+    if (period === 'month') {
+      const m = new Date(today)
+      m.setDate(m.getDate() - 30)
+      return ts >= m
+    }
+    return true
+  })
+}
+
 function RiderPanel() {
   const { settings } = useSettings()
 
   const [user, setUser] = useState(null)
   const [rider, setRider] = useState(null)
-  const [orders, setOrders] = useState([])
+  const [availableOrders, setAvailableOrders] = useState([])
   const [myOrders, setMyOrders] = useState([])
+  const [riderPayments, setRiderPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [view, setView] = useState('dashboard')
   const [otpInput, setOtpInput] = useState('')
+  const [cashPeriod, setCashPeriod] = useState('today')
+  const [submittingRequest, setSubmittingRequest] = useState(false)
+  const [showSendModal, setShowSendModal] = useState(false)
+  const [araifoodNumbers, setAraifoodNumbers] = useState(null)
+
+  // Send Money modal state
+  const [sendMethod, setSendMethod] = useState('bKash')
+  const [sendTrxId, setSendTrxId] = useState('')
+  const [sendNote, setSendNote] = useState('')
 
   const [gpsMode, setGpsMode] = useState('simulated')
   const [currentGPSLocation, setCurrentGPSLocation] = useState(null)
@@ -171,6 +211,9 @@ function RiderPanel() {
         setGpsMode(data.gpsMode || 'simulated')
         setError('')
         localStorage.setItem('userRole', 'rider')
+        localStorage.removeItem('isPartner')
+        localStorage.removeItem('managementRole')
+        localStorage.removeItem('managementPermissions')
       } catch (err) {
         console.error('Error loading rider:', err)
         if (isMounted) setError('Failed to load rider data.')
@@ -182,6 +225,24 @@ function RiderPanel() {
       isMounted = false
       unsubscribe()
     }
+  }, [])
+
+  // ============ LOAD ARAIFOOD PAYMENT NUMBERS ============
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'settings', 'araifood_payment_numbers'),
+      (snap) => {
+        if (snap.exists()) {
+          setAraifoodNumbers(snap.data())
+        } else {
+          setAraifoodNumbers(null)
+        }
+      },
+      (err) => {
+        console.warn('AraiFood numbers load failed:', err.message)
+      }
+    )
+    return () => unsub()
   }, [])
 
   // ============ AUTO-REQUEST GPS ============
@@ -254,32 +315,123 @@ function RiderPanel() {
     }
   }, [rider?.riderStatus, gpsMode, rider?.firebaseId])
 
-  // ============ LIVE ORDERS ============
+  // ============ AVAILABLE ORDERS ============
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      const list = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
-      list.sort((a, b) => {
-        const aT = a.createdAt?.toDate?.()?.getTime() || 0
-        const bT = b.createdAt?.toDate?.()?.getTime() || 0
-        return bT - aT
-      })
-      setOrders(list)
-    })
-    return () => unsubscribe()
-  }, [])
+    if (!rider?.firebaseId) return
 
-  const availableOrders = useMemo(
-    () =>
-      orders.filter(
-        (o) =>
-          !o.riderId &&
-          (o.riderStatus === 'available' || !o.riderStatus) &&
-          o.status !== 'delivered' &&
-          o.status !== 'cancelled'
-      ),
-    [orders]
-  )
+    const availableQuery = query(
+      collection(db, 'orders'),
+      where('riderId', '==', null)
+    )
 
+    const unsub = onSnapshot(
+      availableQuery,
+      (snapshot) => {
+        const list = snapshot.docs
+          .map((d) => ({ firebaseId: d.id, ...d.data() }))
+          .filter(
+            (o) =>
+              o.status !== 'delivered' &&
+              o.status !== 'cancelled' &&
+              (!o.riderStatus || o.riderStatus === 'available')
+          )
+          .sort((a, b) => {
+            const aT = a.createdAt?.toDate?.()?.getTime() || 0
+            const bT = b.createdAt?.toDate?.()?.getTime() || 0
+            return bT - aT
+          })
+        setAvailableOrders(list)
+      },
+      (err) => {
+        console.error('❌ Available orders error:', err)
+      }
+    )
+
+    return () => unsub()
+  }, [rider?.firebaseId])
+
+  // ============ MY ORDERS ============
+  useEffect(() => {
+    if (!rider?.firebaseId) return
+
+    const myQuery = query(
+      collection(db, 'orders'),
+      where('riderId', '==', rider.firebaseId)
+    )
+
+    const unsub = onSnapshot(
+      myQuery,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({
+          firebaseId: d.id,
+          ...d.data(),
+        }))
+
+        list.sort((a, b) => {
+          const aActive = [
+            'accepted',
+            'going_to_restaurant',
+            'arrived_at_restaurant',
+            'picked_up',
+            'going_to_customer',
+          ].includes(a.riderStatus)
+            ? 1
+            : 0
+          const bActive = [
+            'accepted',
+            'going_to_restaurant',
+            'arrived_at_restaurant',
+            'picked_up',
+            'going_to_customer',
+          ].includes(b.riderStatus)
+            ? 1
+            : 0
+          if (aActive !== bActive) return bActive - aActive
+          const aT = a.acceptedAt?.toDate?.()?.getTime() || 0
+          const bT = b.acceptedAt?.toDate?.()?.getTime() || 0
+          return bT - aT
+        })
+
+        setMyOrders(list)
+      },
+      (err) => {
+        console.error('❌ My orders error:', err)
+      }
+    )
+
+    return () => unsub()
+  }, [rider?.firebaseId])
+
+  // ============ RIDER PAYMENTS (রiderPayments collection) ============
+  useEffect(() => {
+    if (!rider?.firebaseId) return
+
+    const reqQuery = query(
+      collection(db, 'riderPayments'),
+      where('riderId', '==', rider.firebaseId)
+    )
+
+    const unsub = onSnapshot(
+      reqQuery,
+      (snapshot) => {
+        const list = snapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => {
+            const aT = a.createdAt?.toDate?.()?.getTime() || 0
+            const bT = b.createdAt?.toDate?.()?.getTime() || 0
+            return bT - aT
+          })
+        setRiderPayments(list)
+      },
+      (err) => {
+        console.error('❌ Rider payments error:', err)
+      }
+    )
+
+    return () => unsub()
+  }, [rider?.firebaseId])
+
+  // Pre-fetch restaurant locations for available orders
   useEffect(() => {
     if (availableOrders.length === 0) return
     availableOrders.forEach((order) => {
@@ -293,44 +445,6 @@ function RiderPanel() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableOrders])
-
-  // ============ MY ORDERS ============
-  useEffect(() => {
-    if (!user) return
-    const myQuery = query(
-      collection(db, 'orders'),
-      where('riderId', '==', user.uid)
-    )
-    const unsubscribe = onSnapshot(myQuery, (snapshot) => {
-      const list = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
-      list.sort((a, b) => {
-        const aActive = [
-          'accepted',
-          'going_to_restaurant',
-          'arrived_at_restaurant',
-          'picked_up',
-          'going_to_customer',
-        ].includes(a.riderStatus)
-          ? 1
-          : 0
-        const bActive = [
-          'accepted',
-          'going_to_restaurant',
-          'arrived_at_restaurant',
-          'picked_up',
-          'going_to_customer',
-        ].includes(b.riderStatus)
-          ? 1
-          : 0
-        if (aActive !== bActive) return bActive - aActive
-        const aT = a.acceptedAt?.toDate?.()?.getTime() || 0
-        const bT = b.acceptedAt?.toDate?.()?.getTime() || 0
-        return bT - aT
-      })
-      setMyOrders(list)
-    })
-    return () => unsubscribe()
-  }, [user])
 
   // ============ TOGGLE GPS MODE ============
   const toggleGPSMode = async () => {
@@ -490,8 +604,9 @@ function RiderPanel() {
     }
     try {
       const restaurantLoc = await getRestaurantLocation(order.restaurantId)
+
       const updateData = {
-        riderId: user.uid,
+        riderId: rider.firebaseId,
         riderName: rider.fullName,
         riderPhone: rider.phone,
         riderRating: rider.rating || 0,
@@ -503,12 +618,14 @@ function RiderPanel() {
         riderLocationUpdatedAt: new Date(),
         simulationProgress: 0,
       }
+
       if (gpsMode === 'real' && currentGPSLocation) {
         updateData.riderLocation = {
           lat: currentGPSLocation.lat,
           lng: currentGPSLocation.lng,
         }
       }
+
       await updateDoc(doc(db, 'orders', order.firebaseId), updateData)
 
       if (order.userId) {
@@ -518,8 +635,9 @@ function RiderPanel() {
           `Your order ${order.orderId} is being delivered by ${rider.fullName}.`,
           'rider',
           { orderId: order.orderId }
-        )
+        ).catch(() => {})
       }
+
       if (order.restaurantId) {
         await sendNotification(
           order.restaurantId,
@@ -527,8 +645,9 @@ function RiderPanel() {
           `${rider.fullName} will pick up Order ${order.orderId}.`,
           'rider',
           { orderId: order.orderId }
-        )
+        ).catch(() => {})
       }
+
       toast.success('✅ Order Accepted!')
       setView('my-orders')
     } catch (error) {
@@ -539,8 +658,17 @@ function RiderPanel() {
 
   // ============ UPDATE DELIVERY STATUS ============
   const updateDeliveryStatus = async (order, newStatus) => {
+    setMyOrders((prev) =>
+      prev.map((o) =>
+        o.firebaseId === order.firebaseId
+          ? { ...o, riderStatus: newStatus }
+          : o
+      )
+    )
+
     try {
       const updateData = { riderStatus: newStatus }
+
       if (gpsMode === 'simulated') {
         const restaurantLoc =
           order.restaurantLocation ||
@@ -561,9 +689,18 @@ function RiderPanel() {
         }
         updateData.riderLocationUpdatedAt = new Date()
       }
+
       await updateDoc(doc(db, 'orders', order.firebaseId), updateData)
       toast.success(`Status: ${newStatus}`)
     } catch (error) {
+      console.error(error)
+      setMyOrders((prev) =>
+        prev.map((o) =>
+          o.firebaseId === order.firebaseId
+            ? { ...o, riderStatus: order.riderStatus }
+            : o
+        )
+      )
       toast.error('Failed to update status!')
     }
   }
@@ -595,12 +732,18 @@ function RiderPanel() {
       await updateDoc(doc(db, 'orders', order.firebaseId), updateData)
 
       const earnings =
-        (rider.totalEarnings || 0) + (settings.riderEarningPerDelivery || 30)
+        (rider.totalEarnings || 0) +
+        (Number(order.zoneDeliveryFee) ||
+          Number(order.deliveryFee) ||
+          settings.riderEarningPerDelivery ||
+          30)
       const deliveries = (rider.totalDeliveries || 0) + 1
+
       await updateDoc(doc(db, 'riders', rider.firebaseId), {
         totalEarnings: earnings,
         totalDeliveries: deliveries,
       })
+
       setRider({
         ...rider,
         totalEarnings: earnings,
@@ -614,8 +757,9 @@ function RiderPanel() {
           `Order ${order.orderId} has been delivered. Enjoy!`,
           'order',
           { orderId: order.orderId }
-        )
+        ).catch(() => {})
       }
+
       if (order.restaurantId) {
         await sendNotification(
           order.restaurantId,
@@ -623,12 +767,145 @@ function RiderPanel() {
           `Order ${order.orderId} has been delivered.`,
           'order',
           { orderId: order.orderId }
-        )
+        ).catch(() => {})
       }
+
       setOtpInput('')
       toast.success('✅ Delivery Completed!')
     } catch (error) {
+      console.error(error)
       toast.error('Failed to complete delivery!')
+    }
+  }
+
+  // ============ REQUEST SETTLEMENT ============
+  const requestSettlement = async () => {
+    if (!rider?.firebaseId) return
+
+    const deliveredCOD = myOrders.filter(
+      (o) =>
+        o.riderStatus === 'delivered' &&
+        (o.paymentMethod || '').toLowerCase() === 'cod'
+    )
+
+    const cashCollected = deliveredCOD.reduce(
+      (sum, o) => sum + (Number(o.total) || 0),
+      0
+    )
+    const totalFee = deliveredCOD.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
+    const dueToAdmin = Math.max(cashCollected - totalFee, 0)
+
+    // Check already-settled/pending
+    const settledAmount = riderPayments
+      .filter((r) => r.status === 'verified')
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    const pendingAmount = riderPayments
+      .filter((r) => r.status === 'pending')
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+
+    const finalDue = Math.max(dueToAdmin - settledAmount - pendingAmount, 0)
+
+    if (finalDue <= 0) {
+      toast.info('No pending cash to settle!')
+      return
+    }
+
+    setSubmittingRequest(true)
+    try {
+      await addDoc(collection(db, 'riderPayments'), {
+        riderId: rider.firebaseId,
+        riderUid: user?.uid || rider.firebaseId,
+        riderName: rider.fullName,
+        riderPhone: rider.phone || '',
+        cashCollected,
+        totalFee,
+        amount: finalDue,
+        dueToAdmin: finalDue,
+        deliveryCount: deliveredCOD.length,
+        status: 'pending',
+        createdAt: new Date(),
+      })
+
+      toast.success('✅ Settlement request sent to Admin!')
+    } catch (err) {
+      console.error('Request settlement failed:', err)
+      toast.error('Failed to send request: ' + err.message)
+    } finally {
+      setSubmittingRequest(false)
+    }
+  }
+
+  // ============ SEND MONEY (Direct method + TrxID) ============
+  const submitSendMoney = async () => {
+    if (!rider?.firebaseId) return
+    if (!sendTrxId.trim()) {
+      toast.error('Transaction ID দিন')
+      return
+    }
+
+    const deliveredCOD = myOrders.filter(
+      (o) =>
+        o.riderStatus === 'delivered' &&
+        (o.paymentMethod || '').toLowerCase() === 'cod'
+    )
+    const cashCollected = deliveredCOD.reduce(
+      (sum, o) => sum + (Number(o.total) || 0),
+      0
+    )
+    const totalFee = deliveredCOD.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
+    const dueToAdmin = Math.max(cashCollected - totalFee, 0)
+
+    const settledAmount = riderPayments
+      .filter((r) => r.status === 'verified')
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    const pendingAmount = riderPayments
+      .filter((r) => r.status === 'pending')
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    const finalDue = Math.max(dueToAdmin - settledAmount - pendingAmount, 0)
+
+    if (finalDue <= 0) {
+      toast.info('No pending cash to send!')
+      return
+    }
+
+    setSubmittingRequest(true)
+    try {
+      await addDoc(collection(db, 'riderPayments'), {
+        riderId: rider.firebaseId,
+        riderUid: user?.uid || rider.firebaseId,
+        riderName: rider.fullName,
+        riderPhone: rider.phone || '',
+        cashCollected,
+        totalFee,
+        amount: finalDue,
+        dueToAdmin: finalDue,
+        deliveryCount: deliveredCOD.length,
+        method: sendMethod,
+        transactionId: sendTrxId.trim(),
+        note: sendNote.trim(),
+        status: 'pending',
+        createdAt: new Date(),
+      })
+
+      toast.success('✅ Payment sent to Admin!')
+      setShowSendModal(false)
+      setSendTrxId('')
+      setSendNote('')
+    } catch (err) {
+      console.error('Send money failed:', err)
+      toast.error('Failed: ' + err.message)
+    } finally {
+      setSubmittingRequest(false)
     }
   }
 
@@ -638,6 +915,9 @@ function RiderPanel() {
     try {
       await signOut(auth)
       localStorage.removeItem('userRole')
+      localStorage.removeItem('isPartner')
+      localStorage.removeItem('managementRole')
+      localStorage.removeItem('managementPermissions')
       window.location.href = '/rider-login'
     } catch (error) {
       console.error(error)
@@ -663,8 +943,18 @@ function RiderPanel() {
   const completedDeliveries = myOrders.filter(
     (o) => o.riderStatus === 'delivered'
   ).length
-  const todayEarnings =
-    todayDeliveries * (settings.riderEarningPerDelivery || 30)
+  const todayEarnings = myOrders
+    .filter(
+      (o) =>
+        o.riderStatus === 'delivered' &&
+        o.deliveredAt?.toDate?.()?.toLocaleDateString() === today
+    )
+    .reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
   const totalEarnings = rider?.totalEarnings || 0
   const rating = rider?.rating || 0
 
@@ -672,6 +962,91 @@ function RiderPanel() {
     gpsMode === 'real' && currentGPSLocation
       ? currentGPSLocation
       : rider?.currentLocation || null
+
+  // ============ CASH CALCULATIONS (period-aware) ============
+  const cashOrders = useMemo(() => {
+    const deliveredCOD = myOrders.filter(
+      (o) =>
+        o.riderStatus === 'delivered' &&
+        (o.paymentMethod || '').toLowerCase() === 'cod'
+    )
+    return filterByPeriod(deliveredCOD, cashPeriod)
+  }, [myOrders, cashPeriod])
+
+  const cashStats = useMemo(() => {
+    const cashCollected = cashOrders.reduce(
+      (sum, o) => sum + (Number(o.total) || 0),
+      0
+    )
+    const totalFee = cashOrders.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
+    const dueToAdmin = Math.max(cashCollected - totalFee, 0)
+    return {
+      count: cashOrders.length,
+      cashCollected,
+      totalFee,
+      dueToAdmin,
+    }
+  }, [cashOrders])
+
+  // Lifetime due (all COD delivered - settled - pending)
+  const lifetimeDue = useMemo(() => {
+    const deliveredCOD = myOrders.filter(
+      (o) =>
+        o.riderStatus === 'delivered' &&
+        (o.paymentMethod || '').toLowerCase() === 'cod'
+    )
+    const cashCollected = deliveredCOD.reduce(
+      (sum, o) => sum + (Number(o.total) || 0),
+      0
+    )
+    const totalFee = deliveredCOD.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
+    const settledAmount = riderPayments
+      .filter((r) => r.status === 'verified')
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    const pendingAmount = riderPayments
+      .filter((r) => r.status === 'pending')
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+
+    return Math.max(
+      cashCollected - totalFee - settledAmount - pendingAmount,
+      0
+    )
+  }, [myOrders, riderPayments])
+
+  const pendingRequest = riderPayments.find((r) => r.status === 'pending')
+
+  // Active AraiFood numbers
+  const activeAraifoodNumbers = useMemo(() => {
+    if (!araifoodNumbers) return []
+    const list = []
+    if (araifoodNumbers.bkash?.active && araifoodNumbers.bkash?.number) {
+      list.push({ label: 'bKash', number: araifoodNumbers.bkash.number, icon: '📱' })
+    }
+    if (araifoodNumbers.nagad?.active && araifoodNumbers.nagad?.number) {
+      list.push({ label: 'Nagad', number: araifoodNumbers.nagad.number, icon: '📱' })
+    }
+    if (araifoodNumbers.rocket?.active && araifoodNumbers.rocket?.number) {
+      list.push({ label: 'Rocket', number: araifoodNumbers.rocket.number, icon: '📱' })
+    }
+    if (araifoodNumbers.bank?.active && araifoodNumbers.bank?.number) {
+      list.push({
+        label: `Bank${araifoodNumbers.bank.bankName ? ' (' + araifoodNumbers.bank.bankName + ')' : ''}`,
+        number: araifoodNumbers.bank.number,
+        icon: '🏦',
+      })
+    }
+    return list
+  }, [araifoodNumbers])
 
   // ============ RENDER GUARDS ============
   if (loading) {
@@ -724,7 +1099,7 @@ function RiderPanel() {
   // ============================================================
   return (
     <div className="rider-v2">
-      {/* ============ TOP BAR ============ */}
+      {/* TOP BAR */}
       <div className="rider-v2-topbar">
         <div className="rider-v2-topbar-left">
           <div className="rider-v2-avatar-wrap">
@@ -754,7 +1129,6 @@ function RiderPanel() {
         </div>
 
         <div className="rider-v2-topbar-actions">
-          {/* ✅ In-App Notification Bell */}
           <NotificationPanel targetUserId={user?.uid} />
 
           <button
@@ -786,12 +1160,11 @@ function RiderPanel() {
 
       {gpsError && <div className="rider-v2-gps-error">⚠️ {gpsError}</div>}
 
-      {/* ============ DASHBOARD ============ */}
+      {/* DASHBOARD */}
       {view === 'dashboard' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">📊 Dashboard</h2>
 
-          {/* ✅ Push Notification Card */}
           <div style={{ marginBottom: '16px' }}>
             <PushToggleCard user={user} />
           </div>
@@ -844,7 +1217,7 @@ function RiderPanel() {
         </div>
       )}
 
-      {/* ============ AVAILABLE ORDERS ============ */}
+      {/* AVAILABLE ORDERS */}
       {view === 'available' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">
@@ -963,7 +1336,11 @@ function RiderPanel() {
                       <div className="rider-v2-total-block">
                         <span className="rider-v2-total-label">You Earn</span>
                         <span className="rider-v2-total-value earning">
-                          ৳{settings.riderEarningPerDelivery || 30}
+                          ৳
+                          {order.zoneDeliveryFee ||
+                            order.deliveryFee ||
+                            settings.riderEarningPerDelivery ||
+                            30}
                         </span>
                       </div>
                     </div>
@@ -983,7 +1360,7 @@ function RiderPanel() {
         </div>
       )}
 
-      {/* ============ MY DELIVERIES ============ */}
+      {/* MY DELIVERIES */}
       {view === 'my-orders' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">🛵 My Deliveries</h2>
@@ -1145,7 +1522,11 @@ function RiderPanel() {
                           You Earn
                         </span>
                         <span className="rider-v2-total-value earning">
-                          ৳{settings.riderEarningPerDelivery || 30}
+                          ৳
+                          {order.zoneDeliveryFee ||
+                            order.deliveryFee ||
+                            settings.riderEarningPerDelivery ||
+                            30}
                         </span>
                       </div>
                     </div>
@@ -1262,7 +1643,10 @@ function RiderPanel() {
                         }}
                       >
                         ✅ Delivered — You earned ৳
-                        {settings.riderEarningPerDelivery || 30}
+                        {order.zoneDeliveryFee ||
+                          order.deliveryFee ||
+                          settings.riderEarningPerDelivery ||
+                          30}
                       </div>
                     )}
                   </div>
@@ -1273,12 +1657,372 @@ function RiderPanel() {
         </div>
       )}
 
-      {/* ============ PROFILE ============ */}
+      {/* CASH TAB */}
+      {view === 'cash' && (
+        <div className="rider-v2-view">
+          <h2 className="rider-v2-view-title">💰 My Cash</h2>
+
+          {/* Lifetime Due Hero Card */}
+          <div
+            style={{
+              padding: '24px',
+              borderRadius: '20px',
+              background:
+                'linear-gradient(135deg, #FEF3C7, #FDE68A)',
+              border: '2px solid #F59E0B',
+              marginBottom: '20px',
+              textAlign: 'center',
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#92400E',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+              }}
+            >
+              Total Due to Admin
+            </p>
+            <p
+              style={{
+                margin: '8px 0',
+                fontSize: '38px',
+                fontWeight: 900,
+                color: '#B45309',
+                lineHeight: 1,
+              }}
+            >
+              {tk(lifetimeDue)}
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '12px',
+                color: '#92400E',
+                fontWeight: 600,
+              }}
+            >
+              Cash you collected (COD) minus your delivery fees
+            </p>
+          </div>
+
+          {/* SEND MONEY SECTION — AraiFood's numbers */}
+          {lifetimeDue > 0 && activeAraifoodNumbers.length > 0 && (
+            <div
+              style={{
+                padding: '18px 20px',
+                borderRadius: '16px',
+                background: '#EFF6FF',
+                border: '2px solid #3B82F6',
+                marginBottom: '16px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  color: '#1E40AF',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                📱 Send Money To
+              </div>
+              {activeAraifoodNumbers.map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: '#FFFFFF',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '10px',
+                    border: '1px solid #BFDBFE',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#1E40AF',
+                    }}
+                  >
+                    {item.icon} {item.label}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        fontWeight: 800,
+                        color: '#0F172A',
+                      }}
+                    >
+                      {item.number}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(item.number)
+                        toast.success('📋 Copied!')
+                      }}
+                      style={{
+                        background: '#DBEAFE',
+                        border: 'none',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#1E40AF',
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Request Settlement / Send button */}
+          {pendingRequest ? (
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '14px',
+                background: '#FEF3C7',
+                border: '2px solid #F59E0B',
+                marginBottom: '20px',
+                textAlign: 'center',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#92400E',
+              }}
+            >
+              ⏳ Settlement request pending with Admin
+              <br />
+              <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                Requested: {tk(pendingRequest.amount || pendingRequest.dueToAdmin)} on{' '}
+                {pendingRequest.createdAt
+                  ?.toDate?.()
+                  ?.toLocaleDateString()}
+              </span>
+            </div>
+          ) : lifetimeDue > 0 ? (
+            <button
+              onClick={() => setShowSendModal(true)}
+              disabled={submittingRequest}
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: '14px',
+                background: '#F59E0B',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '15px',
+                fontWeight: 800,
+                cursor: submittingRequest ? 'not-allowed' : 'pointer',
+                marginBottom: '20px',
+              }}
+            >
+              {submittingRequest
+                ? '⏳ Sending...'
+                : `🔄 I Have Sent ${tk(lifetimeDue)} to Admin`}
+            </button>
+          ) : (
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '14px',
+                background: '#DCFCE7',
+                border: '2px solid #16A34A',
+                marginBottom: '20px',
+                textAlign: 'center',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#15803D',
+              }}
+            >
+              ✅ Nothing to Settle — All Clear!
+            </div>
+          )}
+
+          {/* Period Filter */}
+          <div className="rider-v2-view-title" style={{ fontSize: '16px' }}>
+            📊 Cash Breakdown
+          </div>
+          <div
+            className="stl-period-bar"
+            style={{ marginBottom: '16px' }}
+          >
+            {[
+              { key: 'today', label: 'Today' },
+              { key: 'week', label: 'This Week' },
+              { key: 'month', label: 'This Month' },
+              { key: 'all', label: 'All Time' },
+            ].map((p) => (
+              <button
+                key={p.key}
+                className={`stl-period-btn ${
+                  cashPeriod === p.key ? 'active' : ''
+                }`}
+                onClick={() => setCashPeriod(p.key)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Stats Grid */}
+          <div className="rider-v2-stat-grid">
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon blue">📦</div>
+              <div>
+                <div className="rider-v2-stat-value">
+                  {cashStats.count}
+                </div>
+                <div className="rider-v2-stat-label">COD Deliveries</div>
+              </div>
+            </div>
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon green">💵</div>
+              <div>
+                <div className="rider-v2-stat-value">
+                  {tk(cashStats.cashCollected)}
+                </div>
+                <div className="rider-v2-stat-label">Cash Collected</div>
+              </div>
+            </div>
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon purple">💰</div>
+              <div>
+                <div className="rider-v2-stat-value">
+                  {tk(cashStats.totalFee)}
+                </div>
+                <div className="rider-v2-stat-label">My Fee</div>
+              </div>
+            </div>
+            <div className="rider-v2-stat-card">
+              <div className="rider-v2-stat-icon orange">📤</div>
+              <div>
+                <div className="rider-v2-stat-value">
+                  {tk(cashStats.dueToAdmin)}
+                </div>
+                <div className="rider-v2-stat-label">To Give Admin</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Request History */}
+          <div
+            className="rider-v2-view-title"
+            style={{ fontSize: '16px', marginTop: '24px' }}
+          >
+            📜 Settlement History
+          </div>
+          {riderPayments.length === 0 ? (
+            <div className="rider-v2-empty" style={{ padding: '30px 20px' }}>
+              <div className="rider-v2-empty-icon">📝</div>
+              <h3>No requests yet</h3>
+              <p>Your settlement requests will appear here</p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}
+            >
+              {riderPayments.map((req) => (
+                <div
+                  key={req.id}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: '15px',
+                        fontWeight: 800,
+                        color: '#0F172A',
+                      }}
+                    >
+                      {tk(req.amount || req.dueToAdmin)}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '11.5px',
+                        color: '#64748B',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {req.deliveryCount} deliveries ·{' '}
+                      {req.createdAt?.toDate?.()?.toLocaleDateString()}
+                      {req.method && ` · ${req.method}`}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '10.5px',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      background:
+                        req.status === 'pending'
+                          ? '#FEF3C7'
+                          : req.status === 'verified' ||
+                            req.status === 'approved' ||
+                            req.status === 'collected'
+                          ? '#DCFCE7'
+                          : '#FEE2E2',
+                      color:
+                        req.status === 'pending'
+                          ? '#92400E'
+                          : req.status === 'verified' ||
+                            req.status === 'approved' ||
+                            req.status === 'collected'
+                          ? '#15803D'
+                          : '#B91C1C',
+                    }}
+                  >
+                    {req.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PROFILE */}
       {view === 'profile' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">👤 Profile</h2>
 
-          {/* ✅ Push Notification Card in Profile */}
           <div style={{ marginBottom: '16px' }}>
             <PushToggleCard user={user} />
           </div>
@@ -1485,7 +2229,251 @@ function RiderPanel() {
         </div>
       )}
 
-      {/* ============ BOTTOM NAV ============ */}
+      {/* SEND MONEY MODAL */}
+      {showSendModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+          }}
+          onClick={() => setShowSendModal(false)}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '18px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{
+                margin: '0 0 8px',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0F172A',
+              }}
+            >
+              💸 Confirm Payment Sent
+            </h3>
+            <p
+              style={{
+                margin: '0 0 20px',
+                fontSize: '13px',
+                color: '#64748B',
+              }}
+            >
+              Admin এই তথ্য verify করবে
+            </p>
+
+            {/* Amount */}
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: '12px',
+                background: '#FEF3C7',
+                border: '1px solid #F59E0B',
+                marginBottom: '16px',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#92400E',
+                  textTransform: 'uppercase',
+                  marginBottom: '4px',
+                }}
+              >
+                Amount Sent
+              </div>
+              <div
+                style={{
+                  fontSize: '26px',
+                  fontWeight: 900,
+                  color: '#B45309',
+                }}
+              >
+                {tk(lifetimeDue)}
+              </div>
+            </div>
+
+            {/* Method */}
+            <div style={{ marginBottom: '14px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#334155',
+                  textTransform: 'uppercase',
+                  marginBottom: '6px',
+                }}
+              >
+                Method
+              </label>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '6px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {['bKash', 'Nagad', 'Rocket', 'Bank', 'Cash'].map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setSendMethod(m)}
+                    type="button"
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border:
+                        sendMethod === m
+                          ? '1.5px solid #F59E0B'
+                          : '1.5px solid #E2E8F0',
+                      background:
+                        sendMethod === m ? '#F59E0B' : '#FFFFFF',
+                      color:
+                        sendMethod === m ? '#FFFFFF' : '#475569',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* TrxID */}
+            {sendMethod !== 'Cash' && (
+              <div style={{ marginBottom: '14px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#334155',
+                    textTransform: 'uppercase',
+                    marginBottom: '6px',
+                  }}
+                >
+                  Transaction ID
+                </label>
+                <input
+                  type="text"
+                  value={sendTrxId}
+                  onChange={(e) => setSendTrxId(e.target.value)}
+                  placeholder="e.g. TRX123456789"
+                  className="stl-input"
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Note */}
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#334155',
+                  textTransform: 'uppercase',
+                  marginBottom: '6px',
+                }}
+              >
+                Note (optional)
+              </label>
+              <input
+                type="text"
+                value={sendNote}
+                onChange={(e) => setSendNote(e.target.value)}
+                placeholder="Any message to admin"
+                className="stl-input"
+                style={{
+                  width: '100%',
+                  padding: '11px 14px',
+                  border: '1.5px solid #E2E8F0',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <button
+                onClick={() => setShowSendModal(false)}
+                disabled={submittingRequest}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #E2E8F0',
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  fontSize: '13.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitSendMoney}
+                disabled={submittingRequest || !sendTrxId.trim()}
+                style={{
+                  padding: '12px 22px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background:
+                    submittingRequest || !sendTrxId.trim()
+                      ? '#94A3B8'
+                      : '#F59E0B',
+                  color: '#FFFFFF',
+                  fontSize: '13.5px',
+                  fontWeight: 800,
+                  cursor:
+                    submittingRequest || !sendTrxId.trim()
+                      ? 'not-allowed'
+                      : 'pointer',
+                }}
+              >
+                {submittingRequest ? 'Sending...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM NAV — 5 buttons */}
       <div className="rider-v2-botnav">
         <button
           className={`rider-v2-navbtn ${
@@ -1520,6 +2508,18 @@ function RiderPanel() {
           Deliveries
           {activeDeliveries > 0 && (
             <span className="rider-v2-navbadge">{activeDeliveries}</span>
+          )}
+        </button>
+        <button
+          className={`rider-v2-navbtn ${
+            view === 'cash' ? 'active' : ''
+          }`}
+          onClick={() => setView('cash')}
+        >
+          <span className="rider-v2-navbtn-icon">💰</span>
+          Cash
+          {lifetimeDue > 0 && !pendingRequest && (
+            <span className="rider-v2-navbadge">!</span>
           )}
         </button>
         <button

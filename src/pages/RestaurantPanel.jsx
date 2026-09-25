@@ -1,6 +1,6 @@
 // ============================================================
-// src/pages/RestaurantPanel.jsx — PREMIUM V3.5
-// + Push Toggle + Notification Bell + Notify All Riders
+// src/pages/RestaurantPanel.jsx — PREMIUM V4.0
+// FIX: Direct query by restaurantId (rules-safe) + Optimistic UI
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -165,29 +165,41 @@ function RestaurantPanel() {
     }
   }, [])
 
-  // ============ LIVE ORDERS ============
+  // ============ LIVE ORDERS (rules-safe query) ============
   useEffect(() => {
-    if (!restaurant) return
-    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      const allOrders = snapshot.docs.map((d) => ({
-        firebaseId: d.id,
-        ...d.data(),
-      }))
-      const restaurantOrders = allOrders
-        .filter((order) => order.restaurantId === restaurant.firebaseId)
-        .sort((a, b) => {
-          const aT = a.createdAt?.toDate?.()?.getTime() || 0
-          const bT = b.createdAt?.toDate?.()?.getTime() || 0
-          return bT - aT
-        })
-      setOrders(restaurantOrders)
-    })
+    if (!restaurant?.firebaseId) return
+
+    const ordersQuery = query(
+      collection(db, 'orders'),
+      where('restaurantId', '==', restaurant.firebaseId)
+    )
+
+    const unsubscribe = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        const restaurantOrders = snapshot.docs
+          .map((d) => ({
+            firebaseId: d.id,
+            ...d.data(),
+          }))
+          .sort((a, b) => {
+            const aT = a.createdAt?.toDate?.()?.getTime() || 0
+            const bT = b.createdAt?.toDate?.()?.getTime() || 0
+            return bT - aT
+          })
+        setOrders(restaurantOrders)
+      },
+      (err) => {
+        console.error('❌ Orders snapshot error:', err)
+      }
+    )
+
     return () => unsubscribe()
-  }, [restaurant])
+  }, [restaurant?.firebaseId])
 
   // ============ LIVE MENU ============
   useEffect(() => {
-    if (!restaurant) return
+    if (!restaurant?.firebaseId) return
     const menuQuery = query(
       collection(db, 'foods'),
       where('restaurantId', '==', restaurant.firebaseId)
@@ -200,11 +212,11 @@ function RestaurantPanel() {
       setMenuItems(menuList)
     })
     return () => unsubscribe()
-  }, [restaurant])
+  }, [restaurant?.firebaseId])
 
   // ============ LIVE REVIEWS ============
   useEffect(() => {
-    if (!restaurant) return
+    if (!restaurant?.firebaseId) return
     const reviewsQuery = query(
       collection(db, 'reviews'),
       where('restaurantId', '==', restaurant.firebaseId)
@@ -220,7 +232,7 @@ function RestaurantPanel() {
       setReviews(list)
     })
     return () => unsubscribe()
-  }, [restaurant])
+  }, [restaurant?.firebaseId])
 
   // ============ LOGO UPLOAD ============
   const handleLogoUpload = (e) => {
@@ -377,11 +389,24 @@ function RestaurantPanel() {
   }
 
   // ============================================================
-  // UPDATE ORDER STATUS — With Rider Notify
+  // UPDATE ORDER STATUS — With Optimistic UI + Retry
   // ============================================================
   const updateOrderStatus = async (firebaseId, newStatus, order) => {
+    const previousStatus = order.status
+
     try {
-      await updateDoc(doc(db, 'orders', firebaseId), { status: newStatus })
+      // ✅ OPTIMISTIC UPDATE — instant UI feedback
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.firebaseId === firebaseId ? { ...o, status: newStatus } : o
+        )
+      )
+
+      // ✅ Firestore update
+      await updateDoc(doc(db, 'orders', firebaseId), {
+        status: newStatus,
+        [`${newStatus}At`]: new Date(),
+      })
 
       // 1️⃣ Customer notification
       if (order?.userId) {
@@ -401,11 +426,11 @@ function RestaurantPanel() {
           await sendNotification(order.userId, title, body, 'order', {
             orderId: order.orderId,
             url: `/track-order?id=${order.orderId}`,
-          })
+          }).catch((err) => console.warn('Notify customer failed:', err))
         }
       }
 
-      // 2️⃣ Riders notification when order is ready for pickup
+      // 2️⃣ Notify all riders when ready
       if (newStatus === 'delivering') {
         try {
           await notifyAllRiders(
@@ -416,7 +441,6 @@ function RestaurantPanel() {
               url: '/rider-panel',
             }
           )
-          console.log('✅ Riders notified successfully')
         } catch (err) {
           console.warn('Rider notify failed:', err)
         }
@@ -424,8 +448,22 @@ function RestaurantPanel() {
 
       toast.success(`Order marked as ${newStatus}!`)
     } catch (error) {
-      console.error(error)
-      toast.error('Failed to update order')
+      console.error('❌ Update failed:', error)
+
+      // ❌ Revert optimistic update
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.firebaseId === firebaseId
+            ? { ...o, status: previousStatus }
+            : o
+        )
+      )
+
+      if (error?.code === 'permission-denied') {
+        toast.error('❌ Permission denied — check Firestore Rules')
+      } else {
+        toast.error('Failed: ' + (error?.message || 'Unknown error'))
+      }
     }
   }
 
@@ -673,7 +711,6 @@ function RestaurantPanel() {
     return { total, avg, dist }
   }, [visibleReviews])
 
-  // ============ UNREAD REVIEWS COUNT ============
   const unreadReviewsCount = useMemo(() => {
     if (!lastViewedReviews) return visibleReviews.length
     return visibleReviews.filter((r) => {
@@ -682,7 +719,6 @@ function RestaurantPanel() {
     }).length
   }, [visibleReviews, lastViewedReviews])
 
-  // ============ AUTO-MARK REVIEWS AS VIEWED ============
   useEffect(() => {
     if (!restaurant) return
     if (view !== 'reviews') return
@@ -704,7 +740,6 @@ function RestaurantPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, restaurant?.firebaseId, reviews.length])
 
-  // ============ FILTERED REVIEWS ============
   const filteredReviews = useMemo(() => {
     if (reviewRatingFilter === 'all') return visibleReviews
     return visibleReviews.filter(
@@ -712,7 +747,6 @@ function RestaurantPanel() {
     )
   }, [visibleReviews, reviewRatingFilter])
 
-  // Render stars
   const renderReadOnlyStars = (value, size = 14) => {
     const rounded = Math.round(Number(value) || 0)
     return (
@@ -794,7 +828,7 @@ function RestaurantPanel() {
   // ============================================================
   return (
     <div className="rest-v2">
-      {/* ============ TOP BAR ============ */}
+      {/* TOP BAR */}
       <div className="rest-v2-topbar">
         <div className="rest-v2-topbar-left">
           <div className="rest-v2-avatar-wrap">
@@ -847,7 +881,7 @@ function RestaurantPanel() {
         </div>
       </div>
 
-      {/* ============ DASHBOARD ============ */}
+      {/* DASHBOARD */}
       {view === 'dashboard' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">📊 Dashboard</h2>
@@ -977,7 +1011,7 @@ function RestaurantPanel() {
         </div>
       )}
 
-      {/* ============ ORDERS ============ */}
+      {/* ORDERS */}
       {view === 'orders' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">
@@ -1230,7 +1264,7 @@ function RestaurantPanel() {
         </div>
       )}
 
-      {/* ============ MENU ============ */}
+      {/* MENU */}
       {view === 'menu' && (
         <div className="rest-v2-view">
           <div className="rest-v2-menu-header">
@@ -1436,7 +1470,7 @@ function RestaurantPanel() {
         </div>
       )}
 
-      {/* ============ REVIEWS ============ */}
+      {/* REVIEWS */}
       {view === 'reviews' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">
@@ -1734,7 +1768,7 @@ function RestaurantPanel() {
         </div>
       )}
 
-      {/* ============ PROFILE ============ */}
+      {/* PROFILE */}
       {view === 'profile' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">🏪 Profile</h2>
@@ -1934,7 +1968,7 @@ function RestaurantPanel() {
         </div>
       )}
 
-      {/* ============ SETTINGS ============ */}
+      {/* SETTINGS */}
       {view === 'settings' && (
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">⚙️ Settings</h2>
@@ -1992,7 +2026,7 @@ function RestaurantPanel() {
         </div>
       )}
 
-      {/* ============ BOTTOM NAV ============ */}
+      {/* BOTTOM NAV */}
       <div className="rest-v2-botnav">
         <button
           className={`rest-v2-navbtn ${

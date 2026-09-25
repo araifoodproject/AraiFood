@@ -1,6 +1,6 @@
 // ============================================================
 // src/App.jsx
-// V5 — Lazy loading + Help/Terms/Contact pages
+// V8 — AraiFood Payment Numbers + Rider Payments routes
 // ============================================================
 
 import { useState, useEffect, lazy, Suspense } from 'react'
@@ -29,7 +29,7 @@ import PartnerCTA from './components/PartnerCTA'
 import DeliveryAreas from './components/DeliveryAreas'
 import LiveChat from './components/LiveChat'
 
-// Public Pages — Lazy loaded
+// Public Pages
 const RestaurantsPage = lazy(() => import('./pages/RestaurantsPage'))
 const RestaurantPage = lazy(() => import('./pages/RestaurantPage'))
 const CartPage = lazy(() => import('./pages/CartPage'))
@@ -57,12 +57,12 @@ const RestaurantSignupPage = lazy(() => import('./pages/RestaurantSignupPage'))
 const RiderLoginPage = lazy(() => import('./pages/RiderLoginPage'))
 const RiderSignupPage = lazy(() => import('./pages/RiderSignupPage'))
 
-// ✅ NEW — Static pages
+// Static pages
 const HelpPage = lazy(() => import('./pages/HelpPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
 
-// Admin Pages — Lazy loaded
+// Admin Pages
 const AdminOrdersPage = lazy(() => import('./pages/admin/AdminOrdersPage'))
 const AdminRestaurantsPage = lazy(() => import('./pages/admin/AdminRestaurantsPage'))
 const AdminRidersPage = lazy(() => import('./pages/admin/AdminRidersPage'))
@@ -85,6 +85,14 @@ const AdminPharmaciesPage = lazy(() => import('./pages/admin/AdminPharmaciesPage
 const AdminMedicinesPage = lazy(() => import('./pages/admin/AdminMedicinesPage'))
 const AdminNotificationsPage = lazy(() => import('./pages/admin/AdminNotificationsPage'))
 
+// Settlement
+const AdminSettlementPage = lazy(() => import('./pages/admin/settlement/AdminSettlementPage'))
+const AdminSettlementSettingsPage = lazy(() => import('./pages/admin/settlement/AdminSettlementSettingsPage'))
+const AdminSettlementHistoryPage = lazy(() => import('./pages/admin/settlement/AdminSettlementHistoryPage'))
+const AdminPaymentNumbersPage = lazy(() => import('./pages/admin/settlement/AdminPaymentNumbersPage'))
+const AdminAraiFoodPaymentNumbersPage = lazy(() => import('./pages/admin/settlement/AdminAraiFoodPaymentNumbersPage'))
+const AdminRiderPaymentsPage = lazy(() => import('./pages/admin/settlement/AdminRiderPaymentsPage'))
+
 // ============================================================
 // PAGE LOADER
 // ============================================================
@@ -102,13 +110,7 @@ function PageLoader() {
       }}
     >
       <div className="panel-loading-spinner"></div>
-      <p
-        style={{
-          color: 'var(--text-tertiary)',
-          fontSize: '13.5px',
-          fontWeight: 600,
-        }}
-      >
+      <p style={{ color: 'var(--text-tertiary)', fontSize: '13.5px', fontWeight: 600 }}>
         Loading...
       </p>
     </div>
@@ -128,9 +130,7 @@ function RestaurantCardHome({ restaurant }) {
     restaurant.restaurantStatus === 'busy'
 
   const deliveryTime =
-    restaurant.deliveryTime ||
-    restaurant.delivery ||
-    settings.defaultDeliveryTime
+    restaurant.deliveryTime || restaurant.delivery || settings.defaultDeliveryTime
 
   const deliveryFee =
     restaurant.deliveryFee != null
@@ -255,23 +255,11 @@ function HomePage() {
         </div>
 
         {loading ? (
-          <p
-            style={{
-              textAlign: 'center',
-              padding: '40px',
-              color: 'var(--text-tertiary)',
-            }}
-          >
+          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
             Loading restaurants...
           </p>
         ) : restaurants.length === 0 ? (
-          <p
-            style={{
-              textAlign: 'center',
-              padding: '40px',
-              color: 'var(--text-tertiary)',
-            }}
-          >
+          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
             No restaurants available yet.
           </p>
         ) : (
@@ -307,10 +295,7 @@ function OffersPage() {
             {(settings.siteName || 'ARAIFOOD').toUpperCase()} OFFERS
           </span>
           <h1>Special Offers</h1>
-          <p>
-            Enjoy delicious food with special offers from restaurants around
-            Araihazar.
-          </p>
+          <p>Enjoy delicious food with special offers from restaurants around Araihazar.</p>
         </div>
       </div>
     </div>
@@ -395,8 +380,7 @@ function App() {
     path.startsWith('/pharmacy-panel')
 
   const showNavbarAndFooter = !isCheckout && !isAuth && !isPanel
-  const showSubscribePrompt =
-    currentUser && !isAuth && !isPanel && !isCheckout
+  const showSubscribePrompt = currentUser && !isAuth && !isPanel && !isCheckout
 
   return (
     <>
@@ -476,15 +460,21 @@ function App() {
           <Route path="/admin/gaming-orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingOrders" redirectTo="/login"><AdminGamingOrdersPage /></ProtectedRoute>} />
           <Route path="/admin/gaming-settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingSettings" redirectTo="/login"><AdminGamingSettingsPage /></ProtectedRoute>} />
           <Route path="/admin/management" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="management" redirectTo="/login"><AdminManagementPage /></ProtectedRoute>} />
+
+          {/* SETTLEMENT */}
+          <Route path="/admin/settlement" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminSettlementPage /></ProtectedRoute>} />
+          <Route path="/admin/settlement/settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminSettlementSettingsPage /></ProtectedRoute>} />
+          <Route path="/admin/settlement/history" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminSettlementHistoryPage /></ProtectedRoute>} />
+          <Route path="/admin/settlement/payment-numbers" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminPaymentNumbersPage /></ProtectedRoute>} />
+          <Route path="/admin/settlement/araifood-numbers" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminAraiFoodPaymentNumbersPage /></ProtectedRoute>} />
+          <Route path="/admin/settlement/rider-payments" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminRiderPaymentsPage /></ProtectedRoute>} />
         </Routes>
       </Suspense>
 
       {showNavbarAndFooter && <Footer />}
       {!isPanel && <LiveChat />}
 
-      {showSubscribePrompt && (
-        <SubscribePromptModal user={currentUser} />
-      )}
+      {showSubscribePrompt && <SubscribePromptModal user={currentUser} />}
 
       <ToastContainer
         position="top-right"

@@ -1,6 +1,6 @@
 // ============================================================
 // src/components/AdminSidebar.jsx
-// V4 — Sidebar scroll position preserved across navigation
+// V7 — AraiFood Numbers + Rider Payments menu
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -32,6 +32,10 @@ import {
   Pill,
   Briefcase,
   Bell,
+  HandCoins,
+  CreditCard,
+  Building2,
+  Inbox,
 } from 'lucide-react'
 
 const SIDEBAR_SCROLL_KEY = 'adminSidebarScrollTop'
@@ -47,6 +51,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     support: 0,
     reviews: 0,
     pharmacies: 0,
+    riderPayments: 0,
   })
 
   const location = useLocation()
@@ -54,7 +59,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
   const menuRef = useRef(null)
   const isFirstMount = useRef(true)
 
-  // Partner mode check
   const isPartner = localStorage.getItem('isPartner') === 'true'
   const managementRole = localStorage.getItem('managementRole') || 'partner'
   let permissions = {}
@@ -73,15 +77,12 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     return permissions[key] === true
   }
 
-  // ============ SCROLL POSITION PRESERVE ============
-  // Restore scroll on mount
   useEffect(() => {
     if (!menuRef.current) return
     const saved = sessionStorage.getItem(SIDEBAR_SCROLL_KEY)
     if (saved) {
       const val = parseInt(saved, 10)
       if (!isNaN(val) && val > 0) {
-        // Restore after paint
         requestAnimationFrame(() => {
           if (menuRef.current) {
             menuRef.current.scrollTop = val
@@ -92,7 +93,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     isFirstMount.current = false
   }, [])
 
-  // Save scroll on user scroll
   const handleMenuScroll = (e) => {
     if (!menuRef.current) return
     sessionStorage.setItem(
@@ -101,7 +101,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     )
   }
 
-  // Save scroll before navigation
   const handleLinkClick = () => {
     if (menuRef.current) {
       sessionStorage.setItem(
@@ -112,7 +111,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     if (onMobileClose) onMobileClose()
   }
 
-  // ============ LOAD BADGE COUNTS ============
   useEffect(() => {
     const unsub1 = onSnapshot(collection(db, 'orders'), (snap) => {
       const pending = snap.docs.filter((d) => {
@@ -169,6 +167,20 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       setCounts((c) => ({ ...c, pharmacies: pending }))
     })
 
+    const unsub9 = onSnapshot(
+      collection(db, 'riderPayments'),
+      (snap) => {
+        const pending = snap.docs.filter(
+          (d) => d.data().status === 'pending'
+        ).length
+        setCounts((c) => ({ ...c, riderPayments: pending }))
+      },
+      (err) => {
+        // Ignore if collection doesn't exist yet
+        console.warn('riderPayments listener:', err.message)
+      }
+    )
+
     return () => {
       unsub1()
       unsub2()
@@ -178,6 +190,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       unsub6()
       unsub7()
       unsub8()
+      unsub9()
     }
   }, [])
 
@@ -237,6 +250,32 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       label: 'Finance',
       icon: Wallet,
       path: '/admin/finance',
+      key: 'finance',
+    },
+    {
+      label: 'Settlement',
+      icon: HandCoins,
+      path: '/admin/settlement',
+      key: 'finance',
+    },
+    {
+      label: 'Payment Numbers',
+      icon: CreditCard,
+      path: '/admin/settlement/payment-numbers',
+      key: 'finance',
+    },
+    {
+      label: 'AraiFood Numbers',
+      icon: Building2,
+      path: '/admin/settlement/araifood-numbers',
+      key: 'finance',
+    },
+    {
+      label: 'Rider Payments',
+      icon: Inbox,
+      path: '/admin/settlement/rider-payments',
+      badge: counts.riderPayments,
+      badgeClass: 'red',
       key: 'finance',
     },
     {
