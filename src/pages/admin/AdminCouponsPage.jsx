@@ -1,3 +1,8 @@
+// ============================================================
+// src/pages/admin/AdminCouponsPage.jsx
+// V2 — + Push Notification button for each coupon
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { db } from '../../firebase'
 import {
@@ -22,7 +27,15 @@ import {
   Check,
   CheckCircle2,
   XCircle,
+  Send,
+  Bell,
+  Loader2,
+  Users,
 } from 'lucide-react'
+import {
+  sendPushNotification,
+  saveInAppNotification,
+} from '../../utils/sendNotification'
 
 function AdminCouponsPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -40,6 +53,13 @@ function AdminCouponsPage() {
   const [maxDiscount, setMaxDiscount] = useState('')
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // ---------- PUSH MODAL STATE ----------
+  const [pushModal, setPushModal] = useState(false)
+  const [pushCoupon, setPushCoupon] = useState(null)
+  const [pushTitle, setPushTitle] = useState('')
+  const [pushBody, setPushBody] = useState('')
+  const [pushSending, setPushSending] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -109,7 +129,6 @@ function AdminCouponsPage() {
 
     const upperCode = code.trim().toUpperCase()
 
-    // Check for duplicate
     if (coupons.some((c) => c.code === upperCode)) {
       toast.error('This coupon code already exists')
       return
@@ -180,6 +199,126 @@ function AdminCouponsPage() {
     if (!ts) return '—'
     const d = ts.toDate ? ts.toDate() : new Date(ts)
     return d.toLocaleDateString()
+  }
+
+  // ============================================================
+  // PUSH NOTIFICATION
+  // ============================================================
+
+  // Generate default push content from coupon
+  const generatePushContent = (coupon) => {
+    const discountText =
+      coupon.discountType === 'percent'
+        ? `${coupon.discountValue}% OFF`
+        : `৳${coupon.discountValue} OFF`
+
+    const title = `🏷️ ${discountText} with ${coupon.code}!`
+
+    let body = `Use code ${coupon.code} and get ${discountText.toLowerCase()}`
+
+    const conditions = []
+    if (coupon.minOrder > 0) {
+      conditions.push(`min order ৳${coupon.minOrder}`)
+    }
+    if (coupon.maxDiscount) {
+      conditions.push(`max ৳${coupon.maxDiscount} off`)
+    }
+    if (conditions.length > 0) {
+      body += ` (${conditions.join(', ')})`
+    }
+
+    body += '. Order now!'
+
+    return { title, body }
+  }
+
+  // Open push modal for a coupon
+  const openPushModal = (coupon) => {
+    setPushCoupon(coupon)
+    const { title, body } = generatePushContent(coupon)
+    setPushTitle(title)
+    setPushBody(body)
+    setPushModal(true)
+  }
+
+  // Close push modal
+  const closePushModal = () => {
+    setPushModal(false)
+    setPushCoupon(null)
+    setPushTitle('')
+    setPushBody('')
+  }
+
+  // Send push to all customers
+  const sendPushNow = async () => {
+    if (!pushCoupon) return
+    if (!pushTitle.trim() || !pushBody.trim()) {
+      toast.error('Title and message are required')
+      return
+    }
+
+    setPushSending(true)
+
+    try {
+      // Get all customers
+      const usersSnap = await new Promise((resolve, reject) => {
+        const unsub = onSnapshot(
+          collection(db, 'users'),
+          (snap) => {
+            unsub()
+            resolve(snap)
+          },
+          (err) => {
+            unsub()
+            reject(err)
+          }
+        )
+      })
+
+      const customerUids = usersSnap.docs.map((d) => d.id)
+
+      if (customerUids.length === 0) {
+        toast.warn('No customers found')
+        setPushSending(false)
+        return
+      }
+
+      // 1️⃣ Save in-app notifications for each customer
+      for (const uid of customerUids) {
+        await saveInAppNotification(uid, pushTitle.trim(), pushBody.trim(), 'promotion', {
+          url: '/offers',
+          couponCode: pushCoupon.code,
+          couponId: pushCoupon.firebaseId,
+        })
+      }
+
+      // 2️⃣ Send push
+      const pushResult = await sendPushNotification({
+        title: pushTitle.trim(),
+        body: pushBody.trim(),
+        userIds: customerUids,
+        url: '/offers',
+      })
+
+      if (pushResult.success) {
+        toast.success(
+          `✅ Push sent! In-app: ${customerUids.length} customers · Push: ${
+            pushResult.recipients || 'sent'
+          }`
+        )
+        closePushModal()
+      } else {
+        toast.warn(
+          `⚠️ In-app sent to ${customerUids.length}, but push failed.`
+        )
+        console.error('Push failed:', pushResult.error)
+      }
+    } catch (err) {
+      console.error('Push error:', err)
+      toast.error('Failed to send notification')
+    } finally {
+      setPushSending(false)
+    }
   }
 
   return (
@@ -761,6 +900,27 @@ function AdminCouponsPage() {
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '6px' }}>
+                    {/* ✅ NEW: Push Button */}
+                    <button
+                      onClick={() => openPushModal(c)}
+                      title="Send Push Notification"
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background:
+                          'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(37,99,235,0.1))',
+                        border: '1px solid rgba(59,130,246,0.35)',
+                        color: '#2563EB',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Send size={15} />
+                    </button>
+
                     <button
                       onClick={() => toggleActive(c.firebaseId, isActive)}
                       title={isActive ? 'Deactivate' : 'Activate'}
@@ -809,6 +969,364 @@ function AdminCouponsPage() {
           </div>
         )}
       </main>
+
+      {/* ============ PUSH MODAL ============ */}
+      {pushModal && pushCoupon && (
+        <>
+          <div
+            onClick={closePushModal}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 9998,
+              backdropFilter: 'blur(2px)',
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'calc(100% - 32px)',
+              maxWidth: '520px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: 'var(--surface)',
+              borderRadius: '20px',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
+              zIndex: 9999,
+              padding: '24px',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '20px',
+              }}
+            >
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
+                }}
+              >
+                <Bell size={22} strokeWidth={2.4} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  Send Push Notification
+                </h3>
+                <span
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--text-tertiary)',
+                    fontWeight: 600,
+                  }}
+                >
+                  For coupon: <strong>{pushCoupon.code}</strong>
+                </span>
+              </div>
+              <button
+                onClick={closePushModal}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'var(--surface-soft)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Preview */}
+            <div style={{ marginBottom: '18px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '11.5px',
+                  fontWeight: 800,
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                👀 Live Preview
+              </label>
+              <div
+                style={{
+                  padding: '14px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #1F2937, #111827)',
+                  color: '#FFFFFF',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <img
+                      src="/araifood-logo.png"
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong
+                      style={{
+                        display: 'block',
+                        fontSize: '13px',
+                        fontWeight: 800,
+                        marginBottom: '2px',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {pushTitle || 'Notification title'}
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        color: 'rgba(255,255,255,0.75)',
+                        fontWeight: 500,
+                        display: 'block',
+                        lineHeight: 1.4,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {pushBody || 'Message body will appear here...'}
+                    </span>
+                    <span
+                      style={{
+                        display: 'block',
+                        marginTop: '6px',
+                        fontSize: '10.5px',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      AraiFood · now
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <div style={{ marginBottom: '14px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  color: 'var(--text-secondary)',
+                  marginBottom: '6px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                Title
+              </label>
+              <input
+                type="text"
+                value={pushTitle}
+                onChange={(e) => setPushTitle(e.target.value)}
+                maxLength={80}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--surface-soft)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Body */}
+            <div style={{ marginBottom: '18px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  color: 'var(--text-secondary)',
+                  marginBottom: '6px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                Message
+              </label>
+              <textarea
+                value={pushBody}
+                onChange={(e) => setPushBody(e.target.value)}
+                maxLength={200}
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--surface-soft)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13.5px',
+                  fontWeight: 500,
+                  outline: 'none',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
+
+            {/* Info */}
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: '12px',
+                background: 'rgba(59,130,246,0.08)',
+                border: '1px solid rgba(59,130,246,0.2)',
+                fontSize: '12px',
+                color: '#1D4ED8',
+                fontWeight: 600,
+                lineHeight: 1.5,
+                marginBottom: '18px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px',
+              }}
+            >
+              <Users size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                Will send to <strong>all customers</strong> as in-app + push
+                notification. Clicking will open the Offers page.
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={closePushModal}
+                disabled={pushSending}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  borderRadius: '999px',
+                  background: 'var(--surface-soft)',
+                  border: '1px solid var(--border-strong)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor: pushSending ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendPushNow}
+                disabled={pushSending || !pushTitle.trim() || !pushBody.trim()}
+                style={{
+                  flex: 2,
+                  padding: '14px',
+                  borderRadius: '999px',
+                  background:
+                    pushSending || !pushTitle.trim() || !pushBody.trim()
+                      ? 'var(--surface-soft)'
+                      : 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                  color:
+                    pushSending || !pushTitle.trim() || !pushBody.trim()
+                      ? 'var(--text-tertiary)'
+                      : '#FFFFFF',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor:
+                    pushSending || !pushTitle.trim() || !pushBody.trim()
+                      ? 'not-allowed'
+                      : 'pointer',
+                  boxShadow:
+                    pushSending || !pushTitle.trim() || !pushBody.trim()
+                      ? 'none'
+                      : '0 6px 20px rgba(59,130,246,0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {pushSending ? (
+                  <>
+                    <Loader2
+                      size={16}
+                      style={{ animation: 'spin 1s linear infinite' }}
+                    />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} strokeWidth={2.5} />
+                    Send Push Now
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 // ============================================================
-// src/pages/RestaurantPanel.jsx — PREMIUM V3.4
-// Topbar: Only 1 Bell (In-App). Push Toggle: Dashboard + Settings only.
+// src/pages/RestaurantPanel.jsx — PREMIUM V3.5
+// + Push Toggle + Notification Bell + Notify All Riders
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -18,7 +18,10 @@ import {
   where,
 } from 'firebase/firestore'
 import { toast } from 'react-toastify'
-import { sendNotification } from '../utils/sendNotification'
+import {
+  sendNotification,
+  notifyAllRiders,
+} from '../utils/sendNotification'
 import { Camera, X, Search, Star } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
 import PushToggleCard from '../components/PushToggleCard'
@@ -373,10 +376,14 @@ function RestaurantPanel() {
     reader.readAsDataURL(file)
   }
 
-  // ============ UPDATE ORDER STATUS ============
+  // ============================================================
+  // UPDATE ORDER STATUS — With Rider Notify
+  // ============================================================
   const updateOrderStatus = async (firebaseId, newStatus, order) => {
     try {
       await updateDoc(doc(db, 'orders', firebaseId), { status: newStatus })
+
+      // 1️⃣ Customer notification
       if (order?.userId) {
         let title = ''
         let body = ''
@@ -390,13 +397,35 @@ function RestaurantPanel() {
           title = '✅ Order Delivered!'
           body = `Order ${order.orderId} has been delivered. Enjoy!`
         }
-        await sendNotification(order.userId, title, body, 'order', {
-          orderId: order.orderId,
-        })
+        if (title) {
+          await sendNotification(order.userId, title, body, 'order', {
+            orderId: order.orderId,
+            url: `/track-order?id=${order.orderId}`,
+          })
+        }
       }
+
+      // 2️⃣ Riders notification when order is ready for pickup
+      if (newStatus === 'delivering') {
+        try {
+          await notifyAllRiders(
+            '🛵 New Delivery Available!',
+            `Order ${order.orderId} from ${order.restaurantName} is ready. Accept now!`,
+            {
+              orderId: order.orderId,
+              url: '/rider-panel',
+            }
+          )
+          console.log('✅ Riders notified successfully')
+        } catch (err) {
+          console.warn('Rider notify failed:', err)
+        }
+      }
+
       toast.success(`Order marked as ${newStatus}!`)
     } catch (error) {
       console.error(error)
+      toast.error('Failed to update order')
     }
   }
 
@@ -427,7 +456,10 @@ function RestaurantPanel() {
           '❌ Order Cancelled',
           `Your order ${order.orderId} was cancelled by the restaurant. Reason: ${trimmed}`,
           'order',
-          { orderId: order.orderId }
+          {
+            orderId: order.orderId,
+            url: '/order-history',
+          }
         )
       }
       toast.success('Order cancelled.')
@@ -794,7 +826,6 @@ function RestaurantPanel() {
         </div>
 
         <div className="rest-v2-topbar-actions">
-          {/* ✅ Single Bell — In-App Notifications only */}
           <NotificationPanel targetUserId={user?.uid} />
 
           <button
@@ -821,7 +852,6 @@ function RestaurantPanel() {
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">📊 Dashboard</h2>
 
-          {/* Push Notification Card */}
           <div style={{ marginBottom: '16px' }}>
             <PushToggleCard user={user} />
           </div>
@@ -1909,7 +1939,6 @@ function RestaurantPanel() {
         <div className="rest-v2-view">
           <h2 className="rest-v2-view-title">⚙️ Settings</h2>
 
-          {/* Push Notification Settings */}
           <div style={{ marginBottom: '16px' }}>
             <PushToggleCard user={user} />
           </div>

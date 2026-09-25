@@ -1,14 +1,22 @@
 // ============================================================
 // src/pages/PharmacySignupPage.jsx
-// 4-step signup: credentials → info → license/NID → location
+// V3 — + Welcome Notification + Admin Push Notify
 // ============================================================
 
 import { useState } from 'react'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { toast } from 'react-toastify'
 import MapPicker from '../components/MapPicker'
+import { saveInAppNotification } from '../utils/sendNotification'
+import { notifyAdminsOfSignup } from '../utils/notifyAdmin'
+
+const DEFAULT_WELCOME = {
+  enabled: true,
+  title: '💊 Welcome to AraiFood Pharmacy!',
+  body: 'Your account is pending approval. We will notify you soon!',
+}
 
 function PharmacySignupPage() {
   const [step, setStep] = useState(1)
@@ -191,6 +199,38 @@ function PharmacySignupPage() {
         createdAt: serverTimestamp(),
       })
 
+      // 🔔 Welcome Notification to Pharmacy
+      try {
+        let welcome = DEFAULT_WELCOME
+        const settingsRef = doc(db, 'settings', 'notifications')
+        const settingsSnap = await getDoc(settingsRef)
+
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data()
+          if (data.welcomePharmacy) {
+            welcome = { ...DEFAULT_WELCOME, ...data.welcomePharmacy }
+          }
+        }
+
+        if (welcome.enabled !== false) {
+          await saveInAppNotification(
+            userId,
+            welcome.title || DEFAULT_WELCOME.title,
+            welcome.body || DEFAULT_WELCOME.body,
+            'pharmacy',
+            { url: '/pharmacy-panel' }
+          )
+          console.log('✅ Welcome notification sent to pharmacy:', userId)
+        }
+      } catch (notifErr) {
+        console.warn('Welcome notification skipped:', notifErr)
+      }
+
+      // 🔔 Notify Admin (in background)
+      notifyAdminsOfSignup('pharmacy', pharmacyName.trim(), {
+        uid: userId,
+      }).catch((err) => console.warn('Admin notify failed:', err))
+
       toast.success(
         'Pharmacy Signup Successful! Waiting for Admin Approval.',
         { autoClose: 5000 }
@@ -231,7 +271,6 @@ function PharmacySignupPage() {
           <p>Partner With AraiFood</p>
         </div>
 
-        {/* Steps */}
         <div className="signup-steps">
           <div className={`signup-step ${step >= 1 ? 'active' : ''}`}>1</div>
           <div className={`signup-step-line ${step >= 2 ? 'active' : ''}`}></div>
@@ -242,7 +281,6 @@ function PharmacySignupPage() {
           <div className={`signup-step ${step >= 4 ? 'active' : ''}`}>4</div>
         </div>
 
-        {/* ============ STEP 1 ============ */}
         {step === 1 && (
           <>
             <div className="premium-login-header">
@@ -293,7 +331,6 @@ function PharmacySignupPage() {
           </>
         )}
 
-        {/* ============ STEP 2 ============ */}
         {step === 2 && (
           <>
             <div className="premium-login-header">
@@ -359,7 +396,6 @@ function PharmacySignupPage() {
           </>
         )}
 
-        {/* ============ STEP 3: LICENSE + NID ============ */}
         {step === 3 && (
           <>
             <div className="premium-login-header">
@@ -368,7 +404,6 @@ function PharmacySignupPage() {
               <p>Drug License & Owner NID</p>
             </div>
 
-            {/* Drug License */}
             <div className="form-group">
               <label>💊 Drug License Number *</label>
               <input
@@ -417,13 +452,14 @@ function PharmacySignupPage() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleImageUpload(e, setDrugLicenseImage)}
+                    onChange={(e) =>
+                      handleImageUpload(e, setDrugLicenseImage)
+                    }
                   />
                 </label>
               )}
             </div>
 
-            {/* Owner NID */}
             <div className="form-group">
               <label>🪪 Owner NID Number *</label>
               <input
@@ -495,7 +531,6 @@ function PharmacySignupPage() {
           </>
         )}
 
-        {/* ============ STEP 4 ============ */}
         {step === 4 && (
           <>
             <div className="premium-login-header">

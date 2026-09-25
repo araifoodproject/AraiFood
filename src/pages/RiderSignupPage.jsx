@@ -1,8 +1,21 @@
+// ============================================================
+// src/pages/RiderSignupPage.jsx
+// V3 — + Welcome Notification + Admin Push Notify
+// ============================================================
+
 import { useState } from 'react'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { toast } from 'react-toastify'
+import { saveInAppNotification } from '../utils/sendNotification'
+import { notifyAdminsOfSignup } from '../utils/notifyAdmin'
+
+const DEFAULT_WELCOME = {
+  enabled: true,
+  title: '🛵 Welcome to AraiFood Riders!',
+  body: 'Your application is pending admin approval. Stay tuned!',
+}
 
 function RiderSignupPage() {
   const [step, setStep] = useState(1)
@@ -30,7 +43,7 @@ function RiderSignupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // ============ IMAGE UPLOAD FUNCTION ============
+  // ============ IMAGE UPLOAD ============
   const handleImageUpload = (e, setImage, maxSize = 800) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -86,29 +99,68 @@ function RiderSignupPage() {
   // ============ STEP HANDLERS ============
   const handleStep1 = () => {
     setError('')
-    if (!email.trim()) { setError('Please enter your email.'); return }
-    if (!password.trim()) { setError('Please enter your password.'); return }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return }
+    if (!email.trim()) {
+      setError('Please enter your email.')
+      return
+    }
+    if (!password.trim()) {
+      setError('Please enter your password.')
+      return
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
     setStep(2)
   }
 
   const handleStep2 = () => {
     setError('')
-    if (!fullName.trim()) { setError('Please enter your full name.'); return }
-    if (!phone.trim()) { setError('Please enter your phone number.'); return }
-    if (!nidNumber.trim()) { setError('Please enter your NID number.'); return }
-    if (!dob) { setError('Please enter your date of birth.'); return }
-    if (!address.trim()) { setError('Please enter your address.'); return }
-    if (!profileImage) { setError('Please upload your profile photo.'); return }
+    if (!fullName.trim()) {
+      setError('Please enter your full name.')
+      return
+    }
+    if (!phone.trim()) {
+      setError('Please enter your phone number.')
+      return
+    }
+    if (!nidNumber.trim()) {
+      setError('Please enter your NID number.')
+      return
+    }
+    if (!dob) {
+      setError('Please enter your date of birth.')
+      return
+    }
+    if (!address.trim()) {
+      setError('Please enter your address.')
+      return
+    }
+    if (!profileImage) {
+      setError('Please upload your profile photo.')
+      return
+    }
     setStep(3)
   }
 
   const handleStep3 = () => {
     setError('')
-    if (!vehicleType) { setError('Please select your vehicle type.'); return }
-    if (!nidImage) { setError('Please upload your NID photo.'); return }
-    if (!vehicleImage) { setError('Please upload your vehicle photo.'); return }
+    if (!vehicleType) {
+      setError('Please select your vehicle type.')
+      return
+    }
+    if (!nidImage) {
+      setError('Please upload your NID photo.')
+      return
+    }
+    if (!vehicleImage) {
+      setError('Please upload your vehicle photo.')
+      return
+    }
     setStep(4)
   }
 
@@ -117,7 +169,11 @@ function RiderSignupPage() {
     setLoading(true)
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password)
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      )
       const userId = userCredential.user.uid
 
       await setDoc(doc(db, 'riders', userId), {
@@ -141,16 +197,56 @@ function RiderSignupPage() {
         rating: 0,
         totalDeliveries: 0,
         totalEarnings: 0,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       })
 
-      toast.success('✅ Rider Signup Successful! Waiting for Admin Approval.', { autoClose: 5000 })
+      // 🔔 Welcome Notification to Rider
+      try {
+        let welcome = DEFAULT_WELCOME
+        const settingsRef = doc(db, 'settings', 'notifications')
+        const settingsSnap = await getDoc(settingsRef)
+
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data()
+          if (data.welcomeRider) {
+            welcome = { ...DEFAULT_WELCOME, ...data.welcomeRider }
+          }
+        }
+
+        if (welcome.enabled !== false) {
+          await saveInAppNotification(
+            userId,
+            welcome.title || DEFAULT_WELCOME.title,
+            welcome.body || DEFAULT_WELCOME.body,
+            'rider',
+            { url: '/rider-panel' }
+          )
+          console.log('✅ Welcome notification sent to rider:', userId)
+        }
+      } catch (notifErr) {
+        console.warn('Welcome notification skipped:', notifErr)
+      }
+
+      // 🔔 Notify Admin (in background)
+      notifyAdminsOfSignup('rider', fullName.trim(), { uid: userId }).catch(
+        (err) => console.warn('Admin notify failed:', err)
+      )
+
+      toast.success(
+        '✅ Rider Signup Successful! Waiting for Admin Approval.',
+        { autoClose: 5000 }
+      )
       window.location.href = '/rider-login'
     } catch (error) {
-      if (error.code === 'auth/email-already-in-use') setError('This email is already registered.')
-      else if (error.code === 'auth/invalid-email') setError('Please enter a valid email address.')
-      else if (error.code === 'auth/weak-password') setError('Password is too weak.')
-      else setError('Signup failed. Please try again.')
+      if (error.code === 'auth/email-already-in-use') {
+        setError('This email is already registered.')
+      } else if (error.code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.')
+      } else if (error.code === 'auth/weak-password') {
+        setError('Password is too weak.')
+      } else {
+        setError('Signup failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -165,12 +261,15 @@ function RiderSignupPage() {
 
       <div className="premium-login-card rider-signup-card">
         <div className="premium-login-logo">
-          <img src="/araifood-logo.png" alt="AraiFood Logo" className="premium-logo-image" />
+          <img
+            src="/araifood-logo.png"
+            alt="AraiFood Logo"
+            className="premium-logo-image"
+          />
           <h1>RIDER SIGNUP</h1>
           <p>Join as a Delivery Partner</p>
         </div>
 
-        {/* Step Indicator */}
         <div className="signup-steps">
           <div className={`signup-step ${step >= 1 ? 'active' : ''}`}>1</div>
           <div className={`signup-step-line ${step >= 2 ? 'active' : ''}`}></div>
@@ -181,7 +280,6 @@ function RiderSignupPage() {
           <div className={`signup-step ${step >= 4 ? 'active' : ''}`}>4</div>
         </div>
 
-        {/* ==================== STEP 1 ==================== */}
         {step === 1 && (
           <>
             <div className="premium-login-header">
@@ -192,23 +290,43 @@ function RiderSignupPage() {
 
             <div className="form-group">
               <label>Email Address</label>
-              <input type="email" placeholder="rider@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input
+                type="email"
+                placeholder="rider@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
             <div className="form-group">
               <label>Password</label>
-              <input type="password" placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input
+                type="password"
+                placeholder="Create a password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
             <div className="form-group">
               <label>Confirm Password</label>
-              <input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <input
+                type="password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
             </div>
 
-            {error && <p className="login-error" style={{ marginBottom: '12px' }}>{error}</p>}
-            <button className="login-submit-button" onClick={handleStep1}>Next →</button>
+            {error && (
+              <p className="login-error" style={{ marginBottom: '12px' }}>
+                {error}
+              </p>
+            )}
+            <button className="login-submit-button" onClick={handleStep1}>
+              Next →
+            </button>
           </>
         )}
 
-        {/* ==================== STEP 2 ==================== */}
         {step === 2 && (
           <>
             <div className="premium-login-header">
@@ -219,53 +337,98 @@ function RiderSignupPage() {
 
             <div className="form-group">
               <label>Full Name *</label>
-              <input type="text" placeholder="e.g., Rahim Uddin" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+              <input
+                type="text"
+                placeholder="e.g., Rahim Uddin"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
             </div>
             <div className="form-group">
               <label>Phone Number *</label>
-              <input type="tel" placeholder="01XXXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <input
+                type="tel"
+                placeholder="01XXXXXXXXX"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
             </div>
             <div className="form-group">
               <label>NID Number *</label>
-              <input type="text" placeholder="e.g., 1234567890123" value={nidNumber} onChange={(e) => setNidNumber(e.target.value)} />
+              <input
+                type="text"
+                placeholder="e.g., 1234567890123"
+                value={nidNumber}
+                onChange={(e) => setNidNumber(e.target.value)}
+              />
             </div>
             <div className="form-group">
               <label>Date of Birth *</label>
-              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+              <input
+                type="date"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+              />
             </div>
             <div className="form-group">
               <label>Address *</label>
-              <textarea placeholder="House / Road / Area / Araihazar" rows="2" value={address} onChange={(e) => setAddress(e.target.value)}></textarea>
+              <textarea
+                placeholder="House / Road / Area / Araihazar"
+                rows="2"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              ></textarea>
             </div>
 
-            {/* Profile Photo Upload */}
             <div className="form-group">
               <label>Profile Photo *</label>
               <div className="image-upload-area">
                 {profileImage ? (
                   <div className="image-preview-wrapper">
-                    <img src={profileImage} alt="Profile" className="food-image-preview" />
-                    <button className="remove-image-btn" onClick={() => setProfileImage('')}>✕</button>
+                    <img
+                      src={profileImage}
+                      alt="Profile"
+                      className="food-image-preview"
+                    />
+                    <button
+                      className="remove-image-btn"
+                      onClick={() => setProfileImage('')}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ) : (
                   <label className="image-upload-btn">
                     <span>📷 Upload Profile Photo</span>
-                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setProfileImage, 400)} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageUpload(e, setProfileImage, 400)
+                      }
+                    />
                   </label>
                 )}
               </div>
             </div>
 
-            {error && <p className="login-error" style={{ marginBottom: '12px' }}>{error}</p>}
+            {error && (
+              <p className="login-error" style={{ marginBottom: '12px' }}>
+                {error}
+              </p>
+            )}
 
             <div className="signup-btn-group">
-              <button className="signup-back-btn" onClick={() => setStep(1)}>← Back</button>
-              <button className="login-submit-button" onClick={handleStep2}>Next →</button>
+              <button className="signup-back-btn" onClick={() => setStep(1)}>
+                ← Back
+              </button>
+              <button className="login-submit-button" onClick={handleStep2}>
+                Next →
+              </button>
             </div>
           </>
         )}
 
-        {/* ==================== STEP 3 ==================== */}
         {step === 3 && (
           <>
             <div className="premium-login-header">
@@ -279,7 +442,9 @@ function RiderSignupPage() {
               <div className="vehicle-type-grid">
                 <button
                   type="button"
-                  className={`vehicle-type-btn ${vehicleType === 'Motorcycle' ? 'active' : ''}`}
+                  className={`vehicle-type-btn ${
+                    vehicleType === 'Motorcycle' ? 'active' : ''
+                  }`}
                   onClick={() => setVehicleType('Motorcycle')}
                 >
                   <span>🛵</span>
@@ -287,7 +452,9 @@ function RiderSignupPage() {
                 </button>
                 <button
                   type="button"
-                  className={`vehicle-type-btn ${vehicleType === 'Bicycle' ? 'active' : ''}`}
+                  className={`vehicle-type-btn ${
+                    vehicleType === 'Bicycle' ? 'active' : ''
+                  }`}
                   onClick={() => setVehicleType('Bicycle')}
                 >
                   <span>🚲</span>
@@ -295,7 +462,9 @@ function RiderSignupPage() {
                 </button>
                 <button
                   type="button"
-                  className={`vehicle-type-btn ${vehicleType === 'Scooter' ? 'active' : ''}`}
+                  className={`vehicle-type-btn ${
+                    vehicleType === 'Scooter' ? 'active' : ''
+                  }`}
                   onClick={() => setVehicleType('Scooter')}
                 >
                   <span>🛴</span>
@@ -303,7 +472,9 @@ function RiderSignupPage() {
                 </button>
                 <button
                   type="button"
-                  className={`vehicle-type-btn ${vehicleType === 'Electric Bike' ? 'active' : ''}`}
+                  className={`vehicle-type-btn ${
+                    vehicleType === 'Electric Bike' ? 'active' : ''
+                  }`}
                   onClick={() => setVehicleType('Electric Bike')}
                 >
                   <span>⚡🛵</span>
@@ -314,60 +485,103 @@ function RiderSignupPage() {
 
             <div className="form-group">
               <label>Vehicle Number (Optional)</label>
-              <input type="text" placeholder="e.g., Dhaka-LA-1234" value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />
+              <input
+                type="text"
+                placeholder="e.g., Dhaka-LA-1234"
+                value={vehicleNumber}
+                onChange={(e) => setVehicleNumber(e.target.value)}
+              />
             </div>
 
             <div className="form-group">
               <label>Driving License (Optional)</label>
-              <input type="text" placeholder="License Number" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
+              <input
+                type="text"
+                placeholder="License Number"
+                value={licenseNumber}
+                onChange={(e) => setLicenseNumber(e.target.value)}
+              />
             </div>
 
-            {/* NID Photo Upload */}
             <div className="form-group">
               <label>NID Photo *</label>
               <div className="image-upload-area">
                 {nidImage ? (
                   <div className="image-preview-wrapper">
-                    <img src={nidImage} alt="NID" className="food-image-preview" />
-                    <button className="remove-image-btn" onClick={() => setNidImage('')}>✕</button>
+                    <img
+                      src={nidImage}
+                      alt="NID"
+                      className="food-image-preview"
+                    />
+                    <button
+                      className="remove-image-btn"
+                      onClick={() => setNidImage('')}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ) : (
                   <label className="image-upload-btn">
                     <span>📷 Upload NID Photo</span>
-                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNidImage, 800)} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, setNidImage, 800)}
+                    />
                   </label>
                 )}
               </div>
             </div>
 
-            {/* Vehicle Photo Upload */}
             <div className="form-group">
               <label>Vehicle Photo *</label>
               <div className="image-upload-area">
                 {vehicleImage ? (
                   <div className="image-preview-wrapper">
-                    <img src={vehicleImage} alt="Vehicle" className="food-image-preview" />
-                    <button className="remove-image-btn" onClick={() => setVehicleImage('')}>✕</button>
+                    <img
+                      src={vehicleImage}
+                      alt="Vehicle"
+                      className="food-image-preview"
+                    />
+                    <button
+                      className="remove-image-btn"
+                      onClick={() => setVehicleImage('')}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ) : (
                   <label className="image-upload-btn">
                     <span>📷 Upload Vehicle Photo</span>
-                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setVehicleImage, 800)} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageUpload(e, setVehicleImage, 800)
+                      }
+                    />
                   </label>
                 )}
               </div>
             </div>
 
-            {error && <p className="login-error" style={{ marginBottom: '12px' }}>{error}</p>}
+            {error && (
+              <p className="login-error" style={{ marginBottom: '12px' }}>
+                {error}
+              </p>
+            )}
 
             <div className="signup-btn-group">
-              <button className="signup-back-btn" onClick={() => setStep(2)}>← Back</button>
-              <button className="login-submit-button" onClick={handleStep3}>Next →</button>
+              <button className="signup-back-btn" onClick={() => setStep(2)}>
+                ← Back
+              </button>
+              <button className="login-submit-button" onClick={handleStep3}>
+                Next →
+              </button>
             </div>
           </>
         )}
 
-        {/* ==================== STEP 4 ==================== */}
         {step === 4 && (
           <>
             <div className="premium-login-header">
@@ -378,7 +592,11 @@ function RiderSignupPage() {
 
             <div className="rider-review-card">
               <div className="rider-review-avatar">
-                {profileImage ? <img src={profileImage} alt="Profile" /> : <span>👤</span>}
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" />
+                ) : (
+                  <span>👤</span>
+                )}
               </div>
               <h3>{fullName}</h3>
               <p>{email}</p>
@@ -427,22 +645,41 @@ function RiderSignupPage() {
               </div>
             </div>
 
-            {error && <p className="login-error" style={{ marginBottom: '12px' }}>{error}</p>}
+            {error && (
+              <p className="login-error" style={{ marginBottom: '12px' }}>
+                {error}
+              </p>
+            )}
 
             <div className="signup-btn-group">
-              <button className="signup-back-btn" onClick={() => setStep(3)}>← Back</button>
-              <button className="login-submit-button" onClick={handleFinalSubmit} disabled={loading}>
+              <button className="signup-back-btn" onClick={() => setStep(3)}>
+                ← Back
+              </button>
+              <button
+                className="login-submit-button"
+                onClick={handleFinalSubmit}
+                disabled={loading}
+              >
                 {loading ? 'Submitting...' : 'Submit Application →'}
               </button>
             </div>
 
-            <p className="signup-note">📝 Your application will be reviewed by Admin. You'll get an email once approved.</p>
+            <p className="signup-note">
+              📝 Your application will be reviewed by Admin. You'll get an
+              email once approved.
+            </p>
           </>
         )}
 
         <div className="login-footer">
           <p>Already a rider?</p>
-          <button type="button" className="signup-link" onClick={() => { window.location.href = '/rider-login' }}>
+          <button
+            type="button"
+            className="signup-link"
+            onClick={() => {
+              window.location.href = '/rider-login'
+            }}
+          >
             Rider Login
           </button>
         </div>

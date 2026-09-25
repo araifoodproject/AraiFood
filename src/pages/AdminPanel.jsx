@@ -1,11 +1,11 @@
 // ============================================================
 // src/pages/AdminPanel.jsx
-// V2.2 — Fixed Users import
+// V3 — With Admin Push Enable + Notification Bell
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
 import { collection, onSnapshot } from 'firebase/firestore'
 import {
   BarChart,
@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import AdminSidebar from '../components/AdminSidebar'
 import NotificationPanel from '../components/NotificationPanel'
+import PushToggleCard from '../components/PushToggleCard'
 import {
   Menu,
   Search,
@@ -39,6 +40,7 @@ import {
   Wallet,
   AlertCircle,
   Users,
+  Bell,
 } from 'lucide-react'
 
 function AdminPanel() {
@@ -50,6 +52,14 @@ function AdminPanel() {
   const [walletRequests, setWalletRequests] = useState([])
   const [customers, setCustomers] = useState([])
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [showPushSection, setShowPushSection] = useState(false)
+
+  // ============ CURRENT USER ============
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged((u) => setCurrentUser(u))
+    return () => unsub()
+  }, [])
 
   // ============ LIVE DATA ============
   useEffect(() => {
@@ -192,7 +202,7 @@ function AdminPanel() {
     (r) => r.status === 'pending'
   ).length
 
-  // ============ AVERAGE RATING (safe) ============
+  // ============ AVERAGE RATING ============
   const avgRating = useMemo(() => {
     const withRating = restaurants.filter(
       (r) => typeof r.rating === 'number' && r.rating > 0
@@ -393,6 +403,94 @@ function AdminPanel() {
             View Reports
           </Link>
         </div>
+
+        {/* ✅ NEW: Admin Push Notification Card */}
+        {currentUser && (
+          <div
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '18px',
+              padding: '8px',
+              marginBottom: '20px',
+              position: 'relative',
+            }}
+          >
+            <button
+              onClick={() => setShowPushSection(!showPushSection)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                background: showPushSection
+                  ? 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(37,99,235,0.04))'
+                  : 'var(--surface-soft)',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  flexShrink: 0,
+                  boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
+                }}
+              >
+                <Bell size={20} strokeWidth={2.4} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong
+                  style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    color: 'var(--text-primary)',
+                    marginBottom: '2px',
+                  }}
+                >
+                  My Push Notifications
+                </strong>
+                <span
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--text-tertiary)',
+                    fontWeight: 600,
+                  }}
+                >
+                  Get real-time alerts about new orders & signups
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: '20px',
+                  color: 'var(--text-tertiary)',
+                  transform: showPushSection ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              >
+                ⌄
+              </span>
+            </button>
+
+            {showPushSection && (
+              <div style={{ padding: '12px 8px 8px' }}>
+                <PushToggleCard user={currentUser} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Pending Alerts */}
         {totalPendingActions > 0 && (

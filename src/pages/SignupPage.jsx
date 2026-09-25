@@ -1,15 +1,23 @@
 // ============================================================
 // src/pages/SignupPage.jsx
-// V2 — Customer-only signup with name + phone + terms
+// V4 — Customer signup + Welcome + Admin notify
 // ============================================================
 
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { toast } from 'react-toastify'
 import { Eye, EyeOff } from 'lucide-react'
+import { saveInAppNotification } from '../utils/sendNotification'
+import { notifyAdminsOfSignup } from '../utils/notifyAdmin'
+
+const DEFAULT_WELCOME = {
+  enabled: true,
+  title: '🎉 Welcome to AraiFood!',
+  body: 'Thanks for joining AraiFood. Start ordering your favourite food now!',
+}
 
 function SignupPage() {
   const navigate = useNavigate()
@@ -28,19 +36,9 @@ function SignupPage() {
     e.preventDefault()
     setError('')
 
-    // Validations
-    if (!fullName.trim()) {
-      setError('Please enter your full name.')
-      return
-    }
-    if (!email.trim()) {
-      setError('Please enter your email.')
-      return
-    }
-    if (!phone.trim()) {
-      setError('Please enter your mobile number.')
-      return
-    }
+    if (!fullName.trim()) { setError('Please enter your full name.'); return }
+    if (!email.trim()) { setError('Please enter your email.'); return }
+    if (!phone.trim()) { setError('Please enter your mobile number.'); return }
     if (!/^01[0-9]{9}$/.test(phone.trim())) {
       setError('Please enter a valid 11-digit mobile number.')
       return
@@ -70,7 +68,6 @@ function SignupPage() {
       )
       const uid = userCred.user.uid
 
-      // Create user doc
       await setDoc(doc(db, 'users', uid), {
         email: cleanEmail,
         fullName: fullName.trim(),
@@ -84,6 +81,37 @@ function SignupPage() {
         pointsHistory: [],
         createdAt: new Date(),
       })
+
+      // 🔔 Welcome Notification
+      try {
+        let welcome = DEFAULT_WELCOME
+        const settingsRef = doc(db, 'settings', 'notifications')
+        const settingsSnap = await getDoc(settingsRef)
+
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data()
+          if (data.welcomeCustomer) {
+            welcome = { ...DEFAULT_WELCOME, ...data.welcomeCustomer }
+          }
+        }
+
+        if (welcome.enabled !== false) {
+          await saveInAppNotification(
+            uid,
+            welcome.title || DEFAULT_WELCOME.title,
+            welcome.body || DEFAULT_WELCOME.body,
+            'promotion',
+            { url: '/' }
+          )
+        }
+      } catch (notifErr) {
+        console.warn('Welcome notification skipped:', notifErr)
+      }
+
+      // 🔔 Notify Admin (in background, no await)
+      notifyAdminsOfSignup('customer', fullName.trim(), { uid }).catch((err) =>
+        console.warn('Admin notify failed:', err)
+      )
 
       localStorage.setItem('userRole', 'customer')
       toast.success('🎉 Welcome to AraiFood!')
@@ -116,7 +144,6 @@ function SignupPage() {
       <div className="floating-food food-four">🍗</div>
 
       <div className="premium-login-card">
-        {/* Logo */}
         <div className="premium-login-logo">
           <img
             src="/araifood-logo.png"
@@ -127,7 +154,6 @@ function SignupPage() {
           <p>Good Food, Good Mood</p>
         </div>
 
-        {/* Header */}
         <div className="premium-login-header">
           <span className="section-label">JOIN US</span>
           <h2>Create Account</h2>
@@ -232,7 +258,6 @@ function SignupPage() {
             />
           </div>
 
-          {/* Terms */}
           <label
             style={{
               display: 'flex',
@@ -267,15 +292,11 @@ function SignupPage() {
             />
             <span>
               I agree to the{' '}
-              <span
-                style={{ color: '#059669', fontWeight: 800 }}
-              >
+              <span style={{ color: '#059669', fontWeight: 800 }}>
                 Terms & Conditions
               </span>{' '}
               and{' '}
-              <span
-                style={{ color: '#059669', fontWeight: 800 }}
-              >
+              <span style={{ color: '#059669', fontWeight: 800 }}>
                 Privacy Policy
               </span>
             </span>
@@ -307,7 +328,6 @@ function SignupPage() {
           </Link>
         </div>
 
-        {/* Partner signup links */}
         <div
           style={{
             marginTop: '20px',

@@ -1,7 +1,6 @@
 // ============================================================
 // src/pages/admin/AdminSettingsPage.jsx
-// FULLY REAL-TIME ADMIN SETTINGS — nested structure
-// Supports arrays (features, categories, footer links) with add/remove
+// V2 — + Welcome Notifications editor
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -30,6 +29,11 @@ import {
   Layers,
   MessageCircle,
   Handshake,
+  Bell,
+  User,
+  Store,
+  Bike,
+  Pill,
 } from 'lucide-react'
 import {
   FaFacebookF,
@@ -39,9 +43,10 @@ import {
 } from 'react-icons/fa'
 
 const SETTINGS_DOC_ID = 'platform'
+const NOTIFICATION_DOC_ID = 'notifications'
 
 // ------------------------------------------------------------
-// Defaults (must match useSettings.js)
+// Defaults
 // ------------------------------------------------------------
 const DEFAULT_FEATURES = [
   { icon: '🚚', color: 'green', title: 'Fast Delivery', desc: '30-45 min to your door' },
@@ -75,30 +80,51 @@ const DEFAULT_SUPPORT_LINKS = [
   { text: 'Terms & Privacy', url: '#', isExternal: false },
 ]
 
+// ------------------------------------------------------------
+// Welcome Notification Defaults
+// ------------------------------------------------------------
+const DEFAULT_WELCOME = {
+  customer: {
+    enabled: true,
+    title: '🎉 Welcome to AraiFood!',
+    body: 'Thanks for joining AraiFood. Start ordering your favourite food now!',
+  },
+  restaurant: {
+    enabled: true,
+    title: '🏪 Welcome to AraiFood Partner!',
+    body: 'Your account is under review. You will be notified once approved.',
+  },
+  rider: {
+    enabled: true,
+    title: '🛵 Welcome to AraiFood Riders!',
+    body: 'Your application is pending admin approval. Stay tuned!',
+  },
+  pharmacy: {
+    enabled: true,
+    title: '💊 Welcome to AraiFood Pharmacy!',
+    body: 'Your account is pending approval. We will notify you soon!',
+  },
+}
+
 function AdminSettingsPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // ---------- STATE (all flat + nested) ----------
+  // ---------- PLATFORM STATE ----------
   const [state, setState] = useState({
-    // Brand
     siteName: 'AraiFood',
     tagline: 'Good Food, Good Mood',
-    // Contact
     contactEmail: 'hello@araifood.com',
     contactPhone: '+880 1700-000000',
     address: 'Araihazar, Narayanganj',
-    // Fees
     defaultDeliveryFee: '30',
     minOrderAmount: '100',
     commissionPercent: '10',
     riderEarningPerDelivery: '30',
     freeDeliveryThreshold: '500',
-    // Hours
     openingTime: '10:00',
     closingTime: '22:00',
-    // Social
     facebookUrl: '',
     instagramUrl: '',
     twitterUrl: '',
@@ -106,44 +132,34 @@ function AdminSettingsPage() {
     whatsappNumber: '',
     appStoreUrl: '',
     playStoreUrl: '',
-    // Gaming
     gamingBkashNumber: '01700000000',
     gamingNagadNumber: '01700000000',
-    // Wallet
     walletBkashNumber: '01700000000',
     walletNagadNumber: '01700000000',
     walletMinAmount: '50',
     walletMaxAmount: '10000',
-    // Delivery (checkout)
     defaultDeliveryTime: '30-40 min',
     deliveryAreaName: 'Araihazar Thana',
     deliverySlots: ['6-7pm', '7-8pm', '8-9pm', '9-10pm'],
     mapDefaultLat: '23.78',
     mapDefaultLng: '90.64',
     mapDefaultZoom: '14',
-    // Hero
     heroTitle1: 'App -',
     heroTitle2: 'Food, Pharmacy & Gaming',
     heroTitle3: 'in One Place',
     heroSearchPlaceholder: 'Search food, medicine or games...',
-    // Trust bar
     trustText1: 'Trusted by 50k+ in Araihazar',
     trustText2: '4.8★ Rating',
     trustText3: 'Updated Oct 2025',
-    // Features (array)
     features: DEFAULT_FEATURES,
-    // Home section
     homePopularTitle: 'Popular Restaurants Near You',
     homePopularSubtitle: 'Top-rated picks from Araihazar',
     homePopularLimit: '6',
-    // Categories
     categoriesTitle: 'Food Categories',
     categoriesSubtitle: 'Browse by categories',
     categoriesList: DEFAULT_CATEGORIES,
-    // Delivery areas section
     deliveryAreasTitle: 'We Deliver Around Araihazar',
     deliveryAreasSubtitle: 'Fast delivery across your locality',
-    // Partner CTA
     partnerSectionTitle: 'Become a Partner',
     partnerSectionSubtitle: 'Grow with us in Araihazar',
     partnerRestaurantTitle: 'Own a Restaurant?',
@@ -158,13 +174,11 @@ function AdminSettingsPage() {
       'Flexible earnings, weekly payouts, support & safety gear provided',
     partnerRiderBtn: 'Ride with us',
     partnerRiderPath: '/rider-signup',
-    // Footer
     footerTagline: 'Food, Pharmacy & Gaming in One Place',
     footerCompanyName: 'AraiFood Ltd.',
     footerCompanyLinks: DEFAULT_COMPANY_LINKS,
     footerSupportLinks: DEFAULT_SUPPORT_LINKS,
     footerAppsLabel: 'Available on',
-    // Live chat
     liveChatTeamName: 'Support Team',
     liveChatStatus: 'Online Now',
     liveChatAvatar: '👨‍💼',
@@ -174,27 +188,34 @@ function AdminSettingsPage() {
     liveChatPlaceholder: 'Type your message...',
   })
 
-  // helper — update single field
+  // ---------- WELCOME NOTIFICATION STATE ----------
+  const [welcome, setWelcome] = useState(DEFAULT_WELCOME)
+
   const set = (key, value) =>
     setState((prev) => ({ ...prev, [key]: value }))
+
+  const setWelcomeField = (role, field, value) => {
+    setWelcome((prev) => ({
+      ...prev,
+      [role]: { ...prev[role], [field]: value },
+    }))
+  }
 
   // ---------- LOAD ----------
   useEffect(() => {
     const load = async () => {
       try {
+        // Load platform settings
         const snap = await getDoc(doc(db, 'settings', SETTINGS_DOC_ID))
         if (snap.exists()) {
           const d = snap.data()
           setState((prev) => ({
             ...prev,
-            // Brand
             siteName: d.siteName ?? prev.siteName,
             tagline: d.tagline ?? prev.tagline,
-            // Contact
             contactEmail: d.contactEmail ?? prev.contactEmail,
             contactPhone: d.contactPhone ?? prev.contactPhone,
             address: d.address ?? prev.address,
-            // Fees
             defaultDeliveryFee: String(d.defaultDeliveryFee ?? prev.defaultDeliveryFee),
             minOrderAmount: String(d.minOrderAmount ?? prev.minOrderAmount),
             commissionPercent: String(d.commissionPercent ?? prev.commissionPercent),
@@ -204,10 +225,8 @@ function AdminSettingsPage() {
             freeDeliveryThreshold: String(
               d.freeDeliveryThreshold ?? prev.freeDeliveryThreshold
             ),
-            // Hours
             openingTime: d.openingTime ?? prev.openingTime,
             closingTime: d.closingTime ?? prev.closingTime,
-            // Social
             facebookUrl: d.facebookUrl ?? prev.facebookUrl,
             instagramUrl: d.instagramUrl ?? prev.instagramUrl,
             twitterUrl: d.twitterUrl ?? prev.twitterUrl,
@@ -215,15 +234,12 @@ function AdminSettingsPage() {
             whatsappNumber: d.whatsappNumber ?? prev.whatsappNumber,
             appStoreUrl: d.appStoreUrl ?? prev.appStoreUrl,
             playStoreUrl: d.playStoreUrl ?? prev.playStoreUrl,
-            // Gaming
             gamingBkashNumber: d.gamingBkashNumber ?? prev.gamingBkashNumber,
             gamingNagadNumber: d.gamingNagadNumber ?? prev.gamingNagadNumber,
-            // Wallet
             walletBkashNumber: d.walletBkashNumber ?? prev.walletBkashNumber,
             walletNagadNumber: d.walletNagadNumber ?? prev.walletNagadNumber,
             walletMinAmount: String(d.walletMinAmount ?? prev.walletMinAmount),
             walletMaxAmount: String(d.walletMaxAmount ?? prev.walletMaxAmount),
-            // Delivery
             defaultDeliveryTime: d.defaultDeliveryTime ?? prev.defaultDeliveryTime,
             deliveryAreaName: d.deliveryAreaName ?? prev.deliveryAreaName,
             deliverySlots:
@@ -233,7 +249,6 @@ function AdminSettingsPage() {
             mapDefaultLat: String(d.mapDefaultCenter?.lat ?? prev.mapDefaultLat),
             mapDefaultLng: String(d.mapDefaultCenter?.lng ?? prev.mapDefaultLng),
             mapDefaultZoom: String(d.mapDefaultZoom ?? prev.mapDefaultZoom),
-            // Hero (nested)
             heroTitle1: d.hero?.title1 ?? d.heroTitle1 ?? prev.heroTitle1,
             heroTitle2: d.hero?.title2 ?? d.heroTitle2 ?? prev.heroTitle2,
             heroTitle3: d.hero?.title3 ?? d.heroTitle3 ?? prev.heroTitle3,
@@ -241,31 +256,25 @@ function AdminSettingsPage() {
               d.hero?.searchPlaceholder ??
               d.heroSearchPlaceholder ??
               prev.heroSearchPlaceholder,
-            // Trust bar (nested)
             trustText1: d.trustBar?.text1 ?? d.trustText1 ?? prev.trustText1,
             trustText2: d.trustBar?.text2 ?? d.trustText2 ?? prev.trustText2,
             trustText3: d.trustBar?.text3 ?? d.trustText3 ?? prev.trustText3,
-            // Features array
             features:
               Array.isArray(d.features) && d.features.length > 0
                 ? d.features
                 : prev.features,
-            // Home
             homePopularTitle: d.home?.popularTitle ?? prev.homePopularTitle,
             homePopularSubtitle: d.home?.popularSubtitle ?? prev.homePopularSubtitle,
             homePopularLimit: String(d.home?.popularLimit ?? prev.homePopularLimit),
-            // Categories
             categoriesTitle: d.categories?.title ?? prev.categoriesTitle,
             categoriesSubtitle: d.categories?.subtitle ?? prev.categoriesSubtitle,
             categoriesList:
               Array.isArray(d.categories?.list) && d.categories.list.length > 0
                 ? d.categories.list
                 : prev.categoriesList,
-            // Delivery areas
             deliveryAreasTitle: d.deliveryAreas?.title ?? prev.deliveryAreasTitle,
             deliveryAreasSubtitle:
               d.deliveryAreas?.subtitle ?? prev.deliveryAreasSubtitle,
-            // Partner
             partnerSectionTitle: d.partner?.sectionTitle ?? prev.partnerSectionTitle,
             partnerSectionSubtitle:
               d.partner?.sectionSubtitle ?? prev.partnerSectionSubtitle,
@@ -286,7 +295,6 @@ function AdminSettingsPage() {
               d.partner?.rider?.description ?? prev.partnerRiderDesc,
             partnerRiderBtn: d.partner?.rider?.buttonText ?? prev.partnerRiderBtn,
             partnerRiderPath: d.partner?.rider?.path ?? prev.partnerRiderPath,
-            // Footer
             footerTagline: d.footer?.tagline ?? prev.footerTagline,
             footerCompanyName: d.footer?.companyName ?? prev.footerCompanyName,
             footerCompanyLinks:
@@ -300,7 +308,6 @@ function AdminSettingsPage() {
                 ? d.footer.supportLinks
                 : prev.footerSupportLinks,
             footerAppsLabel: d.footer?.appsLabel ?? prev.footerAppsLabel,
-            // Live chat
             liveChatTeamName: d.liveChat?.teamName ?? prev.liveChatTeamName,
             liveChatStatus: d.liveChat?.statusText ?? prev.liveChatStatus,
             liveChatAvatar: d.liveChat?.avatarEmoji ?? prev.liveChatAvatar,
@@ -310,6 +317,32 @@ function AdminSettingsPage() {
             liveChatPlaceholder:
               d.liveChat?.inputPlaceholder ?? prev.liveChatPlaceholder,
           }))
+        }
+
+        // Load welcome notifications
+        const notifSnap = await getDoc(
+          doc(db, 'settings', NOTIFICATION_DOC_ID)
+        )
+        if (notifSnap.exists()) {
+          const n = notifSnap.data()
+          setWelcome({
+            customer: {
+              ...DEFAULT_WELCOME.customer,
+              ...(n.welcomeCustomer || {}),
+            },
+            restaurant: {
+              ...DEFAULT_WELCOME.restaurant,
+              ...(n.welcomeRestaurant || {}),
+            },
+            rider: {
+              ...DEFAULT_WELCOME.rider,
+              ...(n.welcomeRider || {}),
+            },
+            pharmacy: {
+              ...DEFAULT_WELCOME.pharmacy,
+              ...(n.welcomePharmacy || {}),
+            },
+          })
         }
       } catch (err) {
         console.error('Failed to load settings:', err)
@@ -325,14 +358,11 @@ function AdminSettingsPage() {
     setSaving(true)
     try {
       const payload = {
-        // Brand
         siteName: state.siteName.trim(),
         tagline: state.tagline.trim(),
-        // Contact
         contactEmail: state.contactEmail.trim(),
         contactPhone: state.contactPhone.trim(),
         address: state.address.trim(),
-        // Fees
         defaultDeliveryFee: parseFloat(state.defaultDeliveryFee) || 30,
         minOrderAmount: parseFloat(state.minOrderAmount) || 100,
         commissionPercent: parseFloat(state.commissionPercent) || 10,
@@ -340,10 +370,8 @@ function AdminSettingsPage() {
           parseFloat(state.riderEarningPerDelivery) || 30,
         freeDeliveryThreshold:
           parseFloat(state.freeDeliveryThreshold) || 500,
-        // Hours
         openingTime: state.openingTime,
         closingTime: state.closingTime,
-        // Social
         facebookUrl: state.facebookUrl.trim(),
         instagramUrl: state.instagramUrl.trim(),
         twitterUrl: state.twitterUrl.trim(),
@@ -351,15 +379,12 @@ function AdminSettingsPage() {
         whatsappNumber: state.whatsappNumber.trim(),
         appStoreUrl: state.appStoreUrl.trim(),
         playStoreUrl: state.playStoreUrl.trim(),
-        // Gaming
         gamingBkashNumber: state.gamingBkashNumber.trim(),
         gamingNagadNumber: state.gamingNagadNumber.trim(),
-        // Wallet
         walletBkashNumber: state.walletBkashNumber.trim(),
         walletNagadNumber: state.walletNagadNumber.trim(),
         walletMinAmount: parseFloat(state.walletMinAmount) || 50,
         walletMaxAmount: parseFloat(state.walletMaxAmount) || 10000,
-        // Delivery
         defaultDeliveryTime: state.defaultDeliveryTime.trim(),
         deliveryAreaName: state.deliveryAreaName.trim(),
         deliverySlots: state.deliverySlots,
@@ -368,39 +393,32 @@ function AdminSettingsPage() {
           lng: parseFloat(state.mapDefaultLng) || 90.64,
         },
         mapDefaultZoom: parseFloat(state.mapDefaultZoom) || 14,
-        // Hero (nested)
         hero: {
           title1: state.heroTitle1.trim(),
           title2: state.heroTitle2.trim(),
           title3: state.heroTitle3.trim(),
           searchPlaceholder: state.heroSearchPlaceholder.trim(),
         },
-        // Trust bar (nested)
         trustBar: {
           text1: state.trustText1.trim(),
           text2: state.trustText2.trim(),
           text3: state.trustText3.trim(),
         },
-        // Features
         features: state.features,
-        // Home
         home: {
           popularTitle: state.homePopularTitle.trim(),
           popularSubtitle: state.homePopularSubtitle.trim(),
           popularLimit: parseInt(state.homePopularLimit) || 6,
         },
-        // Categories
         categories: {
           title: state.categoriesTitle.trim(),
           subtitle: state.categoriesSubtitle.trim(),
           list: state.categoriesList,
         },
-        // Delivery areas
         deliveryAreas: {
           title: state.deliveryAreasTitle.trim(),
           subtitle: state.deliveryAreasSubtitle.trim(),
         },
-        // Partner
         partner: {
           sectionTitle: state.partnerSectionTitle.trim(),
           sectionSubtitle: state.partnerSectionSubtitle.trim(),
@@ -419,7 +437,6 @@ function AdminSettingsPage() {
             path: state.partnerRiderPath.trim(),
           },
         },
-        // Footer
         footer: {
           tagline: state.footerTagline.trim(),
           companyName: state.footerCompanyName.trim(),
@@ -427,7 +444,6 @@ function AdminSettingsPage() {
           supportLinks: state.footerSupportLinks,
           appsLabel: state.footerAppsLabel.trim(),
         },
-        // Live chat
         liveChat: {
           teamName: state.liveChatTeamName.trim(),
           statusText: state.liveChatStatus.trim(),
@@ -442,6 +458,20 @@ function AdminSettingsPage() {
       await setDoc(doc(db, 'settings', SETTINGS_DOC_ID), payload, {
         merge: true,
       })
+
+      // Save welcome notifications to separate doc
+      await setDoc(
+        doc(db, 'settings', NOTIFICATION_DOC_ID),
+        {
+          welcomeCustomer: welcome.customer,
+          welcomeRestaurant: welcome.restaurant,
+          welcomeRider: welcome.rider,
+          welcomePharmacy: welcome.pharmacy,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+
       toast.success('✅ Settings saved!')
     } catch (err) {
       console.error(err)
@@ -519,6 +549,54 @@ function AdminSettingsPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+            {/* ==================== WELCOME NOTIFICATIONS ==================== */}
+            <Section
+              icon={<Bell size={20} />}
+              title="Welcome Notifications"
+              subtitle="Auto-send when new users signup (in-app notification)"
+            >
+              <WelcomeCard
+                role="customer"
+                icon={<User size={18} />}
+                label="Customer Signup"
+                color="#3B82F6"
+                data={welcome.customer}
+                onChange={(field, value) =>
+                  setWelcomeField('customer', field, value)
+                }
+              />
+              <WelcomeCard
+                role="restaurant"
+                icon={<Store size={18} />}
+                label="Restaurant Signup"
+                color="#F59E0B"
+                data={welcome.restaurant}
+                onChange={(field, value) =>
+                  setWelcomeField('restaurant', field, value)
+                }
+              />
+              <WelcomeCard
+                role="rider"
+                icon={<Bike size={18} />}
+                label="Rider Signup"
+                color="#8B5CF6"
+                data={welcome.rider}
+                onChange={(field, value) =>
+                  setWelcomeField('rider', field, value)
+                }
+              />
+              <WelcomeCard
+                role="pharmacy"
+                icon={<Pill size={18} />}
+                label="Pharmacy Signup"
+                color="#EC4899"
+                data={welcome.pharmacy}
+                onChange={(field, value) =>
+                  setWelcomeField('pharmacy', field, value)
+                }
+              />
+            </Section>
 
             {/* ==================== BRAND ==================== */}
             <Section icon={<Globe size={20} />} title="Brand Information">
@@ -713,10 +791,7 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== CATEGORIES ==================== */}
-            <Section
-              icon={<Layers size={20} />}
-              title="Categories Section"
-            >
+            <Section icon={<Layers size={20} />} title="Categories Section">
               <div style={gridTwo}>
                 <Field label="Title">
                   <input
@@ -823,10 +898,7 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== DELIVERY AREAS ==================== */}
-            <Section
-              icon={<MapPin size={20} />}
-              title="Delivery Areas Section"
-            >
+            <Section icon={<MapPin size={20} />} title="Delivery Areas Section">
               <div style={gridTwo}>
                 <Field label="Title">
                   <input
@@ -1394,10 +1466,7 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== LIVE CHAT ==================== */}
-            <Section
-              icon={<MessageCircle size={20} />}
-              title="Live Chat"
-            >
+            <Section icon={<MessageCircle size={20} />} title="Live Chat">
               <div style={gridTwo}>
                 <Field label="Team Name">
                   <input
@@ -1451,10 +1520,7 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== SOCIAL ==================== */}
-            <Section
-              icon={<SettingsIcon size={20} />}
-              title="Social Media"
-            >
+            <Section icon={<SettingsIcon size={20} />} title="Social Media">
               <div style={gridTwo}>
                 <Field label="Facebook URL" icon={<FaFacebookF size={14} />}>
                   <input
@@ -1539,6 +1605,164 @@ function AdminSettingsPage() {
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+// ============================================================
+// WELCOME CARD COMPONENT
+// ============================================================
+function WelcomeCard({ role, icon, label, color, data, onChange }) {
+  return (
+    <div
+      style={{
+        padding: '16px',
+        borderRadius: '14px',
+        border: data.enabled
+          ? `1px solid ${color}40`
+          : '1px dashed var(--border-strong)',
+        background: data.enabled ? `${color}08` : 'var(--surface-soft)',
+        marginBottom: '10px',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '12px',
+        }}
+      >
+        <div
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
+            background: `${color}18`,
+            color: color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <strong
+            style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 800,
+              color: 'var(--text-primary)',
+            }}
+          >
+            {label}
+          </strong>
+          <span
+            style={{
+              fontSize: '11.5px',
+              color: 'var(--text-tertiary)',
+              fontWeight: 600,
+            }}
+          >
+            {data.enabled ? '✅ Enabled — will send on signup' : '🔕 Disabled'}
+          </span>
+        </div>
+
+        {/* Toggle */}
+        <label
+          style={{
+            position: 'relative',
+            width: '46px',
+            height: '26px',
+            flexShrink: 0,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={data.enabled}
+            onChange={(e) => onChange('enabled', e.target.checked)}
+            style={{ display: 'none' }}
+          />
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '999px',
+              background: data.enabled ? color : '#D1D5DB',
+              transition: 'all 0.2s',
+            }}
+          />
+          <span
+            style={{
+              position: 'absolute',
+              top: '3px',
+              left: data.enabled ? '23px' : '3px',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              background: '#FFFFFF',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+              transition: 'all 0.2s',
+            }}
+          />
+        </label>
+      </div>
+
+      {/* Fields */}
+      {data.enabled && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+                marginBottom: '5px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.3px',
+              }}
+            >
+              Title
+            </label>
+            <input
+              type="text"
+              value={data.title}
+              onChange={(e) => onChange('title', e.target.value)}
+              placeholder="Notification title"
+              maxLength={80}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+                marginBottom: '5px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.3px',
+              }}
+            >
+              Body / Message
+            </label>
+            <textarea
+              value={data.body}
+              onChange={(e) => onChange('body', e.target.value)}
+              placeholder="Welcome message"
+              rows={2}
+              maxLength={200}
+              style={{ ...inputStyle, resize: 'vertical', minHeight: '60px', fontFamily: 'inherit' }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

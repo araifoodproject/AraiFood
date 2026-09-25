@@ -1,12 +1,13 @@
 // ============================================================
 // src/pages/CheckoutPage.jsx
-// V3 — Zone dropdown + map marker (no polygon check)
+// V5 — + Order Push Prompt after successful order
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import MapPicker from '../components/MapPicker'
 import PageBackButton from '../components/PageBackButton'
+import OrderPushPrompt from '../components/OrderPushPrompt'
 import useSettings from '../hooks/useSettings'
 import {
   collection,
@@ -60,13 +61,12 @@ function CheckoutPage() {
   const [mapPosition, setMapPosition] = useState(null)
   const [placing, setPlacing] = useState(false)
 
-  // ✅ NEW: Selected zone
   const [zones, setZones] = useState([])
   const [selectedZoneId, setSelectedZoneId] = useState('')
 
-  // ------------------------------------------------------------
-  // LOAD zones (active only)
-  // ------------------------------------------------------------
+  // ✅ Order push prompt state
+  const [showPushPrompt, setShowPushPrompt] = useState(false)
+
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'deliveryZones'), where('active', '==', true)),
@@ -85,20 +85,15 @@ function CheckoutPage() {
     [zones, selectedZoneId]
   )
 
-  // ------------------------------------------------------------
-  // Load cart + user data + saved zone
-  // ------------------------------------------------------------
   useEffect(() => {
     const items = JSON.parse(localStorage.getItem('cartItems') || '[]')
     setCartItems(items)
 
-    // Preload saved map location
     const savedLoc = JSON.parse(
       localStorage.getItem('deliveryLocation') || 'null'
     )
     if (savedLoc?.lat && savedLoc?.lng) setMapPosition(savedLoc)
 
-    // Preload saved zone
     const savedZone = localStorage.getItem('deliveryZoneId')
     if (savedZone) setSelectedZoneId(savedZone)
 
@@ -121,7 +116,6 @@ function CheckoutPage() {
     loadUserData()
   }, [])
 
-  // Load coupons
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'coupons'), where('active', '==', true)),
@@ -134,9 +128,6 @@ function CheckoutPage() {
     return () => unsub()
   }, [])
 
-  // ------------------------------------------------------------
-  // Restaurant info from cart
-  // ------------------------------------------------------------
   const restaurant =
     cartItems.length > 0
       ? {
@@ -154,7 +145,6 @@ function CheckoutPage() {
     0
   )
 
-  // ✅ Delivery fee: selected zone fee > restaurant fee > settings default
   const deliveryFee = useMemo(() => {
     if (selectedZone?.deliveryFee != null) return selectedZone.deliveryFee
     if (restaurant?.deliveryFee != null) return restaurant.deliveryFee
@@ -212,9 +202,6 @@ function CheckoutPage() {
     pointsDiscount -
     walletDiscount
 
-  // ============================================================
-  // PLACE ORDER
-  // ============================================================
   const placeOrder = async () => {
     if (!fullName.trim()) {
       toast.error('Please enter your full name.')
@@ -228,7 +215,6 @@ function CheckoutPage() {
       toast.error('Please enter your delivery address.')
       return
     }
-    // ✅ Zone mandatory
     if (!selectedZoneId) {
       toast.error('📍 Please select your area / zone.')
       const zoneSection = document.querySelector('.zone-selection-section')
@@ -237,7 +223,6 @@ function CheckoutPage() {
       }
       return
     }
-    // ✅ Map mandatory
     if (!mapPosition) {
       toast.error('📍 Please drop a pin on the map for delivery location.')
       const mapSection = document.querySelector('.map-selection-section')
@@ -298,11 +283,9 @@ function CheckoutPage() {
         couponDiscount: couponDiscount,
         paymentMethod: paymentMethod,
         location: mapPosition,
-        // ✅ Zone info
         zoneId: selectedZone.firebaseId,
         zoneName: selectedZone.name,
         zoneDeliveryFee: selectedZone.deliveryFee,
-        // Status
         status: 'pending',
         riderStatus: 'available',
         riderId: null,
@@ -313,7 +296,6 @@ function CheckoutPage() {
         createdAt: serverTimestamp(),
       })
 
-      // Update user wallet / points
       if (auth.currentUser?.uid) {
         const userDocRef = doc(db, 'users', auth.currentUser.uid)
         const userDoc = await getDoc(userDocRef)
@@ -374,31 +356,44 @@ function CheckoutPage() {
         }
       }
 
-      // Notifications
+      // ============================================================
+      // PUSH NOTIFICATIONS
+      // ============================================================
       const customerId = auth.currentUser?.uid || 'guest'
+
       await sendNotification(
         customerId,
         '✅ Order Placed Successfully!',
         `Your order ${newOrderId} from ${restaurant.restaurantName} has been received.`,
         'order',
-        { orderId: newOrderId }
+        {
+          orderId: newOrderId,
+          url: `/track-order?id=${newOrderId}`,
+        }
       )
+
       await sendNotification(
         restaurant.restaurantId,
         '🔔 New Order Received!',
-        `New order ${newOrderId} — ৳${total}`,
+        `New order ${newOrderId} — ৳${total}. Please accept & prepare.`,
         'restaurant',
-        { orderId: newOrderId }
+        {
+          orderId: newOrderId,
+          url: '/restaurant-panel',
+        }
       )
+
       await sendNotification(
         'admin',
         '🆕 New Order Placed',
         `Order ${newOrderId} from ${restaurant.restaurantName} — ৳${total}`,
         'order',
-        { orderId: newOrderId }
+        {
+          orderId: newOrderId,
+          url: '/admin/orders',
+        }
       )
 
-      // Local history
       const orderHistory = JSON.parse(
         localStorage.getItem('orderHistory') || '[]'
       )
@@ -418,6 +413,8 @@ function CheckoutPage() {
 
       setOrderPlaced(true)
       setTrackingStage(0)
+      // ✅ Show push prompt
+      setShowPushPrompt(true)
       localStorage.removeItem('cartItems')
       window.dispatchEvent(new Event('cartUpdated'))
       window.scrollTo(0, 0)
@@ -440,9 +437,6 @@ function CheckoutPage() {
     }
   }, [orderPlaced])
 
-  // ============================================================
-  // SUCCESS SCREEN
-  // ============================================================
   if (orderPlaced) {
     return (
       <div className="checkout-page">
@@ -526,13 +520,17 @@ function CheckoutPage() {
             </Link>
           </div>
         </div>
+
+        {/* ✅ Order Push Prompt */}
+        <OrderPushPrompt
+          user={auth.currentUser}
+          orderId={orderId}
+          show={showPushPrompt}
+        />
       </div>
     )
   }
 
-  // ============================================================
-  // CHECKOUT FORM
-  // ============================================================
   return (
     <div className="checkout-page">
       <div className="checkout-container">
@@ -548,7 +546,6 @@ function CheckoutPage() {
         </div>
 
         <div className="checkout-content">
-          {/* LEFT: FORM */}
           <div className="delivery-form checkout-card">
             <div className="checkout-card-heading">
               <div className="checkout-icon">📍</div>
@@ -578,7 +575,6 @@ function CheckoutPage() {
               />
             </div>
 
-            {/* ============ ZONE SELECTION (NEW) ============ */}
             <div className="zone-selection-section">
               <h3
                 style={{
@@ -670,7 +666,6 @@ function CheckoutPage() {
               ></textarea>
             </div>
 
-            {/* ============ MAP — only marker ============ */}
             <div className="map-selection-section">
               <h3
                 style={{
@@ -717,7 +712,6 @@ function CheckoutPage() {
               <span>💾 Save this address for future orders</span>
             </label>
 
-            {/* DELIVERY TIME */}
             <div className="delivery-time-section">
               <div className="checkout-icon-container">
                 <div className="checkout-icon">⏰</div>
@@ -807,7 +801,6 @@ function CheckoutPage() {
               ></textarea>
             </div>
 
-            {/* COUPON */}
             <div className="coupon-section-checkout">
               <h3>Apply Coupon</h3>
               <div className="coupon-input-group">
@@ -903,7 +896,6 @@ function CheckoutPage() {
               )}
             </div>
 
-            {/* REWARDS */}
             <div className="payment-rewards-section">
               <h3>Use Rewards</h3>
               <div className="reward-options">
@@ -939,7 +931,6 @@ function CheckoutPage() {
               </div>
             </div>
 
-            {/* PAYMENT */}
             <div className="payment-section">
               <div className="payment-heading">
                 <div className="checkout-icon">💳</div>
@@ -1003,7 +994,6 @@ function CheckoutPage() {
             </button>
           </div>
 
-          {/* RIGHT: SUMMARY */}
           <div className="checkout-summary checkout-card">
             <span className="section-label">ORDER SUMMARY</span>
             <h2>Your Order</h2>

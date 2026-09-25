@@ -1,14 +1,18 @@
 // ============================================================
 // src/utils/sendNotification.js
-// V2 — FIXED: OneSignal v16 response handling
+// V3 — Multi-collection + Notify All Riders
 // ============================================================
 
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  getDocs,
+  query,
+  where,
+} from 'firebase/firestore'
 import { db } from '../firebase'
 
-// ⚠️ These MUST be in your .env file:
-// VITE_ONESIGNAL_APP_ID=xxxx
-// VITE_ONESIGNAL_REST_API_KEY=xxxx
 const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID
 const ONESIGNAL_REST_API_KEY = import.meta.env.VITE_ONESIGNAL_REST_API_KEY
 
@@ -42,16 +46,6 @@ export const saveInAppNotification = async (
 // ============================================================
 // 2️⃣ ONESIGNAL — push notification
 // ============================================================
-
-/**
- * Send push notification via OneSignal REST API
- * @param {object} options
- * @param {string} options.title
- * @param {string} options.body
- * @param {string[]|null} options.userIds - Firebase UIDs (null = all users)
- * @param {string} options.url - Click korle kothay jabe
- * @param {string} options.imageUrl - Optional big picture
- */
 export const sendPushNotification = async ({
   title,
   body,
@@ -73,9 +67,7 @@ export const sendPushNotification = async ({
     chrome_web_badge: `${window.location.origin}/araifood-logo.png`,
   }
 
-  // Target: specific users OR all
   if (userIds && userIds.length > 0) {
-    // OneSignal v16: use include_aliases with external_id
     payload.include_aliases = { external_id: userIds }
     payload.target_channel = 'push'
   } else {
@@ -101,15 +93,6 @@ export const sendPushNotification = async ({
 
     console.log('📨 OneSignal Response:', data)
 
-    // ✅ FIXED: v16 doesn't always return `id`
-    // Success indicators:
-    //   - data.id exists (older API)
-    //   - data.recipients >= 1 (means at least 1 device received)
-    //   - No `errors` field
-    // Failure indicators:
-    //   - data.errors array has values
-    //   - data.recipients === 0 AND errors mention "not subscribed"
-
     const hasErrors =
       data.errors &&
       (Array.isArray(data.errors)
@@ -131,7 +114,6 @@ export const sendPushNotification = async ({
       }
     }
 
-    // Real failure
     console.error('❌ OneSignal error:', data)
     return {
       success: false,
@@ -149,10 +131,6 @@ export const sendPushNotification = async ({
 // ============================================================
 // 3️⃣ COMBINED — Firestore + Push
 // ============================================================
-
-/**
- * Send notification to a SINGLE user (in-app + push)
- */
 export const sendNotification = async (
   userId,
   title,
@@ -165,49 +143,140 @@ export const sendNotification = async (
   const pushResult = await sendPushNotification({
     title,
     body,
-    userIds: userId && userId !== 'all' ? [userId] : null,
+    userIds: userId && userId !== 'all' && userId !== 'admin' ? [userId] : null,
     url: extra.url || '/',
+    imageUrl: extra.imageUrl || null,
   })
 
   return pushResult
 }
 
-/**
- * Send notification to MULTIPLE users (in-app + push)
- */
-export const sendNotificationToMany = async (
-  userIds,
-  title,
-  body,
-  type = 'general',
-  extra = {}
-) => {
-  for (const userId of userIds) {
-    if (userId) {
-      await saveInAppNotification(userId, title, body, type, extra)
+// ============================================================
+// 4️⃣ NOTIFY ALL RIDERS — when new order is available
+// ============================================================
+export const notifyAllRiders = async (title, body, extra = {}) => {
+  try {
+    const ridersQuery = query(
+      collection(db, 'riders'),
+      where('status', '==', 'approved')
+    )
+    const snap = await getDocs(ridersQuery)
+    const riderUids = snap.docs.map((d) => d.id)
+
+    if (riderUids.length === 0) {
+      console.log('⚠️ No approved riders found')
+      return { success: false, error: 'No riders available' }
     }
+
+    console.log(`📢 Notifying ${riderUids.length} riders...`)
+
+    // 1️⃣ In-app notifications for each rider
+    for (const uid of riderUids) {
+      await saveInAppNotification(uid, title, body, 'rider', extra)
+    }
+
+    // 2️⃣ Push in one batch
+    const pushResult = await sendPushNotification({
+      title,
+      body,
+      userIds: riderUids,
+      url: extra.url || '/rider-panel',
+      imageUrl: extra.imageUrl || null,
+    })
+
+    return pushResult
+  } catch (err) {
+    console.error('notifyAllRiders error:', err)
+    return { success: false, error: err.message }
   }
-
-  const pushResult = await sendPushNotification({
-    title,
-    body,
-    userIds,
-    url: extra.url || '/',
-  })
-
-  return pushResult
 }
 
-/**
- * Send notification to ALL users (broadcast)
- */
-export const sendNotificationToAll = async (title, body, extra = {}) => {
-  await saveInAppNotification('all', title, body, 'broadcast', extra)
+// ============================================================
+// 5️⃣ NOTIFY ALL RESTAURANTS — for admin broadcast
+// ============================================================
+export const notifyAllRestaurants = async (title, body, extra = {}) => {
+  try {
+    const q = query(
+      collection(db, 'restaurants'),
+      where('status', '==', 'approved')
+    )
+    const snap = await getDocs(q)
+    const uids = snap.docs.map((d) => d.id)
 
-  return await sendPushNotification({
-    title,
-    body,
-    userIds: null,
-    url: extra.url || '/',
-  })
+    if (uids.length === 0) return { success: false, error: 'No restaurants' }
+
+    for (const uid of uids) {
+      await saveInAppNotification(uid, title, body, 'restaurant', extra)
+    }
+
+    return await sendPushNotification({
+      title,
+      body,
+      userIds: uids,
+      url: extra.url || '/restaurant-panel',
+      imageUrl: extra.imageUrl || null,
+    })
+  } catch (err) {
+    console.error('notifyAllRestaurants error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+// ============================================================
+// 6️⃣ NOTIFY ALL PHARMACIES — for admin broadcast
+// ============================================================
+export const notifyAllPharmacies = async (title, body, extra = {}) => {
+  try {
+    const q = query(
+      collection(db, 'pharmacies'),
+      where('status', '==', 'approved')
+    )
+    const snap = await getDocs(q)
+    const uids = snap.docs.map((d) => d.id)
+
+    if (uids.length === 0) return { success: false, error: 'No pharmacies' }
+
+    for (const uid of uids) {
+      await saveInAppNotification(uid, title, body, 'pharmacy', extra)
+    }
+
+    return await sendPushNotification({
+      title,
+      body,
+      userIds: uids,
+      url: extra.url || '/pharmacy-panel',
+      imageUrl: extra.imageUrl || null,
+    })
+  } catch (err) {
+    console.error('notifyAllPharmacies error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+// ============================================================
+// 7️⃣ NOTIFY ALL CUSTOMERS — for admin broadcast
+// ============================================================
+export const notifyAllCustomers = async (title, body, extra = {}) => {
+  try {
+    const q = query(collection(db, 'users'))
+    const snap = await getDocs(q)
+    const uids = snap.docs.map((d) => d.id)
+
+    if (uids.length === 0) return { success: false, error: 'No customers' }
+
+    for (const uid of uids) {
+      await saveInAppNotification(uid, title, body, 'promotion', extra)
+    }
+
+    return await sendPushNotification({
+      title,
+      body,
+      userIds: uids,
+      url: extra.url || '/',
+      imageUrl: extra.imageUrl || null,
+    })
+  } catch (err) {
+    console.error('notifyAllCustomers error:', err)
+    return { success: false, error: err.message }
+  }
 }
