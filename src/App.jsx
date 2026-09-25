@@ -1,9 +1,9 @@
 // ============================================================
 // src/App.jsx
-// V3 — With Push Subscribe Prompt (Modal + Banner)
+// V5 — Lazy loading + Help/Terms/Contact pages
 // ============================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
@@ -19,69 +19,104 @@ import useSettings from './hooks/useSettings'
 // Components
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
+import ScrollToTop from './components/ScrollToTop'
+import ProtectedRoute from './components/ProtectedRoute'
+import SubscribePromptModal from './components/SubscribePromptModal'
 import Hero from './components/Hero'
 import Categories from './components/Categories'
 import GamingBanner from './components/GamingBanner'
 import PartnerCTA from './components/PartnerCTA'
 import DeliveryAreas from './components/DeliveryAreas'
 import LiveChat from './components/LiveChat'
-import ScrollToTop from './components/ScrollToTop'
-import ProtectedRoute from './components/ProtectedRoute'
-import SubscribePromptModal from './components/SubscribePromptModal' // ✅ NEW
 
-// Pages
-import RestaurantsPage from './pages/RestaurantsPage'
-import RestaurantPage from './pages/RestaurantPage'
-import CartPage from './pages/CartPage'
-import CheckoutPage from './pages/CheckoutPage'
-import LoginPage from './pages/LoginPage'
-import SignupPage from './pages/SignupPage'
-import AccountPage from './pages/AccountPage'
-import FavoritesPage from './pages/FavoritesPage'
-import OrderHistoryPage from './pages/OrderHistoryPage'
-import TrackOrderPage from './pages/TrackOrderPage'
-import PharmacyPage from './pages/PharmacyPage'
-import PharmacyDetailPage from './pages/PharmacyDetailPage'
-import PharmacyCheckoutPage from './pages/PharmacyCheckoutPage'
-import PharmacyLoginPage from './pages/PharmacyLoginPage'
-import PharmacySignupPage from './pages/PharmacySignupPage'
-import PharmacyPanel from './pages/PharmacyPanel'
-import GamingPage from './pages/GamingPage'
-import GamingOrdersPage from './pages/GamingOrdersPage'
-import PartnerLoginPage from './pages/PartnerLoginPage'
-import AdminPanel from './pages/AdminPanel'
-import RestaurantPanel from './pages/RestaurantPanel'
-import RiderPanel from './pages/RiderPanel'
-import RestaurantLoginPage from './pages/RestaurantLoginPage'
-import RestaurantSignupPage from './pages/RestaurantSignupPage'
-import RiderLoginPage from './pages/RiderLoginPage'
-import RiderSignupPage from './pages/RiderSignupPage'
+// Public Pages — Lazy loaded
+const RestaurantsPage = lazy(() => import('./pages/RestaurantsPage'))
+const RestaurantPage = lazy(() => import('./pages/RestaurantPage'))
+const CartPage = lazy(() => import('./pages/CartPage'))
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const SignupPage = lazy(() => import('./pages/SignupPage'))
+const AccountPage = lazy(() => import('./pages/AccountPage'))
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'))
+const OrderHistoryPage = lazy(() => import('./pages/OrderHistoryPage'))
+const TrackOrderPage = lazy(() => import('./pages/TrackOrderPage'))
+const PharmacyPage = lazy(() => import('./pages/PharmacyPage'))
+const PharmacyDetailPage = lazy(() => import('./pages/PharmacyDetailPage'))
+const PharmacyCheckoutPage = lazy(() => import('./pages/PharmacyCheckoutPage'))
+const PharmacyLoginPage = lazy(() => import('./pages/PharmacyLoginPage'))
+const PharmacySignupPage = lazy(() => import('./pages/PharmacySignupPage'))
+const PharmacyPanel = lazy(() => import('./pages/PharmacyPanel'))
+const GamingPage = lazy(() => import('./pages/GamingPage'))
+const GamingOrdersPage = lazy(() => import('./pages/GamingOrdersPage'))
+const PartnerLoginPage = lazy(() => import('./pages/PartnerLoginPage'))
+const AdminPanel = lazy(() => import('./pages/AdminPanel'))
+const RestaurantPanel = lazy(() => import('./pages/RestaurantPanel'))
+const RiderPanel = lazy(() => import('./pages/RiderPanel'))
+const RestaurantLoginPage = lazy(() => import('./pages/RestaurantLoginPage'))
+const RestaurantSignupPage = lazy(() => import('./pages/RestaurantSignupPage'))
+const RiderLoginPage = lazy(() => import('./pages/RiderLoginPage'))
+const RiderSignupPage = lazy(() => import('./pages/RiderSignupPage'))
 
-// Admin Pages
-import AdminOrdersPage from './pages/admin/AdminOrdersPage'
-import AdminRestaurantsPage from './pages/admin/AdminRestaurantsPage'
-import AdminRidersPage from './pages/admin/AdminRidersPage'
-import AdminFoodsPage from './pages/admin/AdminFoodsPage'
-import AdminCustomersPage from './pages/admin/AdminCustomersPage'
-import AdminFinancePage from './pages/admin/AdminFinancePage'
-import AdminCouponsPage from './pages/admin/AdminCouponsPage'
-import AdminMarketingPage from './pages/admin/AdminMarketingPage'
-import AdminReviewsPage from './pages/admin/AdminReviewsPage'
-import AdminSupportPage from './pages/admin/AdminSupportPage'
-import AdminZonesPage from './pages/admin/AdminZonesPage'
-import AdminSettingsPage from './pages/admin/AdminSettingsPage'
-import AdminSecurityPage from './pages/admin/AdminSecurityPage'
-import AdminGamingProductsPage from './pages/admin/AdminGamingProductsPage'
-import AdminGamingOrdersPage from './pages/admin/AdminGamingOrdersPage'
-import AdminGamingSettingsPage from './pages/admin/AdminGamingSettingsPage'
-import AdminWalletRequestsPage from './pages/admin/AdminWalletRequestsPage'
-import AdminManagementPage from './pages/admin/AdminManagementPage'
-import AdminPharmaciesPage from './pages/admin/AdminPharmaciesPage'
-import AdminMedicinesPage from './pages/admin/AdminMedicinesPage'
-import AdminNotificationsPage from './pages/admin/AdminNotificationsPage'
+// ✅ NEW — Static pages
+const HelpPage = lazy(() => import('./pages/HelpPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const ContactPage = lazy(() => import('./pages/ContactPage'))
+
+// Admin Pages — Lazy loaded
+const AdminOrdersPage = lazy(() => import('./pages/admin/AdminOrdersPage'))
+const AdminRestaurantsPage = lazy(() => import('./pages/admin/AdminRestaurantsPage'))
+const AdminRidersPage = lazy(() => import('./pages/admin/AdminRidersPage'))
+const AdminFoodsPage = lazy(() => import('./pages/admin/AdminFoodsPage'))
+const AdminCustomersPage = lazy(() => import('./pages/admin/AdminCustomersPage'))
+const AdminFinancePage = lazy(() => import('./pages/admin/AdminFinancePage'))
+const AdminCouponsPage = lazy(() => import('./pages/admin/AdminCouponsPage'))
+const AdminMarketingPage = lazy(() => import('./pages/admin/AdminMarketingPage'))
+const AdminReviewsPage = lazy(() => import('./pages/admin/AdminReviewsPage'))
+const AdminSupportPage = lazy(() => import('./pages/admin/AdminSupportPage'))
+const AdminZonesPage = lazy(() => import('./pages/admin/AdminZonesPage'))
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'))
+const AdminSecurityPage = lazy(() => import('./pages/admin/AdminSecurityPage'))
+const AdminGamingProductsPage = lazy(() => import('./pages/admin/AdminGamingProductsPage'))
+const AdminGamingOrdersPage = lazy(() => import('./pages/admin/AdminGamingOrdersPage'))
+const AdminGamingSettingsPage = lazy(() => import('./pages/admin/AdminGamingSettingsPage'))
+const AdminWalletRequestsPage = lazy(() => import('./pages/admin/AdminWalletRequestsPage'))
+const AdminManagementPage = lazy(() => import('./pages/admin/AdminManagementPage'))
+const AdminPharmaciesPage = lazy(() => import('./pages/admin/AdminPharmaciesPage'))
+const AdminMedicinesPage = lazy(() => import('./pages/admin/AdminMedicinesPage'))
+const AdminNotificationsPage = lazy(() => import('./pages/admin/AdminNotificationsPage'))
 
 // ============================================================
-// HOME PAGE — Restaurant Card Component
+// PAGE LOADER
+// ============================================================
+function PageLoader() {
+  return (
+    <div
+      style={{
+        minHeight: '60vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '16px',
+        padding: '40px 20px',
+      }}
+    >
+      <div className="panel-loading-spinner"></div>
+      <p
+        style={{
+          color: 'var(--text-tertiary)',
+          fontSize: '13.5px',
+          fontWeight: 600,
+        }}
+      >
+        Loading...
+      </p>
+    </div>
+  )
+}
+
+// ============================================================
+// HOME PAGE — Restaurant Card
 // ============================================================
 function RestaurantCardHome({ restaurant }) {
   const navigate = useNavigate()
@@ -220,11 +255,23 @@ function HomePage() {
         </div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              padding: '40px',
+              color: 'var(--text-tertiary)',
+            }}
+          >
             Loading restaurants...
           </p>
         ) : restaurants.length === 0 ? (
-          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              padding: '40px',
+              color: 'var(--text-tertiary)',
+            }}
+          >
             No restaurants available yet.
           </p>
         ) : (
@@ -251,6 +298,7 @@ function HomePage() {
 // ============================================================
 function OffersPage() {
   const { settings } = useSettings()
+
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
@@ -259,7 +307,10 @@ function OffersPage() {
             {(settings.siteName || 'ARAIFOOD').toUpperCase()} OFFERS
           </span>
           <h1>Special Offers</h1>
-          <p>Enjoy delicious food with special offers from restaurants around Araihazar.</p>
+          <p>
+            Enjoy delicious food with special offers from restaurants around
+            Araihazar.
+          </p>
         </div>
       </div>
     </div>
@@ -290,12 +341,18 @@ function AboutPage() {
             easier for people around Araihazar to discover restaurants and
             order delicious food from their favourite local food spots.
           </p>
+          <p>
+            From biryani and traditional Bangladeshi meals to burgers, pizza,
+            snacks and refreshing drinks, {siteName} brings local restaurants
+            together in one convenient place.
+          </p>
           <div className="account-divider"></div>
           <h3>Why {siteName}?</h3>
           <p>🍛 Discover local restaurants</p>
           <p>🚴 Convenient food delivery</p>
           <p>⭐ Find highly-rated food spots</p>
           <p>❤️ Support local businesses</p>
+
           <div className="account-divider"></div>
           <h3>Get in Touch</h3>
           <p>📧 {settings.contactEmail}</p>
@@ -315,7 +372,6 @@ function App() {
   const path = location.pathname
   const [currentUser, setCurrentUser] = useState(null)
 
-  // Track auth state for the subscribe prompt
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setCurrentUser(u))
     return () => unsub()
@@ -339,8 +395,6 @@ function App() {
     path.startsWith('/pharmacy-panel')
 
   const showNavbarAndFooter = !isCheckout && !isAuth && !isPanel
-
-  // Show subscribe prompt only on customer-facing pages
   const showSubscribePrompt =
     currentUser && !isAuth && !isPanel && !isCheckout
 
@@ -350,80 +404,84 @@ function App() {
 
       {showNavbarAndFooter && <Navbar />}
 
-      <Routes>
-        {/* PUBLIC */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/restaurants" element={<RestaurantsPage />} />
-        <Route path="/restaurant" element={<RestaurantPage />} />
-        <Route path="/offers" element={<OffersPage />} />
-        <Route path="/about" element={<AboutPage />} />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* PUBLIC */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/restaurants" element={<RestaurantsPage />} />
+          <Route path="/restaurant" element={<RestaurantPage />} />
+          <Route path="/offers" element={<OffersPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/contact" element={<ContactPage />} />
 
-        {/* PHARMACY */}
-        <Route path="/pharmacy" element={<PharmacyPage />} />
-        <Route path="/pharmacy-detail" element={<PharmacyDetailPage />} />
+          {/* PHARMACY */}
+          <Route path="/pharmacy" element={<PharmacyPage />} />
+          <Route path="/pharmacy-detail" element={<PharmacyDetailPage />} />
 
-        {/* GAMING */}
-        <Route path="/gaming" element={<GamingPage />} />
+          {/* GAMING */}
+          <Route path="/gaming" element={<GamingPage />} />
 
-        {/* AUTH */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/partner-login" element={<PartnerLoginPage />} />
-        <Route path="/restaurant-login" element={<RestaurantLoginPage />} />
-        <Route path="/restaurant-signup" element={<RestaurantSignupPage />} />
-        <Route path="/rider-login" element={<RiderLoginPage />} />
-        <Route path="/rider-signup" element={<RiderSignupPage />} />
-        <Route path="/pharmacy-login" element={<PharmacyLoginPage />} />
-        <Route path="/pharmacy-signup" element={<PharmacySignupPage />} />
+          {/* AUTH */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/partner-login" element={<PartnerLoginPage />} />
+          <Route path="/restaurant-login" element={<RestaurantLoginPage />} />
+          <Route path="/restaurant-signup" element={<RestaurantSignupPage />} />
+          <Route path="/rider-login" element={<RiderLoginPage />} />
+          <Route path="/rider-signup" element={<RiderSignupPage />} />
+          <Route path="/pharmacy-login" element={<PharmacyLoginPage />} />
+          <Route path="/pharmacy-signup" element={<PharmacySignupPage />} />
 
-        {/* CUSTOMER PROTECTED */}
-        <Route path="/account" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><AccountPage /></ProtectedRoute>} />
-        <Route path="/cart" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><CartPage /></ProtectedRoute>} />
-        <Route path="/checkout" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><CheckoutPage /></ProtectedRoute>} />
-        <Route path="/pharmacy-checkout" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><PharmacyCheckoutPage /></ProtectedRoute>} />
-        <Route path="/favorites" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><FavoritesPage /></ProtectedRoute>} />
-        <Route path="/order-history" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><OrderHistoryPage /></ProtectedRoute>} />
-        <Route path="/track-order" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><TrackOrderPage /></ProtectedRoute>} />
-        <Route path="/gaming-orders" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><GamingOrdersPage /></ProtectedRoute>} />
+          {/* CUSTOMER PROTECTED */}
+          <Route path="/account" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><AccountPage /></ProtectedRoute>} />
+          <Route path="/cart" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><CartPage /></ProtectedRoute>} />
+          <Route path="/checkout" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><CheckoutPage /></ProtectedRoute>} />
+          <Route path="/pharmacy-checkout" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><PharmacyCheckoutPage /></ProtectedRoute>} />
+          <Route path="/favorites" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><FavoritesPage /></ProtectedRoute>} />
+          <Route path="/order-history" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><OrderHistoryPage /></ProtectedRoute>} />
+          <Route path="/track-order" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><TrackOrderPage /></ProtectedRoute>} />
+          <Route path="/gaming-orders" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><GamingOrdersPage /></ProtectedRoute>} />
 
-        {/* RESTAURANT PANEL */}
-        <Route path="/restaurant-panel" element={<ProtectedRoute allowedRoles={['restaurant']} redirectTo="/restaurant-login"><RestaurantPanel /></ProtectedRoute>} />
+          {/* RESTAURANT PANEL */}
+          <Route path="/restaurant-panel" element={<ProtectedRoute allowedRoles={['restaurant']} redirectTo="/restaurant-login"><RestaurantPanel /></ProtectedRoute>} />
 
-        {/* RIDER PANEL */}
-        <Route path="/rider-panel" element={<ProtectedRoute allowedRoles={['rider']} redirectTo="/rider-login"><RiderPanel /></ProtectedRoute>} />
+          {/* RIDER PANEL */}
+          <Route path="/rider-panel" element={<ProtectedRoute allowedRoles={['rider']} redirectTo="/rider-login"><RiderPanel /></ProtectedRoute>} />
 
-        {/* PHARMACY PANEL */}
-        <Route path="/pharmacy-panel" element={<ProtectedRoute allowedRoles={['pharmacy']} redirectTo="/pharmacy-login"><PharmacyPanel /></ProtectedRoute>} />
+          {/* PHARMACY PANEL */}
+          <Route path="/pharmacy-panel" element={<ProtectedRoute allowedRoles={['pharmacy']} redirectTo="/pharmacy-login"><PharmacyPanel /></ProtectedRoute>} />
 
-        {/* ADMIN */}
-        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']} redirectTo="/login"><AdminPanel /></ProtectedRoute>} />
-        <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="orders" redirectTo="/login"><AdminOrdersPage /></ProtectedRoute>} />
-        <Route path="/admin/restaurants" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="restaurants" redirectTo="/login"><AdminRestaurantsPage /></ProtectedRoute>} />
-        <Route path="/admin/foods" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="foods" redirectTo="/login"><AdminFoodsPage /></ProtectedRoute>} />
-        <Route path="/admin/pharmacies" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="restaurants" redirectTo="/login"><AdminPharmaciesPage /></ProtectedRoute>} />
-        <Route path="/admin/medicines" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="foods" redirectTo="/login"><AdminMedicinesPage /></ProtectedRoute>} />
-        <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="riders" redirectTo="/login"><AdminRidersPage /></ProtectedRoute>} />
-        <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="customers" redirectTo="/login"><AdminCustomersPage /></ProtectedRoute>} />
-        <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminFinancePage /></ProtectedRoute>} />
-        <Route path="/admin/coupons" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="coupons" redirectTo="/login"><AdminCouponsPage /></ProtectedRoute>} />
-        <Route path="/admin/notifications" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="marketing" redirectTo="/login"><AdminNotificationsPage /></ProtectedRoute>} />
-        <Route path="/admin/marketing" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="marketing" redirectTo="/login"><AdminMarketingPage /></ProtectedRoute>} />
-        <Route path="/admin/reviews" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="reviews" redirectTo="/login"><AdminReviewsPage /></ProtectedRoute>} />
-        <Route path="/admin/support" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="support" redirectTo="/login"><AdminSupportPage /></ProtectedRoute>} />
-        <Route path="/admin/zones" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="zones" redirectTo="/login"><AdminZonesPage /></ProtectedRoute>} />
-        <Route path="/admin/wallet-requests" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="walletRequests" redirectTo="/login"><AdminWalletRequestsPage /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="settings" redirectTo="/login"><AdminSettingsPage /></ProtectedRoute>} />
-        <Route path="/admin/security" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="security" redirectTo="/login"><AdminSecurityPage /></ProtectedRoute>} />
-        <Route path="/admin/gaming-products" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingProducts" redirectTo="/login"><AdminGamingProductsPage /></ProtectedRoute>} />
-        <Route path="/admin/gaming-orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingOrders" redirectTo="/login"><AdminGamingOrdersPage /></ProtectedRoute>} />
-        <Route path="/admin/gaming-settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingSettings" redirectTo="/login"><AdminGamingSettingsPage /></ProtectedRoute>} />
-        <Route path="/admin/management" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="management" redirectTo="/login"><AdminManagementPage /></ProtectedRoute>} />
-      </Routes>
+          {/* ADMIN */}
+          <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']} redirectTo="/login"><AdminPanel /></ProtectedRoute>} />
+          <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="orders" redirectTo="/login"><AdminOrdersPage /></ProtectedRoute>} />
+          <Route path="/admin/restaurants" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="restaurants" redirectTo="/login"><AdminRestaurantsPage /></ProtectedRoute>} />
+          <Route path="/admin/foods" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="foods" redirectTo="/login"><AdminFoodsPage /></ProtectedRoute>} />
+          <Route path="/admin/pharmacies" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="restaurants" redirectTo="/login"><AdminPharmaciesPage /></ProtectedRoute>} />
+          <Route path="/admin/medicines" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="foods" redirectTo="/login"><AdminMedicinesPage /></ProtectedRoute>} />
+          <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="riders" redirectTo="/login"><AdminRidersPage /></ProtectedRoute>} />
+          <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="customers" redirectTo="/login"><AdminCustomersPage /></ProtectedRoute>} />
+          <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminFinancePage /></ProtectedRoute>} />
+          <Route path="/admin/coupons" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="coupons" redirectTo="/login"><AdminCouponsPage /></ProtectedRoute>} />
+          <Route path="/admin/notifications" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="marketing" redirectTo="/login"><AdminNotificationsPage /></ProtectedRoute>} />
+          <Route path="/admin/marketing" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="marketing" redirectTo="/login"><AdminMarketingPage /></ProtectedRoute>} />
+          <Route path="/admin/reviews" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="reviews" redirectTo="/login"><AdminReviewsPage /></ProtectedRoute>} />
+          <Route path="/admin/support" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="support" redirectTo="/login"><AdminSupportPage /></ProtectedRoute>} />
+          <Route path="/admin/zones" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="zones" redirectTo="/login"><AdminZonesPage /></ProtectedRoute>} />
+          <Route path="/admin/wallet-requests" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="walletRequests" redirectTo="/login"><AdminWalletRequestsPage /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="settings" redirectTo="/login"><AdminSettingsPage /></ProtectedRoute>} />
+          <Route path="/admin/security" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="security" redirectTo="/login"><AdminSecurityPage /></ProtectedRoute>} />
+          <Route path="/admin/gaming-products" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingProducts" redirectTo="/login"><AdminGamingProductsPage /></ProtectedRoute>} />
+          <Route path="/admin/gaming-orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingOrders" redirectTo="/login"><AdminGamingOrdersPage /></ProtectedRoute>} />
+          <Route path="/admin/gaming-settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingSettings" redirectTo="/login"><AdminGamingSettingsPage /></ProtectedRoute>} />
+          <Route path="/admin/management" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="management" redirectTo="/login"><AdminManagementPage /></ProtectedRoute>} />
+        </Routes>
+      </Suspense>
 
       {showNavbarAndFooter && <Footer />}
       {!isPanel && <LiveChat />}
 
-      {/* ✅ NEW: Subscribe Prompt Modal (global) */}
       {showSubscribePrompt && (
         <SubscribePromptModal user={currentUser} />
       )}

@@ -1,7 +1,6 @@
 // ============================================================
 // src/components/Footer.jsx
-// FULLY REAL-TIME — footer content from settings.footer + socials
-// Apps row auto-detects: URL present → link, else → Coming Soon
+// V3 — Robust link handling (text-based routing)
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -18,6 +17,63 @@ import {
 } from 'react-icons/fa'
 import { Moon, Sun, Headphones } from 'lucide-react'
 
+// ✅ Text → Route mapping (case-insensitive)
+const TEXT_ROUTE_MAP = {
+  'about': '/about',
+  'about us': '/about',
+  'about us ': '/about',
+  'our story': '/about',
+  'careers': '/about',
+  'career': '/about',
+  'jobs': '/about',
+  'press': '/about',
+  'press kit': '/about',
+  'news': '/about',
+  'blog': '/about',
+  'blogs': '/about',
+  'help': '/help',
+  'help center': '/help',
+  'helpcentre': '/help',
+  'support': '/help',
+  'faqs': '/help',
+  'faq': '/help',
+  'contact': '/contact',
+  'contact us': '/contact',
+  'terms': '/terms',
+  'terms & privacy': '/terms',
+  'terms and privacy': '/terms',
+  'privacy': '/terms',
+  'privacy policy': '/terms',
+}
+
+function resolvePath(text, url) {
+  // 1. If url is valid internal path (starts with /)
+  if (url && url !== '#' && url.startsWith('/')) {
+    return { href: url, external: false }
+  }
+
+  // 2. If url is external URL
+  if (url && /^https?:\/\//i.test(url)) {
+    return { href: url, external: true }
+  }
+
+  // 3. Fallback: match by text
+  const key = (text || '').toLowerCase().trim()
+  if (TEXT_ROUTE_MAP[key]) {
+    return { href: TEXT_ROUTE_MAP[key], external: false }
+  }
+
+  // 4. Partial match
+  for (const [k, v] of Object.entries(TEXT_ROUTE_MAP)) {
+    if (key.includes(k) || k.includes(key)) {
+      return { href: v, external: false }
+    }
+  }
+
+  // 5. Default fallback
+  return { href: '/help', external: false }
+}
+
 function Footer() {
   const { settings } = useSettings()
   const [user, setUser] = useState(null)
@@ -27,7 +83,6 @@ function Footer() {
     return saved === 'dark'
   })
 
-  // Dark mode toggle
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark')
@@ -38,7 +93,6 @@ function Footer() {
     }
   }, [darkMode])
 
-  // Load user + wallet balance
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser)
@@ -71,9 +125,6 @@ function Footer() {
   const companyLinks = footer.companyLinks || []
   const supportLinks = footer.supportLinks || []
 
-  // ------------------------------------------------------------
-  // Apps row auto-detect
-  // ------------------------------------------------------------
   const hasAppStore = Boolean(settings.appStoreUrl?.trim())
   const hasPlayStore = Boolean(settings.playStoreUrl?.trim())
   const anyAppAvailable = hasAppStore || hasPlayStore
@@ -92,22 +143,17 @@ function Footer() {
 
   const renderLink = (item, idx) => {
     if (!item?.text) return null
-    const isExternal =
-      item.isExternal || (item.url && /^https?:\/\//i.test(item.url))
-    if (isExternal) {
+    const { href, external } = resolvePath(item.text, item.url)
+
+    if (external) {
       return (
-        <a
-          key={idx}
-          href={item.url || '#'}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a key={idx} href={href} target="_blank" rel="noreferrer">
           {item.text}
         </a>
       )
     }
     return (
-      <Link key={idx} to={item.url || '#'}>
+      <Link key={idx} to={href}>
         {item.text}
       </Link>
     )
@@ -146,13 +192,29 @@ function Footer() {
         {/* Company Column */}
         <div className="aa-footer-col">
           <h4>Company</h4>
-          {companyLinks.map(renderLink)}
+          {companyLinks.length > 0 ? (
+            companyLinks.map(renderLink)
+          ) : (
+            <>
+              <Link to="/about">About Us</Link>
+              <Link to="/help">Help Center</Link>
+              <Link to="/contact">Contact Us</Link>
+            </>
+          )}
         </div>
 
         {/* Support Column */}
         <div className="aa-footer-col">
           <h4>Support</h4>
-          {supportLinks.map(renderLink)}
+          {supportLinks.length > 0 ? (
+            supportLinks.map(renderLink)
+          ) : (
+            <>
+              <Link to="/help">Help Center</Link>
+              <Link to="/contact">Contact Us</Link>
+              <Link to="/terms">Terms & Privacy</Link>
+            </>
+          )}
         </div>
 
         {/* AraiWallet Column */}
@@ -204,7 +266,6 @@ function Footer() {
               </>
             )}
 
-            {/* Dark Mode Toggle */}
             <div className="aa-dark-toggle-row">
               <span>
                 {darkMode ? (
@@ -236,18 +297,16 @@ function Footer() {
               />
             </div>
 
-            {/* Help Button */}
-            <a href="#" className="aa-help-btn">
+            <Link to="/help" className="aa-help-btn">
               <Headphones size={14} strokeWidth={2.4} />
               Help
-            </a>
+            </Link>
           </div>
         </div>
       </div>
 
       {/* Footer Bottom */}
       <div className="aa-footer-bottom">
-        {/* Social Icons */}
         <div className="aa-footer-social">
           <a
             href={settings.facebookUrl || '#'}
@@ -283,16 +342,11 @@ function Footer() {
           </a>
         </div>
 
-        {/* Apps Row — Coming Soon auto-detect */}
         <div className="aa-footer-apps">
           <span>{appsLabel}</span>
 
           {hasAppStore ? (
-            <a
-              href={settings.appStoreUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={settings.appStoreUrl} target="_blank" rel="noreferrer">
               App Store
             </a>
           ) : (
@@ -302,11 +356,7 @@ function Footer() {
           <span>•</span>
 
           {hasPlayStore ? (
-            <a
-              href={settings.playStoreUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={settings.playStoreUrl} target="_blank" rel="noreferrer">
               Google Play
             </a>
           ) : (

@@ -1,3 +1,8 @@
+// ============================================================
+// src/components/Navbar.jsx
+// V2 — Help now goes to /help
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import NotificationPanel from './NotificationPanel'
@@ -20,14 +25,12 @@ function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  // Cart Count
   const updateCartCount = () => {
     const cartItems = JSON.parse(localStorage.getItem('cartItems') || '[]')
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
     setCartCount(totalItems)
   }
 
-  // Auth user
   useEffect(() => {
     let unsub = null
     let mounted = true
@@ -78,14 +81,13 @@ function Navbar() {
     { path: '/', label: 'Home' },
     { path: '/order-history', label: 'Orders' },
     { path: '/offers', label: 'Offers' },
-    { path: '/about', label: 'Help' },
+    { path: '/help', label: 'Help' },
   ]
 
   return (
     <>
       <header className="aa-navbar-pill">
         <div className="aa-navbar-pill-inner">
-          {/* Logo */}
           <Link to="/" className="aa-nav-logo">
             <img
               src="/araifood-logo.png"
@@ -101,7 +103,6 @@ function Navbar() {
             </div>
           </Link>
 
-          {/* Center Links */}
           <nav className="aa-nav-links">
             {navLinks.map((link) => (
               <Link
@@ -116,16 +117,13 @@ function Navbar() {
             ))}
           </nav>
 
-          {/* Location */}
           <button className="aa-nav-location" title="Location">
             <MapPin size={14} strokeWidth={2.5} color="#F97316" />
             <span>Araihazar</span>
             <ChevronDown size={14} strokeWidth={2.5} />
           </button>
 
-          {/* Right Actions */}
           <div className="aa-nav-actions">
-            {/* Search */}
             <Link
               to="/restaurants"
               className="aa-nav-icon-btn"
@@ -134,12 +132,10 @@ function Navbar() {
               <Search size={18} strokeWidth={2.2} />
             </Link>
 
-            {/* Notification */}
             <div className="aa-nav-notif-wrapper">
               <NotificationPanel />
             </div>
 
-            {/* Cart */}
             <Link to="/cart" className="aa-nav-icon-btn" title="Cart">
               <ShoppingBag size={18} strokeWidth={2.2} />
               {cartCount > 0 && (
@@ -149,7 +145,6 @@ function Navbar() {
               )}
             </Link>
 
-            {/* Account */}
             <Link
               to="/account"
               className="aa-nav-profile-btn"
@@ -173,7 +168,6 @@ function Navbar() {
         </div>
       </header>
 
-      {/* Mobile Menu Overlay */}
       {menuOpen && (
         <div
           className="glass-mobile-overlay"

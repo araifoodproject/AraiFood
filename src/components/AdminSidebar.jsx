@@ -1,9 +1,9 @@
 // ============================================================
 // src/components/AdminSidebar.jsx
-// V3 — With Notifications menu item
+// V4 — Sidebar scroll position preserved across navigation
 // ============================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
@@ -31,8 +31,10 @@ import {
   UserCog,
   Pill,
   Briefcase,
-  Bell, // ✅ NEW: For Notifications
+  Bell,
 } from 'lucide-react'
+
+const SIDEBAR_SCROLL_KEY = 'adminSidebarScrollTop'
 
 function AdminSidebar({ mobileOpen, onMobileClose }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -49,6 +51,8 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
 
   const location = useLocation()
   const navigate = useNavigate()
+  const menuRef = useRef(null)
+  const isFirstMount = useRef(true)
 
   // Partner mode check
   const isPartner = localStorage.getItem('isPartner') === 'true'
@@ -67,6 +71,45 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
   const canAccess = (key) => {
     if (isSuperAdmin) return true
     return permissions[key] === true
+  }
+
+  // ============ SCROLL POSITION PRESERVE ============
+  // Restore scroll on mount
+  useEffect(() => {
+    if (!menuRef.current) return
+    const saved = sessionStorage.getItem(SIDEBAR_SCROLL_KEY)
+    if (saved) {
+      const val = parseInt(saved, 10)
+      if (!isNaN(val) && val > 0) {
+        // Restore after paint
+        requestAnimationFrame(() => {
+          if (menuRef.current) {
+            menuRef.current.scrollTop = val
+          }
+        })
+      }
+    }
+    isFirstMount.current = false
+  }, [])
+
+  // Save scroll on user scroll
+  const handleMenuScroll = (e) => {
+    if (!menuRef.current) return
+    sessionStorage.setItem(
+      SIDEBAR_SCROLL_KEY,
+      String(e.target.scrollTop)
+    )
+  }
+
+  // Save scroll before navigation
+  const handleLinkClick = () => {
+    if (menuRef.current) {
+      sessionStorage.setItem(
+        SIDEBAR_SCROLL_KEY,
+        String(menuRef.current.scrollTop)
+      )
+    }
+    if (onMobileClose) onMobileClose()
   }
 
   // ============ LOAD BADGE COUNTS ============
@@ -202,7 +245,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       path: '/admin/coupons',
       key: 'coupons',
     },
-    // ✅ NEW: PUSH NOTIFICATIONS
     {
       label: 'Notifications',
       icon: Bell,
@@ -286,7 +328,6 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     },
   ]
 
-  // Filter based on permissions
   const menuItems = allMenuItems.filter((item) => {
     if (item.key === null) return true
     if (item.superAdminOnly && !isSuperAdmin) return false
@@ -302,6 +343,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       localStorage.removeItem('managementPermissions')
       localStorage.removeItem('managementName')
       localStorage.removeItem('managementId')
+      sessionStorage.removeItem(SIDEBAR_SCROLL_KEY)
       navigate('/login')
     } catch (error) {
       console.error(error)
@@ -358,7 +400,11 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
           </button>
         </div>
 
-        <nav className="admin-sidebar-menu">
+        <nav
+          className="admin-sidebar-menu"
+          ref={menuRef}
+          onScroll={handleMenuScroll}
+        >
           {menuItems.map((item) => {
             const IconComponent = item.icon
             const isActive = location.pathname === item.path
@@ -370,7 +416,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                 key={item.path}
                 to={item.path}
                 className={`admin-sidebar-link ${isActive ? 'active' : ''}`}
-                onClick={onMobileClose}
+                onClick={handleLinkClick}
                 title={collapsed ? item.label : ''}
               >
                 <IconComponent size={20} strokeWidth={2} />
