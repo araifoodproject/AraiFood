@@ -1,6 +1,6 @@
 // ============================================================
-// src/pages/RestaurantPanel.jsx — PREMIUM V4.0
-// FIX: Direct query by restaurantId (rules-safe) + Optimistic UI
+// src/pages/RestaurantPanel.jsx — PREMIUM V5.0
+// + Hides online-payment-pending orders (only COD + verified online)
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -26,6 +26,21 @@ import { Camera, X, Search, Star } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
 import PushToggleCard from '../components/PushToggleCard'
 import NotificationPanel from '../components/NotificationPanel'
+
+// ============================================================
+// Only show orders the restaurant should act on:
+//   ✅ COD orders (any status)
+//   ✅ Online orders with paymentStatus === 'verified'
+//   ❌ Online orders with paymentStatus 'pending' or 'rejected' → hidden
+// ============================================================
+function isOrderVisibleToRestaurant(order) {
+  const method = (order.paymentMethod || 'cod').toLowerCase()
+  if (method === 'online') {
+    return order.paymentStatus === 'verified'
+  }
+  // COD + any other → always visible
+  return true
+}
 
 function RestaurantPanel() {
   const [user, setUser] = useState(null)
@@ -165,7 +180,7 @@ function RestaurantPanel() {
     }
   }, [])
 
-  // ============ LIVE ORDERS (rules-safe query) ============
+  // ============ LIVE ORDERS (with visibility filter) ============
   useEffect(() => {
     if (!restaurant?.firebaseId) return
 
@@ -182,6 +197,10 @@ function RestaurantPanel() {
             firebaseId: d.id,
             ...d.data(),
           }))
+          // ✅ Only show orders the restaurant should see:
+          //    - COD (any status)
+          //    - Online with paymentStatus === 'verified'
+          .filter(isOrderVisibleToRestaurant)
           .sort((a, b) => {
             const aT = a.createdAt?.toDate?.()?.getTime() || 0
             const bT = b.createdAt?.toDate?.()?.getTime() || 0
@@ -389,26 +408,24 @@ function RestaurantPanel() {
   }
 
   // ============================================================
-  // UPDATE ORDER STATUS — With Optimistic UI + Retry
+  // UPDATE ORDER STATUS — With Optimistic UI
   // ============================================================
   const updateOrderStatus = async (firebaseId, newStatus, order) => {
     const previousStatus = order.status
 
     try {
-      // ✅ OPTIMISTIC UPDATE — instant UI feedback
       setOrders((prev) =>
         prev.map((o) =>
           o.firebaseId === firebaseId ? { ...o, status: newStatus } : o
         )
       )
 
-      // ✅ Firestore update
       await updateDoc(doc(db, 'orders', firebaseId), {
         status: newStatus,
         [`${newStatus}At`]: new Date(),
       })
 
-      // 1️⃣ Customer notification
+      // Customer notification
       if (order?.userId) {
         let title = ''
         let body = ''
@@ -430,7 +447,7 @@ function RestaurantPanel() {
         }
       }
 
-      // 2️⃣ Notify all riders when ready
+      // Notify all riders when ready
       if (newStatus === 'delivering') {
         try {
           await notifyAllRiders(
@@ -450,7 +467,6 @@ function RestaurantPanel() {
     } catch (error) {
       console.error('❌ Update failed:', error)
 
-      // ❌ Revert optimistic update
       setOrders((prev) =>
         prev.map((o) =>
           o.firebaseId === firebaseId
@@ -1080,6 +1096,10 @@ function RestaurantPanel() {
                 const status = order.status || 'pending'
                 const isCancelled = status === 'cancelled'
                 const isNew = status === 'pending'
+                const isOnlinePayment =
+                  (order.paymentMethod || '').toLowerCase() === 'online'
+                const isPaymentVerified =
+                  isOnlinePayment && order.paymentStatus === 'verified'
 
                 return (
                   <div
@@ -1090,7 +1110,32 @@ function RestaurantPanel() {
                   >
                     <div className="rest-v2-order-header">
                       <div className="rest-v2-order-info-block">
-                        <strong>#{order.orderId}</strong>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <strong>#{order.orderId}</strong>
+                          {isPaymentVerified && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 800,
+                                padding: '3px 9px',
+                                borderRadius: '999px',
+                                background: '#DCFCE7',
+                                color: '#15803D',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                              }}
+                            >
+                              ✅ Paid Online
+                            </span>
+                          )}
+                        </div>
                         <small>{order.userEmail || 'Customer'}</small>
                       </div>
                       <span

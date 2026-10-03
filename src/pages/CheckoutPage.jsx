@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/CheckoutPage.jsx
-// V5 — + Order Push Prompt after successful order
+// V7 — Online Payment (Manual) with proper "Payment" language
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -12,7 +12,6 @@ import useSettings from '../hooks/useSettings'
 import {
   collection,
   addDoc,
-  serverTimestamp,
   doc,
   getDoc,
   updateDoc,
@@ -46,6 +45,12 @@ function CheckoutPage() {
   const [saveAddress, setSaveAddress] = useState(Boolean(savedAddress))
   const [paymentMethod, setPaymentMethod] = useState('cod')
 
+  // Online payment states
+  const [onlineTrxId, setOnlineTrxId] = useState('')
+  const [onlineMethodUsed, setOnlineMethodUsed] = useState('bKash')
+  const [araifoodNumbers, setAraifoodNumbers] = useState(null)
+  const [copiedKey, setCopiedKey] = useState('')
+
   const [loyaltyPoints, setLoyaltyPoints] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
   const [usingPoints, setUsingPoints] = useState(false)
@@ -64,9 +69,11 @@ function CheckoutPage() {
   const [zones, setZones] = useState([])
   const [selectedZoneId, setSelectedZoneId] = useState('')
 
-  // ✅ Order push prompt state
   const [showPushPrompt, setShowPushPrompt] = useState(false)
 
+  // ============================================================
+  // Load zones
+  // ============================================================
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'deliveryZones'), where('active', '==', true)),
@@ -85,6 +92,77 @@ function CheckoutPage() {
     [zones, selectedZoneId]
   )
 
+  // ============================================================
+  // Load AraiFood payment numbers
+  // ============================================================
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'settings', 'araifood_payment_numbers'),
+      (snap) => {
+        if (snap.exists()) {
+          setAraifoodNumbers(snap.data())
+        } else {
+          setAraifoodNumbers(null)
+        }
+      },
+      (err) => console.warn('AraiFood numbers load:', err.message)
+    )
+    return () => unsub()
+  }, [])
+
+  // Active payment numbers list
+  const activePaymentNumbers = useMemo(() => {
+    if (!araifoodNumbers) return []
+    const list = []
+    if (araifoodNumbers.bkash?.active && araifoodNumbers.bkash?.number) {
+      list.push({
+        key: 'bkash',
+        label: 'bKash',
+        icon: '📱',
+        number: araifoodNumbers.bkash.number,
+      })
+    }
+    if (araifoodNumbers.nagad?.active && araifoodNumbers.nagad?.number) {
+      list.push({
+        key: 'nagad',
+        label: 'Nagad',
+        icon: '📱',
+        number: araifoodNumbers.nagad.number,
+      })
+    }
+    if (araifoodNumbers.rocket?.active && araifoodNumbers.rocket?.number) {
+      list.push({
+        key: 'rocket',
+        label: 'Rocket',
+        icon: '📱',
+        number: araifoodNumbers.rocket.number,
+      })
+    }
+    if (araifoodNumbers.bank?.active && araifoodNumbers.bank?.number) {
+      list.push({
+        key: 'bank',
+        label: `Bank${
+          araifoodNumbers.bank.bankName
+            ? ' (' + araifoodNumbers.bank.bankName + ')'
+            : ''
+        }`,
+        icon: '🏦',
+        number: araifoodNumbers.bank.number,
+      })
+    }
+    return list
+  }, [araifoodNumbers])
+
+  const handleCopyNumber = (key, number) => {
+    navigator.clipboard.writeText(number)
+    setCopiedKey(key)
+    toast.success('📋 Copied!')
+    setTimeout(() => setCopiedKey(''), 2000)
+  }
+
+  // ============================================================
+  // Load cart + user data
+  // ============================================================
   useEffect(() => {
     const items = JSON.parse(localStorage.getItem('cartItems') || '[]')
     setCartItems(items)
@@ -116,6 +194,9 @@ function CheckoutPage() {
     loadUserData()
   }, [])
 
+  // ============================================================
+  // Load coupons
+  // ============================================================
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'coupons'), where('active', '==', true)),
@@ -202,6 +283,9 @@ function CheckoutPage() {
     pointsDiscount -
     walletDiscount
 
+  // ============================================================
+  // Place Order
+  // ============================================================
   const placeOrder = async () => {
     if (!fullName.trim()) {
       toast.error('Please enter your full name.')
@@ -239,6 +323,21 @@ function CheckoutPage() {
       toast.error('Insufficient wallet balance.')
       return
     }
+    // Online payment validation
+    if (paymentMethod === 'online') {
+      if (activePaymentNumbers.length === 0) {
+        toast.error(
+          '⚠️ Online payment এখনো available না। অনুগ্রহ করে Cash on Delivery ব্যবহার করুন।'
+        )
+        return
+      }
+      if (!onlineTrxId.trim()) {
+        toast.error('⚠️ অনুগ্রহ করে Transaction ID দিন')
+        const el = document.getElementById('online-payment-section')
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+    }
 
     setPlacing(true)
 
@@ -261,8 +360,11 @@ function CheckoutPage() {
     const newOrderId = `AF-${Math.floor(100000 + Math.random() * 900000)}`
     setOrderId(newOrderId)
 
+    let finalPaymentMethod = paymentMethod
+    if (paymentMethod === 'mobile') finalPaymentMethod = 'online'
+
     try {
-      await addDoc(collection(db, 'orders'), {
+      const orderPayload = {
         orderId: newOrderId,
         userId: auth.currentUser?.uid || 'guest',
         userEmail: auth.currentUser?.email || 'guest',
@@ -281,7 +383,7 @@ function CheckoutPage() {
         orderNote: orderNote,
         couponCode: couponCode,
         couponDiscount: couponDiscount,
-        paymentMethod: paymentMethod,
+        paymentMethod: finalPaymentMethod,
         location: mapPosition,
         zoneId: selectedZone.firebaseId,
         zoneName: selectedZone.name,
@@ -293,8 +395,21 @@ function CheckoutPage() {
         riderPhone: null,
         riderRating: null,
         deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
-        createdAt: serverTimestamp(),
-      })
+        createdAt: new Date(),
+      }
+
+      if (finalPaymentMethod === 'online') {
+        orderPayload.paymentStatus = 'pending'
+        orderPayload.paymentTrxId = onlineTrxId.trim()
+        orderPayload.paymentMethodUsed = onlineMethodUsed
+        orderPayload.paymentSubmittedAt = new Date()
+      } else if (finalPaymentMethod === 'cod') {
+        orderPayload.paymentStatus = 'cod'
+      } else if (finalPaymentMethod === 'wallet') {
+        orderPayload.paymentStatus = 'paid'
+      }
+
+      await addDoc(collection(db, 'orders'), orderPayload)
 
       if (auth.currentUser?.uid) {
         const userDocRef = doc(db, 'users', auth.currentUser.uid)
@@ -356,9 +471,6 @@ function CheckoutPage() {
         }
       }
 
-      // ============================================================
-      // PUSH NOTIFICATIONS
-      // ============================================================
       const customerId = auth.currentUser?.uid || 'guest'
 
       await sendNotification(
@@ -386,7 +498,9 @@ function CheckoutPage() {
       await sendNotification(
         'admin',
         '🆕 New Order Placed',
-        `Order ${newOrderId} from ${restaurant.restaurantName} — ৳${total}`,
+        `Order ${newOrderId} from ${restaurant.restaurantName} — ৳${total}${
+          finalPaymentMethod === 'online' ? ' (Online Payment)' : ''
+        }`,
         'order',
         {
           orderId: newOrderId,
@@ -406,6 +520,7 @@ function CheckoutPage() {
         items: cartItems,
         total: total,
         status: 'pending',
+        paymentMethod: finalPaymentMethod,
         deliveryTime,
         timeSlot,
       })
@@ -413,7 +528,6 @@ function CheckoutPage() {
 
       setOrderPlaced(true)
       setTrackingStage(0)
-      // ✅ Show push prompt
       setShowPushPrompt(true)
       localStorage.removeItem('cartItems')
       window.dispatchEvent(new Event('cartUpdated'))
@@ -437,6 +551,9 @@ function CheckoutPage() {
     }
   }, [orderPlaced])
 
+  // ============================================================
+  // Order Success Screen
+  // ============================================================
   if (orderPlaced) {
     return (
       <div className="checkout-page">
@@ -450,6 +567,60 @@ function CheckoutPage() {
           <p style={{ marginTop: '10px' }}>
             From: <strong>{restaurant.restaurantName}</strong>
           </p>
+
+          {paymentMethod === 'online' && onlineTrxId && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '14px 18px',
+                borderRadius: '14px',
+                background: '#FEF3C7',
+                border: '1px solid #F59E0B',
+                maxWidth: '400px',
+                margin: '16px auto 0',
+                textAlign: 'left',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  color: '#92400E',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  marginBottom: '6px',
+                }}
+              >
+                💳 Online Payment Pending Verification
+              </div>
+              <div
+                style={{
+                  fontSize: '12.5px',
+                  color: '#92400E',
+                  fontWeight: 600,
+                }}
+              >
+                Method: <strong>{onlineMethodUsed}</strong>
+                <br />
+                TrxID:{' '}
+                <strong style={{ fontFamily: 'monospace' }}>
+                  {onlineTrxId}
+                </strong>
+                <br />
+                Amount: <strong>৳{total}</strong>
+              </div>
+              <div
+                style={{
+                  marginTop: '10px',
+                  fontSize: '11.5px',
+                  color: '#78350F',
+                  fontStyle: 'italic',
+                }}
+              >
+                Admin verify করার পর আপনার পেমেন্ট নিশ্চিত হবে।
+              </div>
+            </div>
+          )}
 
           <div className="order-tracking-section">
             <h2 style={{ marginBottom: '20px', marginTop: '20px' }}>
@@ -521,7 +692,6 @@ function CheckoutPage() {
           </div>
         </div>
 
-        {/* ✅ Order Push Prompt */}
         <OrderPushPrompt
           user={auth.currentUser}
           orderId={orderId}
@@ -531,6 +701,9 @@ function CheckoutPage() {
     )
   }
 
+  // ============================================================
+  // Main Checkout UI
+  // ============================================================
   return (
     <div className="checkout-page">
       <div className="checkout-container">
@@ -931,6 +1104,9 @@ function CheckoutPage() {
               </div>
             </div>
 
+            {/* ============================================================
+                PAYMENT SECTION
+            ============================================================ */}
             <div className="payment-section">
               <div className="payment-heading">
                 <div className="checkout-icon">💳</div>
@@ -939,6 +1115,7 @@ function CheckoutPage() {
                   <p>Choose how you want to pay.</p>
                 </div>
               </div>
+
               <div className="payment-options">
                 <label
                   className={`payment-option ${
@@ -954,20 +1131,22 @@ function CheckoutPage() {
                   <strong>💵 Cash on Delivery</strong>
                   <small>Pay when food arrives</small>
                 </label>
+
                 <label
                   className={`payment-option ${
-                    paymentMethod === 'mobile' ? 'selected' : ''
+                    paymentMethod === 'online' ? 'selected' : ''
                   }`}
                 >
                   <input
                     type="radio"
                     name="payment"
-                    checked={paymentMethod === 'mobile'}
-                    onChange={() => setPaymentMethod('mobile')}
+                    checked={paymentMethod === 'online'}
+                    onChange={() => setPaymentMethod('online')}
                   />
-                  <strong>📱 Mobile Banking</strong>
-                  <small>bKash / Nagad / Rocket</small>
+                  <strong>📱 Online Payment</strong>
+                  <small>bKash / Nagad / Rocket / Bank</small>
                 </label>
+
                 <label
                   className={`payment-option ${
                     paymentMethod === 'wallet' ? 'selected' : ''
@@ -983,6 +1162,182 @@ function CheckoutPage() {
                   <small>Pay using ৳{walletBalance.toFixed(2)}</small>
                 </label>
               </div>
+
+              {/* Online Payment Section */}
+              {paymentMethod === 'online' && (
+                <div
+                  id="online-payment-section"
+                  style={{
+                    marginTop: '16px',
+                    padding: '18px 20px',
+                    borderRadius: '16px',
+                    background:
+                      'linear-gradient(135deg, #FEF3C7, #FDE68A)',
+                    border: '2px solid #F59E0B',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 800,
+                      color: '#92400E',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    💳 Online Payment
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: '#78350F',
+                      fontWeight: 600,
+                      marginBottom: '14px',
+                    }}
+                  >
+                    নিচের যেকোনো নম্বরে <strong>৳{total}</strong> পেমেন্ট করুন
+                  </div>
+
+                  {activePaymentNumbers.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '14px',
+                        borderRadius: '10px',
+                        background: '#FEE2E2',
+                        border: '1px solid #DC2626',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        color: '#991B1B',
+                        textAlign: 'center',
+                      }}
+                    >
+                      ⚠️ Online payment এখনো available না
+                      <br />
+                      <span style={{ fontSize: '11px', fontWeight: 600 }}>
+                        Admin এখনো payment number সেট করেনি
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {activePaymentNumbers.map((p) => (
+                        <div
+                          key={p.key}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            background:
+                              onlineMethodUsed === p.label
+                                ? 'rgba(255, 255, 255, 0.95)'
+                                : 'rgba(255, 255, 255, 0.7)',
+                            border:
+                              onlineMethodUsed === p.label
+                                ? '2px solid #059669'
+                                : '1px solid #FCD34D',
+                            marginBottom: '8px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '10px',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setOnlineMethodUsed(p.label)}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                color: '#92400E',
+                              }}
+                            >
+                              {p.icon} {p.label}
+                            </div>
+                            <div
+                              style={{
+                                fontFamily: 'monospace',
+                                fontSize: '14px',
+                                fontWeight: 800,
+                                color: '#0F172A',
+                                marginTop: '2px',
+                              }}
+                            >
+                              {p.number}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCopyNumber(p.key, p.number)
+                            }}
+                            style={{
+                              background:
+                                copiedKey === p.key ? '#16A34A' : '#F59E0B',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              padding: '8px 14px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              fontSize: '11.5px',
+                              fontWeight: 800,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {copiedKey === p.key ? '✅ Copied' : '📋 Copy'}
+                          </button>
+                        </div>
+                      ))}
+
+                      <div style={{ marginTop: '16px' }}>
+                        <label
+                          style={{
+                            display: 'block',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            color: '#92400E',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '6px',
+                          }}
+                        >
+                          Transaction ID{' '}
+                          <span style={{ color: '#DC2626' }}>*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={onlineTrxId}
+                          onChange={(e) => setOnlineTrxId(e.target.value)}
+                          placeholder="e.g. 8N7A6B5C4D3E2F1G"
+                          style={{
+                            width: '100%',
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            border: onlineTrxId.trim()
+                              ? '2px solid #059669'
+                              : '2px solid #F59E0B',
+                            background: '#FFFFFF',
+                            fontFamily: 'monospace',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            color: '#0F172A',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <p
+                          style={{
+                            marginTop: '8px',
+                            fontSize: '11.5px',
+                            color: '#78350F',
+                            fontWeight: 600,
+                          }}
+                        >
+                          💡 পেমেন্ট করার পর bKash/Nagad app থেকে TrxID কপি
+                          করে এখানে দিন
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <button

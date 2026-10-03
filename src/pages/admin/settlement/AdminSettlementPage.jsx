@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/admin/settlement/AdminSettlementPage.jsx
-// V8 — PERMANENT: period-aware pending (no settlementStatus dependency)
+// V9 — Riders tab = Online only (COD separate flow)
 // ============================================================
 import { useState, useEffect, useMemo } from 'react'
 import { db } from '../../../firebase'
@@ -15,6 +15,8 @@ import {
   Zap,
   CreditCard,
   ArrowLeft,
+  Banknote,
+  Smartphone,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -28,9 +30,12 @@ import {
   filterOrdersByPeriod,
   calcOverview,
   calcRestaurantSettlement,
-  calcRiderSettlement,
+  calcRiderCODSettlement,
+  calcRiderOnlineSettlement,
   groupByRestaurant,
   groupByRider,
+  groupByPharmacy,
+  computeStatus,
   tk,
 } from '../../../utils/settlementHelpers'
 
@@ -41,47 +46,6 @@ const PERIODS = [
   { key: 'month', label: 'This Month' },
   { key: 'all', label: 'All Time' },
 ]
-
-// ============================================================
-// groupByPharmacy
-// ============================================================
-function groupByPharmacy(orders) {
-  const map = {}
-  orders.forEach((o) => {
-    if (!o.pharmacyId) return
-    if (!map[o.pharmacyId]) {
-      map[o.pharmacyId] = {
-        pharmacyId: o.pharmacyId,
-        pharmacyName: o.pharmacyName || 'Unknown Pharmacy',
-        orders: [],
-      }
-    }
-    map[o.pharmacyId].orders.push(o)
-  })
-  return Object.values(map)
-}
-
-// ============================================================
-// PERMANENT: compute settlement status from timestamps
-// Returns 'paid' only if all orders are BEFORE lastSettlementAt
-// ============================================================
-function computeStatus(orders, lastSettlementAt, orderTimeField) {
-  // If no settlement ever done → unpaid
-  if (!lastSettlementAt) return 'unpaid'
-
-  const lastSettle = lastSettlementAt?.toDate
-    ? lastSettlementAt.toDate()
-    : new Date(lastSettlementAt)
-
-  // Check if any order was created AFTER last settlement
-  const hasNewer = orders.some((o) => {
-    const raw = o[orderTimeField] || o.createdAt
-    const t = raw?.toDate ? raw.toDate() : raw ? new Date(raw) : null
-    return t && t > lastSettle
-  })
-
-  return hasNewer ? 'unpaid' : 'paid'
-}
 
 export default function AdminSettlementPage() {
   const [orders, setOrders] = useState([])
@@ -175,16 +139,11 @@ export default function AdminSettlementPage() {
   )
 
   const overview = useMemo(
-    () =>
-      calcOverview(
-        filteredOrders,
-        settings.restaurantCommission,
-        settings.riderDeliveryFee
-      ),
+    () => calcOverview(filteredOrders, settings.restaurantCommission),
     [filteredOrders, settings]
   )
 
-  // ---------- RESTAURANT ROWS ----------
+  // ---------- RESTAURANT ROWS (COD + Online) ----------
   const restaurantRows = useMemo(() => {
     const groups = groupByRestaurant(filteredOrders)
     return groups.map((g) => {
@@ -209,19 +168,18 @@ export default function AdminSettlementPage() {
     })
   }, [filteredOrders, settings, restaurants])
 
-  // ---------- RIDER ROWS (PERMANENT — merge duplicate IDs by name) ----------
+  // ---------- RIDER ROWS (ONLINE ONLY for earnings payout) ----------
   const riderRows = useMemo(() => {
     const groups = groupByRider(filteredOrders)
 
-    // ✅ Merge groups with the same rider name (fix duplicate Sohag)
+    // Merge by name (fix duplicate Sohag)
     const merged = {}
     groups.forEach((g) => {
       const key = (g.riderName || '').toLowerCase().trim() || g.riderId
       if (!merged[key]) {
         merged[key] = {
           ...g,
-          riderId: g.riderId, // keep first
-          riderIds: [g.riderId], // track all
+          riderIds: [g.riderId],
         }
       } else {
         merged[key].orders = [...merged[key].orders, ...g.orders]
@@ -232,15 +190,14 @@ export default function AdminSettlementPage() {
     })
 
     return Object.values(merged).map((g) => {
-      const calc = calcRiderSettlement(
-        g.orders,
-        settings.riderDeliveryFee
-      )
+      // 🎯 Online settlement only
+      const onlineCalc = calcRiderOnlineSettlement(g.orders)
+      // COD also computed for display (but NOT used in Settle)
+      const codCalc = calcRiderCODSettlement(g.orders)
 
-      // ✅ Find rider doc — try firebaseId first, then by name match
+      // Find rider doc
       let doc = riders[g.riderId]
       if (!doc) {
-        // fallback: search by name
         const found = Object.values(riders).find(
           (r) =>
             (r.fullName || '').toLowerCase().trim() ===
@@ -250,18 +207,27 @@ export default function AdminSettlementPage() {
       }
 
       const status = computeStatus(
-        g.orders,
+        g.orders.filter(
+          (o) =>
+            o.status === 'delivered' &&
+            (o.paymentMethod || '').toLowerCase() !== 'cod' &&
+            !!o.paymentMethod
+        ),
         doc.lastSettlementAt,
         'acceptedAt'
       )
 
       return {
         ...g,
-        ...calc,
+        ...onlineCalc,
+        codDeliveries: codCalc.codDeliveries,
+        cashCollected: codCalc.cashCollected,
+        codFee: codCalc.codFee,
+        toSendAdmin: codCalc.toSendAdmin,
         bkashNumber: doc.bkashNumber || doc.paymentNumber || '',
         phone: doc.phone || g.riderPhone || '',
         email: doc.email || '',
-        resolvedDocId: doc.id || g.riderId, // ✅ use correct doc id
+        resolvedDocId: doc.id || g.riderId,
         computedStatus: status,
       }
     })
@@ -292,13 +258,16 @@ export default function AdminSettlementPage() {
     })
   }, [filteredOrders, settings, pharmacies])
 
-  // ---------- PENDING LISTS (for Settle All) ----------
+  // ---------- PENDING LISTS ----------
   const pendingRestaurants = useMemo(
     () => restaurantRows.filter((r) => r.computedStatus !== 'paid'),
     [restaurantRows]
   )
   const pendingRiders = useMemo(
-    () => riderRows.filter((r) => r.computedStatus !== 'paid'),
+    () =>
+      riderRows.filter(
+        (r) => r.computedStatus !== 'paid' && r.finalPayable > 0
+      ),
     [riderRows]
   )
   const pendingPharmacies = useMemo(
@@ -323,26 +292,35 @@ export default function AdminSettlementPage() {
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
           <h1>💰 Settlement Center</h1>
-          <p>Manage restaurant, rider & pharmacy payouts</p>
+          <p>Restaurant · Online Rider Earnings · Pharmacy payouts</p>
         </div>
         <div className="stl-header-actions">
           <button
             className="stl-btn stl-btn-ghost"
             onClick={() => setShowSettleAll(true)}
             disabled={
-              pendingRestaurants.length +
-                pendingRiders.length +
-                pendingPharmacies.length ===
-              0
+              pendingRestaurants.length + pendingPharmacies.length === 0
             }
           >
             <Zap size={16} /> Settle All
           </button>
           <Link
+            to="/admin/settlement/rider-payments"
+            className="stl-btn stl-btn-ghost"
+          >
+            <Banknote size={16} /> Rider COD Cash
+          </Link>
+          <Link
             to="/admin/settlement/payment-numbers"
             className="stl-btn stl-btn-ghost"
           >
             <CreditCard size={16} /> Payment Numbers
+          </Link>
+          <Link
+            to="/admin/settlement/araifood-numbers"
+            className="stl-btn stl-btn-ghost"
+          >
+            <Smartphone size={16} /> AraiFood Numbers
           </Link>
           <Link
             to="/admin/settlement/history"
@@ -391,7 +369,7 @@ export default function AdminSettlementPage() {
           className={`stl-tab ${tab === 'riders' ? 'active' : ''}`}
           onClick={() => setTab('riders')}
         >
-          <Bike size={16} /> Riders ({riderRows.length})
+          <Bike size={16} /> Rider Earnings ({riderRows.length})
         </button>
         <button
           className={`stl-tab ${tab === 'pharmacies' ? 'active' : ''}`}
@@ -410,7 +388,7 @@ export default function AdminSettlementPage() {
           onAdjust={(e) => openAdjust(e, 'restaurant')}
         />
       ) : tab === 'riders' ? (
-        <RiderTable
+        <RiderOnlineTable
           rows={riderRows}
           onSettle={(e) => openSettle(e, 'rider')}
           onAdjust={(e) => openAdjust(e, 'rider')}
@@ -522,70 +500,134 @@ function RestaurantTable({ rows, onSettle, onAdjust }) {
 }
 
 /* ============================================================
-   RIDER TABLE
+   RIDER ONLINE EARNINGS TABLE
 ============================================================ */
-function RiderTable({ rows, onSettle, onAdjust }) {
+function RiderOnlineTable({ rows, onSettle, onAdjust }) {
   if (rows.length === 0) {
     return (
-      <div className="stl-empty">No rider deliveries in this period.</div>
+      <div className="stl-empty">
+        No rider activity in this period.
+      </div>
     )
   }
+
+  // Filter out riders with no online earnings
+  const activeRows = rows.filter((r) => r.onlineDeliveries > 0)
+
+  if (activeRows.length === 0) {
+    return (
+      <div
+        className="stl-empty"
+        style={{ padding: '60px 20px', textAlign: 'center' }}
+      >
+        <div
+          style={{
+            fontSize: '14px',
+            color: '#64748b',
+            fontWeight: 600,
+            marginBottom: 8,
+          }}
+        >
+          📱 No online earnings in this period
+        </div>
+        <div style={{ fontSize: '12.5px', color: '#94a3b8' }}>
+          Rider COD cash is managed in{' '}
+          <Link
+            to="/admin/settlement/rider-payments"
+            style={{ color: '#ef4444', fontWeight: 700 }}
+          >
+            Rider Payments
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="stl-table-wrap">
-      <table className="stl-table">
-        <thead>
-          <tr>
-            <th>Rider</th>
-            <th>Deliveries</th>
-            <th>Earnings</th>
-            <th>Bonus</th>
-            <th>Payable</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const status = r.computedStatus
-            return (
-              <tr key={r.riderId}>
-                <td className="stl-td-name">{r.riderName}</td>
-                <td>{r.deliveries}</td>
-                <td>{tk(r.earnings)}</td>
-                <td className="stl-td-green">+{tk(r.bonus)}</td>
-                <td className="stl-td-bold">{tk(r.finalPayable)}</td>
-                <td>
-                  <span
-                    className={`stl-badge ${
-                      status === 'paid' ? 'paid' : 'unpaid'
-                    }`}
+    <>
+      <div
+        style={{
+          padding: '12px 16px',
+          background: '#f5f3ff',
+          border: '1px solid #c4b5fd',
+          borderRadius: '10px',
+          marginBottom: '16px',
+          fontSize: '12.5px',
+          color: '#5b21b6',
+          fontWeight: 600,
+        }}
+      >
+        📱 এই tab শুধু <strong>Online Payment</strong> orders এর rider
+        earnings দেখায়। COD cash Rider Payments page এ manage হয়।
+      </div>
+
+      <div className="stl-table-wrap">
+        <table className="stl-table">
+          <thead>
+            <tr>
+              <th>Rider</th>
+              <th>Online Deliv.</th>
+              <th>COD Deliv.</th>
+              <th>Online Earnings</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeRows.map((r) => {
+              const status = r.computedStatus
+              return (
+                <tr key={r.riderId}>
+                  <td className="stl-td-name">{r.riderName}</td>
+                  <td>
+                    <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
+                      {r.onlineDeliveries}
+                    </span>
+                  </td>
+                  <td
+                    style={{
+                      color: '#94a3b8',
+                      fontSize: '12.5px',
+                    }}
                   >
-                    {status}
-                  </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className="stl-btn stl-btn-primary sm"
-                      onClick={() => onSettle(r)}
-                      disabled={status === 'paid'}
+                    {r.codDeliveries} (COD)
+                  </td>
+                  <td className="stl-td-bold">
+                    {tk(r.onlineEarnings)}
+                  </td>
+                  <td>
+                    <span
+                      className={`stl-badge ${
+                        status === 'paid' ? 'paid' : 'unpaid'
+                      }`}
                     >
-                      Settle
-                    </button>
-                    <button
-                      className="stl-btn stl-btn-ghost sm"
-                      onClick={() => onAdjust(r)}
-                    >
-                      ± Adjust
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+                      {status}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="stl-btn stl-btn-primary sm"
+                        onClick={() => onSettle(r)}
+                        disabled={status === 'paid'}
+                      >
+                        Pay
+                      </button>
+                      <button
+                        className="stl-btn stl-btn-ghost sm"
+                        onClick={() => onAdjust(r)}
+                      >
+                        ± Adjust
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 

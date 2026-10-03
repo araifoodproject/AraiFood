@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/admin/AdminOrdersPage.jsx
-// V2 — Premium with order type filter + export CSV
+// V3 — + Online Payments tab (verify/reject with distribution)
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore'
 import AdminSidebar from '../../components/AdminSidebar'
 import { toast } from 'react-toastify'
+import { sendNotification } from '../../utils/sendNotification'
 import {
   Menu,
   Search,
@@ -32,6 +33,8 @@ import {
   Gamepad2,
   MapPin,
   AlertCircle,
+  DollarSign,
+  ShieldCheck,
 } from 'lucide-react'
 
 function AdminOrdersPage() {
@@ -42,6 +45,7 @@ function AdminOrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [processingId, setProcessingId] = useState(null)
 
   // ============ LIVE DATA ============
   useEffect(() => {
@@ -68,9 +72,60 @@ function AdminOrdersPage() {
     return () => unsubscribe()
   }, [])
 
+  // ============ ONLINE PAYMENT ORDERS ============
+  const onlinePaymentOrders = useMemo(() => {
+    return orders.filter(
+      (o) =>
+        (o.paymentMethod || '').toLowerCase() === 'online' &&
+        o.paymentStatus
+    )
+  }, [orders])
+
+  const onlinePaymentStats = useMemo(() => {
+    const pending = onlinePaymentOrders.filter(
+      (o) => o.paymentStatus === 'pending'
+    )
+    const verified = onlinePaymentOrders.filter(
+      (o) => o.paymentStatus === 'verified'
+    )
+    const rejected = onlinePaymentOrders.filter(
+      (o) => o.paymentStatus === 'rejected'
+    )
+    return {
+      pendingCount: pending.length,
+      pendingAmount: pending.reduce((s, o) => s + (Number(o.total) || 0), 0),
+      verifiedCount: verified.length,
+      verifiedAmount: verified.reduce(
+        (s, o) => s + (Number(o.total) || 0),
+        0
+      ),
+      rejectedCount: rejected.length,
+    }
+  }, [onlinePaymentOrders])
+
   // ============ FILTER ============
   const filteredOrders = useMemo(() => {
     let result = [...orders]
+
+    // ✅ NEW: If Online Payments tab selected, filter to only online payments
+    if (statusFilter === 'online-payments') {
+      result = result.filter(
+        (o) =>
+          (o.paymentMethod || '').toLowerCase() === 'online' &&
+          o.paymentStatus
+      )
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        result = result.filter((o) =>
+          `${o.orderId || ''} ${o.fullName || ''} ${o.phone || ''} ${
+            o.paymentTrxId || ''
+          } ${o.restaurantName || ''}`
+            .toLowerCase()
+            .includes(q)
+        )
+      }
+      return result
+    }
 
     if (statusFilter !== 'all') {
       result = result.filter((o) => (o.status || 'pending') === statusFilter)
@@ -192,6 +247,89 @@ function AdminOrdersPage() {
     }
   }
 
+  // ============================================================
+  // ONLINE PAYMENT VERIFY / REJECT
+  // ============================================================
+  const verifyPayment = async (order) => {
+    const confirmed = window.confirm(
+      `Verify online payment?\n\n` +
+        `Order: ${order.orderId}\n` +
+        `Amount: ৳${order.total}\n` +
+        `Method: ${order.paymentMethodUsed || 'Unknown'}\n` +
+        `TrxID: ${order.paymentTrxId || '—'}\n\n` +
+        `✅ Verify করলে Rider ও Restaurant এর account এ distribution হবে।`
+    )
+    if (!confirmed) return
+
+    setProcessingId(order.firebaseId)
+    try {
+      await updateDoc(doc(db, 'orders', order.firebaseId), {
+        paymentStatus: 'verified',
+        paymentVerifiedAt: new Date(),
+        paymentVerifiedBy: 'admin',
+      })
+
+      // Notify customer
+      if (order.userId) {
+        await sendNotification(
+          order.userId,
+          '✅ Payment Verified!',
+          `Your payment for order ${order.orderId} has been verified.`,
+          'order',
+          { orderId: order.orderId }
+        ).catch(() => {})
+      }
+
+      toast.success('✅ Payment verified!')
+    } catch (err) {
+      console.error('Verify error:', err)
+      toast.error('Failed to verify: ' + err.message)
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const rejectPayment = async (order) => {
+    const reason = window.prompt(
+      `Reject payment for ${order.orderId}?\n\nReason (customer দেখবে):`,
+      'Transaction ID invalid'
+    )
+    if (reason === null) return
+    const trimmed = reason.trim()
+    if (!trimmed) {
+      toast.error('Reason দিন')
+      return
+    }
+
+    setProcessingId(order.firebaseId)
+    try {
+      await updateDoc(doc(db, 'orders', order.firebaseId), {
+        paymentStatus: 'rejected',
+        paymentRejectReason: trimmed,
+        paymentRejectedAt: new Date(),
+        paymentRejectedBy: 'admin',
+      })
+
+      // Notify customer
+      if (order.userId) {
+        await sendNotification(
+          order.userId,
+          '❌ Payment Rejected',
+          `Your payment for order ${order.orderId} was rejected. Reason: ${trimmed}. Please contact support or pay again.`,
+          'order',
+          { orderId: order.orderId }
+        ).catch(() => {})
+      }
+
+      toast.success('Payment rejected')
+    } catch (err) {
+      console.error('Reject error:', err)
+      toast.error('Failed to reject: ' + err.message)
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
   const copyOrderId = (orderId) => {
     navigator.clipboard.writeText(orderId)
     toast.success('Order ID copied!', { autoClose: 1200 })
@@ -215,6 +353,8 @@ function AdminOrdersPage() {
       'Total',
       'Status',
       'Payment',
+      'Payment Status',
+      'TrxID',
     ]
 
     const rows = filteredOrders.map((o) => [
@@ -229,6 +369,8 @@ function AdminOrdersPage() {
       o.total || 0,
       o.status || 'pending',
       o.paymentMethod || 'cod',
+      o.paymentStatus || '',
+      o.paymentTrxId || '',
     ])
 
     const csv = [headers, ...rows]
@@ -241,7 +383,9 @@ function AdminOrdersPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `araifood-orders-${new Date().toISOString().split('T')[0]}.csv`
+    link.download = `araifood-orders-${
+      new Date().toISOString().split('T')[0]
+    }.csv`
     link.click()
     URL.revokeObjectURL(url)
     toast.success(`Exported ${filteredOrders.length} orders`)
@@ -284,6 +428,36 @@ function AdminOrdersPage() {
     return map[status] || map.pending
   }
 
+  const getPaymentStatusBadge = (status) => {
+    const map = {
+      pending: {
+        label: 'Pending',
+        color: '#f59e0b',
+        bg: 'rgba(245,158,11,0.12)',
+        icon: '⏳',
+      },
+      verified: {
+        label: 'Verified',
+        color: '#16a34a',
+        bg: 'rgba(22,163,74,0.12)',
+        icon: '✅',
+      },
+      rejected: {
+        label: 'Rejected',
+        color: '#dc2626',
+        bg: 'rgba(220,38,38,0.12)',
+        icon: '❌',
+      },
+      cod: {
+        label: 'COD',
+        color: '#64748b',
+        bg: 'rgba(100,116,139,0.12)',
+        icon: '💵',
+      },
+    }
+    return map[status] || map.cod
+  }
+
   const getOrderType = (order) => {
     if (order.orderType === 'pharmacy') {
       return { icon: '💊', label: 'Pharmacy', color: '#3B82F6' }
@@ -318,6 +492,12 @@ function AdminOrdersPage() {
     return d.toLocaleDateString()
   }
 
+  // ============ IS ONLINE PAYMENTS MODE ============
+  const isOnlinePaymentsMode = statusFilter === 'online-payments'
+
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div className="admin-layout">
       <AdminSidebar
@@ -421,6 +601,95 @@ function AdminOrdersPage() {
           </div>
         </div>
 
+        {/* ============ ONLINE PAYMENTS SUMMARY ============ */}
+        {(onlinePaymentStats.pendingCount > 0 || isOnlinePaymentsMode) && (
+          <div
+            className="admin-section"
+            style={{
+              padding: '16px 20px',
+              marginBottom: '14px',
+              background: 'linear-gradient(135deg, #FEF3C7, #FDE68A)',
+              border: '2px solid #F59E0B',
+              borderRadius: '14px',
+              display: 'flex',
+              gap: '16px',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '14px',
+                fontWeight: 800,
+                color: '#92400E',
+              }}
+            >
+              <DollarSign size={18} />
+              Online Payments:
+              <span
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '999px',
+                  background: '#FFFFFF',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                }}
+              >
+                ⏳ {onlinePaymentStats.pendingCount} pending · ৳
+                {onlinePaymentStats.pendingAmount}
+              </span>
+              <span
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '999px',
+                  background: '#DCFCE7',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  color: '#15803D',
+                }}
+              >
+                ✅ {onlinePaymentStats.verifiedCount} verified
+              </span>
+              {onlinePaymentStats.rejectedCount > 0 && (
+                <span
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '999px',
+                    background: '#FEE2E2',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#B91C1C',
+                  }}
+                >
+                  ❌ {onlinePaymentStats.rejectedCount} rejected
+                </span>
+              )}
+            </div>
+            {onlinePaymentStats.pendingCount > 0 && !isOnlinePaymentsMode && (
+              <button
+                onClick={() => setStatusFilter('online-payments')}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '999px',
+                  background: '#F59E0B',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                View Online Payments →
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Controls */}
         <div className="admin-section" style={{ padding: '20px' }}>
           <div
@@ -449,7 +718,11 @@ function AdminOrdersPage() {
               <Search size={18} strokeWidth={2.2} />
               <input
                 type="text"
-                placeholder="Search order ID, name, phone, vendor..."
+                placeholder={
+                  isOnlinePaymentsMode
+                    ? 'Search order ID, customer, phone, TrxID...'
+                    : 'Search order ID, name, phone, vendor...'
+                }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
@@ -484,51 +757,53 @@ function AdminOrdersPage() {
               )}
             </div>
 
-            {/* Order Type Filter */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '6px',
-                padding: '4px',
-                borderRadius: '999px',
-                background: 'var(--surface-soft)',
-                border: '1px solid var(--border)',
-              }}
-            >
-              {[
-                { value: 'all', label: 'All', icon: '📋' },
-                { value: 'food', label: 'Food', icon: '🍽️' },
-                { value: 'pharmacy', label: 'Pharmacy', icon: '💊' },
-                { value: 'gaming', label: 'Gaming', icon: '🎮' },
-              ].map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setTypeFilter(t.value)}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '999px',
-                    background:
-                      typeFilter === t.value
-                        ? 'linear-gradient(135deg, #059669, #047857)'
-                        : 'transparent',
-                    color:
-                      typeFilter === t.value
-                        ? '#FFFFFF'
-                        : 'var(--text-secondary)',
-                    border: 'none',
-                    fontSize: '12.5px',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <span>{t.icon}</span>
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            {/* Order Type Filter — Hidden in Online Payments mode */}
+            {!isOnlinePaymentsMode && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '6px',
+                  padding: '4px',
+                  borderRadius: '999px',
+                  background: 'var(--surface-soft)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                {[
+                  { value: 'all', label: 'All', icon: '📋' },
+                  { value: 'food', label: 'Food', icon: '🍽️' },
+                  { value: 'pharmacy', label: 'Pharmacy', icon: '💊' },
+                  { value: 'gaming', label: 'Gaming', icon: '🎮' },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setTypeFilter(t.value)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '999px',
+                      background:
+                        typeFilter === t.value
+                          ? 'linear-gradient(135deg, #059669, #047857)'
+                          : 'transparent',
+                      color:
+                        typeFilter === t.value
+                          ? '#FFFFFF'
+                          : 'var(--text-secondary)',
+                      border: 'none',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span>{t.icon}</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Status Filter */}
@@ -540,6 +815,16 @@ function AdminOrdersPage() {
               { value: 'delivering', label: 'Delivering' },
               { value: 'delivered', label: `Delivered (${stats.delivered})` },
               { value: 'cancelled', label: `Cancelled (${stats.cancelled})` },
+              // ✅ NEW TAB
+              {
+                value: 'online-payments',
+                label: `💰 Online Payments${
+                  onlinePaymentStats.pendingCount > 0
+                    ? ` (${onlinePaymentStats.pendingCount})`
+                    : ''
+                }`,
+                highlight: true,
+              },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -549,15 +834,26 @@ function AdminOrdersPage() {
                   borderRadius: '999px',
                   background:
                     statusFilter === opt.value
-                      ? 'linear-gradient(135deg, #059669, #047857)'
+                      ? opt.value === 'online-payments'
+                        ? 'linear-gradient(135deg, #F59E0B, #D97706)'
+                        : 'linear-gradient(135deg, #059669, #047857)'
+                      : opt.highlight &&
+                        onlinePaymentStats.pendingCount > 0
+                      ? 'rgba(245,158,11,0.12)'
                       : 'var(--surface)',
                   color:
                     statusFilter === opt.value
                       ? '#FFFFFF'
+                      : opt.highlight &&
+                        onlinePaymentStats.pendingCount > 0
+                      ? '#92400E'
                       : 'var(--text-secondary)',
                   border:
                     statusFilter === opt.value
                       ? 'none'
+                      : opt.highlight &&
+                        onlinePaymentStats.pendingCount > 0
+                      ? '1px solid rgba(245,158,11,0.3)'
                       : '1px solid var(--border-strong)',
                   fontSize: '12.5px',
                   fontWeight: 700,
@@ -594,15 +890,381 @@ function AdminOrdersPage() {
             className="admin-section"
             style={{ textAlign: 'center', padding: '60px' }}
           >
-            <p style={{ fontSize: '48px', marginBottom: '12px' }}>📦</p>
-            <h3>No orders found</h3>
+            <p style={{ fontSize: '48px', marginBottom: '12px' }}>
+              {isOnlinePaymentsMode ? '💰' : '📦'}
+            </p>
+            <h3>
+              {isOnlinePaymentsMode
+                ? 'No online payments'
+                : 'No orders found'}
+            </h3>
             <p style={{ color: 'var(--text-secondary)' }}>
               {search || statusFilter !== 'all' || typeFilter !== 'all'
                 ? 'Try a different search or filter.'
                 : 'No orders yet.'}
             </p>
           </div>
+        ) : isOnlinePaymentsMode ? (
+          // ============================================================
+          // ONLINE PAYMENTS LIST
+          // ============================================================
+          <div className="admin-section" style={{ padding: '10px' }}>
+            {filteredOrders.map((order) => {
+              const paymentBadge = getPaymentStatusBadge(
+                order.paymentStatus
+              )
+              const isPending = order.paymentStatus === 'pending'
+              const isVerified = order.paymentStatus === 'verified'
+              const isRejected = order.paymentStatus === 'rejected'
+              const isProcessing = processingId === order.firebaseId
+
+              return (
+                <div
+                  key={order.firebaseId}
+                  style={{
+                    background: 'var(--surface-soft)',
+                    border: `2px solid ${
+                      isPending
+                        ? '#F59E0B'
+                        : isVerified
+                        ? '#16A34A'
+                        : '#DC2626'
+                    }`,
+                    borderRadius: '16px',
+                    padding: '18px',
+                    marginBottom: '12px',
+                    opacity: isProcessing ? 0.6 : 1,
+                  }}
+                >
+                  {/* Header */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      marginBottom: '14px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        <strong
+                          style={{
+                            fontFamily: 'var(--font-heading)',
+                            fontSize: '16px',
+                            fontWeight: 800,
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {order.orderId}
+                        </strong>
+                        <button
+                          onClick={() => copyOrderId(order.orderId)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-tertiary)',
+                            padding: 0,
+                            display: 'flex',
+                          }}
+                        >
+                          <Copy size={13} />
+                        </button>
+                        <span
+                          style={{
+                            fontSize: '11.5px',
+                            color: 'var(--text-tertiary)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          · {timeAgo(order.createdAt)}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '12.5px',
+                          color: 'var(--text-secondary)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        👤 {order.fullName} · 📞 {order.phone}
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '6px 14px',
+                        borderRadius: '999px',
+                        background: paymentBadge.bg,
+                        color: paymentBadge.color,
+                        fontSize: '12px',
+                        fontWeight: 800,
+                      }}
+                    >
+                      {paymentBadge.icon} {paymentBadge.label}
+                    </span>
+                  </div>
+
+                  {/* Payment info grid */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns:
+                        'repeat(auto-fit, minmax(140px, 1fr))',
+                      gap: '10px',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: '#F0FDF4',
+                        border: '1px solid #86EFAC',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          color: '#166534',
+                          textTransform: 'uppercase',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        Amount
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '20px',
+                          fontWeight: 900,
+                          color: '#15803D',
+                        }}
+                      >
+                        ৳{order.total}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          color: '#475569',
+                          textTransform: 'uppercase',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        Method
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '15px',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                        }}
+                      >
+                        {order.paymentMethodUsed || '—'}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          color: '#475569',
+                          textTransform: 'uppercase',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        TrxID
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {order.paymentTrxId || '—'}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          color: '#475569',
+                          textTransform: 'uppercase',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        Order Status
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {order.status || 'pending'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rejection reason */}
+                  {isRejected && order.paymentRejectReason && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        background: '#FEF2F2',
+                        border: '1px solid #FCA5A5',
+                        marginBottom: '14px',
+                        fontSize: '12.5px',
+                        color: '#991B1B',
+                        fontWeight: 600,
+                      }}
+                    >
+                      ❌ <strong>Rejected:</strong> {order.paymentRejectReason}
+                    </div>
+                  )}
+
+                  {/* Verified info */}
+                  {isVerified && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        background: '#F0FDF4',
+                        border: '1px solid #86EFAC',
+                        marginBottom: '14px',
+                        fontSize: '12.5px',
+                        color: '#166534',
+                        fontWeight: 600,
+                      }}
+                    >
+                      ✅ Verified · {formatDate(order.paymentVerifiedAt)}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  {isPending && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '10px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <button
+                        onClick={() => verifyPayment(order)}
+                        disabled={isProcessing}
+                        style={{
+                          flex: 1,
+                          minWidth: '140px',
+                          padding: '12px 20px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: '#16A34A',
+                          color: '#FFFFFF',
+                          fontSize: '13.5px',
+                          fontWeight: 800,
+                          cursor: isProcessing ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          opacity: isProcessing ? 0.6 : 1,
+                        }}
+                      >
+                        <ShieldCheck size={16} />
+                        {isProcessing ? 'Verifying...' : 'Verify Payment'}
+                      </button>
+                      <button
+                        onClick={() => rejectPayment(order)}
+                        disabled={isProcessing}
+                        style={{
+                          padding: '12px 20px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #DC2626',
+                          background: '#FFFFFF',
+                          color: '#DC2626',
+                          fontSize: '13.5px',
+                          fontWeight: 800,
+                          cursor: isProcessing ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <XCircle size={16} />
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        style={{
+                          padding: '12px 18px',
+                          borderRadius: '10px',
+                          border: '1.5px solid var(--border-strong)',
+                          background: 'var(--surface)',
+                          color: 'var(--text-secondary)',
+                          fontSize: '13.5px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Eye size={14} /> Details
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         ) : (
+          // ============================================================
+          // NORMAL ORDERS LIST (unchanged from V2)
+          // ============================================================
           <div className="admin-section" style={{ padding: '10px' }}>
             {filteredOrders.map((order) => {
               const badge = getStatusBadge(order.status)
@@ -610,6 +1272,7 @@ function AdminOrdersPage() {
               const vendorName =
                 order.restaurantName || order.pharmacyName || 'Vendor'
               const hasRider = order.riderId && order.riderName
+              const isOnlinePayment = order.paymentMethod === 'online'
 
               return (
                 <div
@@ -626,7 +1289,6 @@ function AdminOrdersPage() {
                     alignItems: 'center',
                   }}
                 >
-                  {/* Order Type Badge */}
                   <div
                     style={{
                       width: '48px',
@@ -644,7 +1306,6 @@ function AdminOrdersPage() {
                     {orderType.icon}
                   </div>
 
-                  {/* Order ID */}
                   <div style={{ minWidth: '140px', flex: '0 0 auto' }}>
                     <div
                       style={{
@@ -652,6 +1313,7 @@ function AdminOrdersPage() {
                         alignItems: 'center',
                         gap: '6px',
                         marginBottom: '4px',
+                        flexWrap: 'wrap',
                       }}
                     >
                       <strong
@@ -678,6 +1340,31 @@ function AdminOrdersPage() {
                       >
                         <Copy size={12} />
                       </button>
+                      {isOnlinePayment && (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: '999px',
+                            background:
+                              order.paymentStatus === 'verified'
+                                ? '#DCFCE7'
+                                : order.paymentStatus === 'rejected'
+                                ? '#FEE2E2'
+                                : '#FEF3C7',
+                            color:
+                              order.paymentStatus === 'verified'
+                                ? '#15803D'
+                                : order.paymentStatus === 'rejected'
+                                ? '#B91C1C'
+                                : '#92400E',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          💳 {order.paymentStatus || 'pending'}
+                        </span>
+                      )}
                     </div>
                     <span
                       style={{
@@ -690,7 +1377,6 @@ function AdminOrdersPage() {
                     </span>
                   </div>
 
-                  {/* Customer */}
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <div
                       style={{
@@ -724,7 +1410,6 @@ function AdminOrdersPage() {
                     </div>
                   </div>
 
-                  {/* Vendor */}
                   <div style={{ flex: 1, minWidth: '140px' }}>
                     <div
                       style={{
@@ -759,7 +1444,6 @@ function AdminOrdersPage() {
                     </span>
                   </div>
 
-                  {/* Total */}
                   <div style={{ minWidth: '90px' }}>
                     <div
                       style={{
@@ -785,7 +1469,6 @@ function AdminOrdersPage() {
                     </strong>
                   </div>
 
-                  {/* Status */}
                   <div>
                     <span
                       style={{
@@ -805,7 +1488,6 @@ function AdminOrdersPage() {
                     </span>
                   </div>
 
-                  {/* Actions */}
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     <button
                       onClick={() => setSelectedOrder(order)}
@@ -924,7 +1606,6 @@ function AdminOrdersPage() {
               flexDirection: 'column',
             }}
           >
-            {/* Sticky Header */}
             <div
               style={{
                 position: 'sticky',
@@ -1004,7 +1685,6 @@ function AdminOrdersPage() {
               </button>
             </div>
 
-            {/* Scrollable Body */}
             <div
               style={{
                 padding: '20px 24px 24px',
@@ -1013,7 +1693,6 @@ function AdminOrdersPage() {
                 gap: '18px',
               }}
             >
-              {/* Status Badge */}
               <div
                 style={{
                   padding: '12px 16px',
@@ -1043,6 +1722,43 @@ function AdminOrdersPage() {
                   </span>
                 )}
               </div>
+
+              {/* Payment status badge */}
+              {selectedOrder.paymentMethod === 'online' && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    background: getPaymentStatusBadge(
+                      selectedOrder.paymentStatus
+                    ).bg,
+                    color: getPaymentStatusBadge(selectedOrder.paymentStatus)
+                      .color,
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <span style={{ fontSize: '18px' }}>
+                    {getPaymentStatusBadge(selectedOrder.paymentStatus).icon}
+                  </span>
+                  Payment:{' '}
+                  {getPaymentStatusBadge(selectedOrder.paymentStatus).label}
+                  {selectedOrder.paymentRejectReason && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        marginLeft: 'auto',
+                      }}
+                    >
+                      · {selectedOrder.paymentRejectReason}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Customer */}
               <div>
@@ -1098,7 +1814,7 @@ function AdminOrdersPage() {
                 </div>
               </div>
 
-              {/* Rider (if assigned) */}
+              {/* Rider */}
               {selectedOrder.riderName && (
                 <div>
                   <strong
@@ -1347,9 +2063,7 @@ function AdminOrdersPage() {
                   gap: '6px',
                 }}
               >
-                <div
-                  style={{ display: 'flex', justifyContent: 'space-between' }}
-                >
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>💳 Payment Method</span>
                   <strong
                     style={{
@@ -1360,6 +2074,32 @@ function AdminOrdersPage() {
                     {selectedOrder.paymentMethod || 'cod'}
                   </strong>
                 </div>
+                {selectedOrder.paymentMethodUsed && (
+                  <div
+                    style={{ display: 'flex', justifyContent: 'space-between' }}
+                  >
+                    <span>🏦 Payment Via</span>
+                    <strong style={{ color: 'var(--text-primary)' }}>
+                      {selectedOrder.paymentMethodUsed}
+                    </strong>
+                  </div>
+                )}
+                {selectedOrder.paymentTrxId && (
+                  <div
+                    style={{ display: 'flex', justifyContent: 'space-between' }}
+                  >
+                    <span>🧾 TrxID</span>
+                    <strong
+                      style={{
+                        color: 'var(--text-primary)',
+                        fontFamily: 'monospace',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {selectedOrder.paymentTrxId}
+                    </strong>
+                  </div>
+                )}
                 {selectedOrder.zoneName && (
                   <div
                     style={{ display: 'flex', justifyContent: 'space-between' }}

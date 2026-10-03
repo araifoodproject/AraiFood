@@ -1,5 +1,7 @@
 // ============================================================
-// src/pages/PharmacyPanel.jsx — PREMIUM V1.1
+// src/pages/PharmacyPanel.jsx — PREMIUM V1.2
+// + Online Payment Filter (COD সবসময়, Online শুধু verified)
+// + "PAID ONLINE" badge for verified online orders
 // + Push Notification toggle in Dashboard + Settings + Profile
 // + In-App Notification Bell in Topbar
 // ============================================================
@@ -38,6 +40,18 @@ const MED_CATEGORIES = [
   { key: 'vitamins', label: 'Vitamins' },
   { key: 'other', label: 'Other' },
 ]
+
+// Helper: COD order কিনা
+const isCODOrder = (o) => {
+  const m = (o.paymentMethod || 'cod').toLowerCase()
+  return m === 'cod' || m === 'cash'
+}
+
+// Helper: Online order কিনা (COD নয়, method আছে)
+const isOnlineOrder = (o) => {
+  const m = (o.paymentMethod || '').toLowerCase()
+  return m && m !== 'cod' && m !== 'cash'
+}
 
 function PharmacyPanel() {
   const [user, setUser] = useState(null)
@@ -163,10 +177,13 @@ function PharmacyPanel() {
   }, [])
 
   // ============ ORDERS ============
+  // COD orders সবসময় দেখাবে। Online orders শুধু paymentStatus === 'verified' হলে।
+  // (Restaurant Panel এর মতো একই rule)
   useEffect(() => {
     if (!pharmacy) return
     const unsub = onSnapshot(collection(db, 'orders'), (snap) => {
       const all = snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+
       const mine = all
         .filter(
           (o) =>
@@ -174,11 +191,18 @@ function PharmacyPanel() {
             (o.restaurantId === pharmacy.firebaseId &&
               o.orderType === 'pharmacy')
         )
+        .filter((o) => {
+          // COD → সবসময় দেখাবে
+          if (isCODOrder(o)) return true
+          // Online / Wallet → শুধু verified হলে দেখাবে
+          return o.paymentStatus === 'verified'
+        })
         .sort((a, b) => {
           const aT = a.createdAt?.toDate?.()?.getTime() || 0
           const bT = b.createdAt?.toDate?.()?.getTime() || 0
           return bT - aT
         })
+
       setOrders(mine)
     })
     return () => unsub()
@@ -876,6 +900,8 @@ function PharmacyPanel() {
                 const status = order.status || 'pending'
                 const isCancelled = status === 'cancelled'
                 const isNew = status === 'pending'
+                const showPaidOnlineBadge =
+                  order.paymentStatus === 'verified' && isOnlineOrder(order)
 
                 return (
                   <div
@@ -886,6 +912,23 @@ function PharmacyPanel() {
                       <div className="rest-v2-order-info-block">
                         <strong>#{order.orderId}</strong>
                         <small>{order.userEmail || 'Customer'}</small>
+                        {showPaidOnlineBadge && (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginTop: '4px',
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: 'rgba(16,185,129,0.15)',
+                              color: '#059669',
+                              fontSize: '10px',
+                              fontWeight: 900,
+                              letterSpacing: '0.3px',
+                            }}
+                          >
+                            💳 PAID ONLINE
+                          </span>
+                        )}
                       </div>
                       <span className={`rest-v2-order-status ${status}`}>
                         {status.replace(/_/g, ' ')}
@@ -910,6 +953,14 @@ function PharmacyPanel() {
                           <span className="rest-v2-info-row-icon">🗺️</span>
                           <span className="rest-v2-info-row-text">
                             Zone: {order.zoneName}
+                          </span>
+                        </div>
+                      )}
+                      {order.paymentTrxId && (
+                        <div className="rest-v2-info-row">
+                          <span className="rest-v2-info-row-icon">🧾</span>
+                          <span className="rest-v2-info-row-text">
+                            TrxID: {order.paymentTrxId}
                           </span>
                         </div>
                       )}
@@ -951,6 +1002,7 @@ function PharmacyPanel() {
                           style={{
                             fontSize: '14px',
                             textTransform: 'uppercase',
+                            color: showPaidOnlineBadge ? '#059669' : undefined,
                           }}
                         >
                           {order.paymentMethod || 'COD'}

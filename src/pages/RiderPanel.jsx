@@ -1,6 +1,6 @@
 // ============================================================
-// src/pages/RiderPanel.jsx — PREMIUM V5.0
-// ✅ Cash Tab + Request Settlement (riderPayments) + Zone-based Fee
+// src/pages/RiderPanel.jsx — PREMIUM V6.0
+// ✅ Cash Tab: 2 sections (COD Cash to Admin + Online Earnings)
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -53,7 +53,7 @@ const calculateEtaMin = (km) => {
 }
 
 // ------------------------------------------------------------
-// PERIOD FILTER
+// Period filter
 // ------------------------------------------------------------
 const filterByPeriod = (orders, period) => {
   const now = new Date()
@@ -402,7 +402,7 @@ function RiderPanel() {
     return () => unsub()
   }, [rider?.firebaseId])
 
-  // ============ RIDER PAYMENTS (রiderPayments collection) ============
+  // ============ RIDER PAYMENTS ============
   useEffect(() => {
     if (!rider?.firebaseId) return
 
@@ -431,7 +431,7 @@ function RiderPanel() {
     return () => unsub()
   }, [rider?.firebaseId])
 
-  // Pre-fetch restaurant locations for available orders
+  // Pre-fetch restaurant locations
   useEffect(() => {
     if (availableOrders.length === 0) return
     availableOrders.forEach((order) => {
@@ -778,69 +778,7 @@ function RiderPanel() {
     }
   }
 
-  // ============ REQUEST SETTLEMENT ============
-  const requestSettlement = async () => {
-    if (!rider?.firebaseId) return
-
-    const deliveredCOD = myOrders.filter(
-      (o) =>
-        o.riderStatus === 'delivered' &&
-        (o.paymentMethod || '').toLowerCase() === 'cod'
-    )
-
-    const cashCollected = deliveredCOD.reduce(
-      (sum, o) => sum + (Number(o.total) || 0),
-      0
-    )
-    const totalFee = deliveredCOD.reduce(
-      (sum, o) =>
-        sum +
-        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
-      0
-    )
-    const dueToAdmin = Math.max(cashCollected - totalFee, 0)
-
-    // Check already-settled/pending
-    const settledAmount = riderPayments
-      .filter((r) => r.status === 'verified')
-      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
-    const pendingAmount = riderPayments
-      .filter((r) => r.status === 'pending')
-      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
-
-    const finalDue = Math.max(dueToAdmin - settledAmount - pendingAmount, 0)
-
-    if (finalDue <= 0) {
-      toast.info('No pending cash to settle!')
-      return
-    }
-
-    setSubmittingRequest(true)
-    try {
-      await addDoc(collection(db, 'riderPayments'), {
-        riderId: rider.firebaseId,
-        riderUid: user?.uid || rider.firebaseId,
-        riderName: rider.fullName,
-        riderPhone: rider.phone || '',
-        cashCollected,
-        totalFee,
-        amount: finalDue,
-        dueToAdmin: finalDue,
-        deliveryCount: deliveredCOD.length,
-        status: 'pending',
-        createdAt: new Date(),
-      })
-
-      toast.success('✅ Settlement request sent to Admin!')
-    } catch (err) {
-      console.error('Request settlement failed:', err)
-      toast.error('Failed to send request: ' + err.message)
-    } finally {
-      setSubmittingRequest(false)
-    }
-  }
-
-  // ============ SEND MONEY (Direct method + TrxID) ============
+  // ============ SEND COD MONEY ============
   const submitSendMoney = async () => {
     if (!rider?.firebaseId) return
     if (!sendTrxId.trim()) {
@@ -857,13 +795,13 @@ function RiderPanel() {
       (sum, o) => sum + (Number(o.total) || 0),
       0
     )
-    const totalFee = deliveredCOD.reduce(
+    const codFee = deliveredCOD.reduce(
       (sum, o) =>
         sum +
         (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
       0
     )
-    const dueToAdmin = Math.max(cashCollected - totalFee, 0)
+    const toSendAdmin = Math.max(cashCollected - codFee, 0)
 
     const settledAmount = riderPayments
       .filter((r) => r.status === 'verified')
@@ -871,7 +809,7 @@ function RiderPanel() {
     const pendingAmount = riderPayments
       .filter((r) => r.status === 'pending')
       .reduce((s, r) => s + (Number(r.amount) || 0), 0)
-    const finalDue = Math.max(dueToAdmin - settledAmount - pendingAmount, 0)
+    const finalDue = Math.max(toSendAdmin - settledAmount - pendingAmount, 0)
 
     if (finalDue <= 0) {
       toast.info('No pending cash to send!')
@@ -886,9 +824,9 @@ function RiderPanel() {
         riderName: rider.fullName,
         riderPhone: rider.phone || '',
         cashCollected,
-        totalFee,
+        codFee,
         amount: finalDue,
-        dueToAdmin: finalDue,
+        toSendAdmin: finalDue,
         deliveryCount: deliveredCOD.length,
         method: sendMethod,
         transactionId: sendTrxId.trim(),
@@ -897,7 +835,7 @@ function RiderPanel() {
         createdAt: new Date(),
       })
 
-      toast.success('✅ Payment sent to Admin!')
+      toast.success('✅ Sent to Admin!')
       setShowSendModal(false)
       setSendTrxId('')
       setSendNote('')
@@ -963,53 +901,43 @@ function RiderPanel() {
       ? currentGPSLocation
       : rider?.currentLocation || null
 
-  // ============ CASH CALCULATIONS (period-aware) ============
-  const cashOrders = useMemo(() => {
+  // ============================================================
+  // 🎯 COD CASH CALCULATIONS (Rider → Admin)
+  // ============================================================
+  const codStats = useMemo(() => {
     const deliveredCOD = myOrders.filter(
       (o) =>
         o.riderStatus === 'delivered' &&
         (o.paymentMethod || '').toLowerCase() === 'cod'
     )
-    return filterByPeriod(deliveredCOD, cashPeriod)
-  }, [myOrders, cashPeriod])
+    const periodOrders = filterByPeriod(deliveredCOD, cashPeriod)
 
-  const cashStats = useMemo(() => {
-    const cashCollected = cashOrders.reduce(
+    const cashCollected = periodOrders.reduce(
       (sum, o) => sum + (Number(o.total) || 0),
       0
     )
-    const totalFee = cashOrders.reduce(
+    const codFee = periodOrders.reduce(
       (sum, o) =>
         sum +
         (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
       0
     )
-    const dueToAdmin = Math.max(cashCollected - totalFee, 0)
-    return {
-      count: cashOrders.length,
-      cashCollected,
-      totalFee,
-      dueToAdmin,
-    }
-  }, [cashOrders])
+    const toSendAdmin = Math.max(cashCollected - codFee, 0)
 
-  // Lifetime due (all COD delivered - settled - pending)
-  const lifetimeDue = useMemo(() => {
-    const deliveredCOD = myOrders.filter(
-      (o) =>
-        o.riderStatus === 'delivered' &&
-        (o.paymentMethod || '').toLowerCase() === 'cod'
-    )
-    const cashCollected = deliveredCOD.reduce(
+    // Lifetime
+    const lifetimeCollected = deliveredCOD.reduce(
       (sum, o) => sum + (Number(o.total) || 0),
       0
     )
-    const totalFee = deliveredCOD.reduce(
+    const lifetimeFee = deliveredCOD.reduce(
       (sum, o) =>
         sum +
         (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
       0
     )
+    const lifetimeTotal = Math.max(lifetimeCollected - lifetimeFee, 0)
+
+    // Settled / Pending
     const settledAmount = riderPayments
       .filter((r) => r.status === 'verified')
       .reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -1017,36 +945,115 @@ function RiderPanel() {
       .filter((r) => r.status === 'pending')
       .reduce((s, r) => s + (Number(r.amount) || 0), 0)
 
-    return Math.max(
-      cashCollected - totalFee - settledAmount - pendingAmount,
+    const lifetimeDue = Math.max(
+      lifetimeTotal - settledAmount - pendingAmount,
       0
     )
-  }, [myOrders, riderPayments])
 
-  const pendingRequest = riderPayments.find((r) => r.status === 'pending')
+    return {
+      count: periodOrders.length,
+      cashCollected,
+      codFee,
+      toSendAdmin,
+      lifetimeCollected,
+      lifetimeFee,
+      lifetimeDue,
+      settledAmount,
+      pendingAmount,
+    }
+  }, [myOrders, riderPayments, cashPeriod])
 
-  // Active AraiFood numbers
+  // ============================================================
+  // 🎯 ONLINE EARNINGS CALCULATIONS (Admin → Rider)
+  // ============================================================
+  const onlineStats = useMemo(() => {
+    const deliveredOnline = myOrders.filter(
+      (o) =>
+        o.riderStatus === 'delivered' &&
+        (o.paymentMethod || '').toLowerCase() !== 'cod' &&
+        !!o.paymentMethod
+    )
+    const periodOrders = filterByPeriod(deliveredOnline, cashPeriod)
+
+    const earnings = periodOrders.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
+
+    const lifetimeEarnings = deliveredOnline.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.zoneDeliveryFee) || Number(o.deliveryFee) || 0),
+      0
+    )
+
+    // Pending from admin = lifetime - already settled (settlementStatus='paid')
+    const status = rider?.lastSettlementAt ? 'paid' : 'unpaid'
+    const isPaid =
+      status === 'paid' && rider?.lastSettlementAt
+        ? new Date(rider.lastSettlementAt?.toDate?.() || 0) >=
+          new Date(
+            Math.max(
+              ...deliveredOnline.map((o) =>
+                (o.deliveredAt?.toDate?.() || o.acceptedAt?.toDate?.() || new Date(0)).getTime()
+              ),
+              0
+            )
+          )
+        : false
+
+    return {
+      count: periodOrders.length,
+      earnings,
+      lifetimeEarnings,
+      totalDeliveries: deliveredOnline.length,
+    }
+  }, [myOrders, cashPeriod, rider])
+
+  // ============================================================
+  // Active AraiFood payment numbers
+  // ============================================================
   const activeAraifoodNumbers = useMemo(() => {
     if (!araifoodNumbers) return []
     const list = []
     if (araifoodNumbers.bkash?.active && araifoodNumbers.bkash?.number) {
-      list.push({ label: 'bKash', number: araifoodNumbers.bkash.number, icon: '📱' })
+      list.push({
+        label: 'bKash',
+        number: araifoodNumbers.bkash.number,
+        icon: '📱',
+      })
     }
     if (araifoodNumbers.nagad?.active && araifoodNumbers.nagad?.number) {
-      list.push({ label: 'Nagad', number: araifoodNumbers.nagad.number, icon: '📱' })
+      list.push({
+        label: 'Nagad',
+        number: araifoodNumbers.nagad.number,
+        icon: '📱',
+      })
     }
     if (araifoodNumbers.rocket?.active && araifoodNumbers.rocket?.number) {
-      list.push({ label: 'Rocket', number: araifoodNumbers.rocket.number, icon: '📱' })
+      list.push({
+        label: 'Rocket',
+        number: araifoodNumbers.rocket.number,
+        icon: '📱',
+      })
     }
     if (araifoodNumbers.bank?.active && araifoodNumbers.bank?.number) {
       list.push({
-        label: `Bank${araifoodNumbers.bank.bankName ? ' (' + araifoodNumbers.bank.bankName + ')' : ''}`,
+        label: `Bank${
+          araifoodNumbers.bank.bankName
+            ? ' (' + araifoodNumbers.bank.bankName + ')'
+            : ''
+        }`,
         number: araifoodNumbers.bank.number,
         icon: '🏦',
       })
     }
     return list
   }, [araifoodNumbers])
+
+  const pendingRequest = riderPayments.find((r) => r.status === 'pending')
 
   // ============ RENDER GUARDS ============
   if (loading) {
@@ -1657,217 +1664,317 @@ function RiderPanel() {
         </div>
       )}
 
-      {/* CASH TAB */}
+      {/* ============================================================
+          CASH TAB — 2 SECTIONS
+      ============================================================ */}
       {view === 'cash' && (
         <div className="rider-v2-view">
           <h2 className="rider-v2-view-title">💰 My Cash</h2>
 
-          {/* Lifetime Due Hero Card */}
+          {/* ============ SECTION 1: COD CASH ============ */}
           <div
             style={{
-              padding: '24px',
-              borderRadius: '20px',
+              padding: '20px',
+              borderRadius: '18px',
               background:
                 'linear-gradient(135deg, #FEF3C7, #FDE68A)',
               border: '2px solid #F59E0B',
-              marginBottom: '20px',
-              textAlign: 'center',
+              marginBottom: '16px',
             }}
           >
-            <p
+            <div
               style={{
-                margin: 0,
-                fontSize: '12px',
-                fontWeight: 700,
-                color: '#92400E',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
               }}
             >
-              Total Due to Admin
-            </p>
-            <p
+              <span style={{ fontSize: '20px' }}>📤</span>
+              <div>
+                <div
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    color: '#92400E',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  COD Cash to Admin
+                </div>
+                <div
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#A16207',
+                  }}
+                >
+                  Cash you collected from customers (COD)
+                </div>
+              </div>
+            </div>
+
+            <div
               style={{
-                margin: '8px 0',
-                fontSize: '38px',
+                fontSize: '32px',
                 fontWeight: 900,
                 color: '#B45309',
                 lineHeight: 1,
+                marginBottom: '6px',
               }}
             >
-              {tk(lifetimeDue)}
-            </p>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '12px',
-                color: '#92400E',
-                fontWeight: 600,
-              }}
-            >
-              Cash you collected (COD) minus your delivery fees
-            </p>
-          </div>
+              {tk(codStats.lifetimeDue)}
+            </div>
 
-          {/* SEND MONEY SECTION — AraiFood's numbers */}
-          {lifetimeDue > 0 && activeAraifoodNumbers.length > 0 && (
             <div
               style={{
-                padding: '18px 20px',
-                borderRadius: '16px',
-                background: '#EFF6FF',
-                border: '2px solid #3B82F6',
-                marginBottom: '16px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#92400E',
+                marginBottom: '14px',
               }}
             >
+              Your Delivery Fee: {tk(codStats.lifetimeFee)} (you keep this)
+            </div>
+
+            {pendingRequest ? (
               <div
                 style={{
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  color: '#1E40AF',
-                  marginBottom: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
+                  padding: '12px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.7)',
+                  border: '1px solid #F59E0B',
+                  textAlign: 'center',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  color: '#92400E',
                 }}
               >
-                📱 Send Money To
+                ⏳ Pending verification: {tk(pendingRequest.amount)}
+                <br />
+                <span style={{ fontSize: '11px', fontWeight: 600 }}>
+                  {pendingRequest.createdAt
+                    ?.toDate?.()
+                    ?.toLocaleDateString()}
+                </span>
               </div>
-              {activeAraifoodNumbers.map((item, idx) => (
+            ) : codStats.lifetimeDue > 0 ? (
+              <button
+                onClick={() => setShowSendModal(true)}
+                disabled={submittingRequest}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  background: '#F59E0B',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor: submittingRequest ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {submittingRequest
+                  ? '⏳ Sending...'
+                  : `📱 I Have Sent ${tk(codStats.lifetimeDue)}`}
+              </button>
+            ) : (
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: '10px',
+                  background: 'rgba(220, 252, 231, 0.7)',
+                  border: '1px solid #16A34A',
+                  textAlign: 'center',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  color: '#15803D',
+                }}
+              >
+                ✅ All Clear — No pending cash
+              </div>
+            )}
+          </div>
+
+          {/* Send Money To section */}
+          {codStats.lifetimeDue > 0 &&
+            !pendingRequest &&
+            activeAraifoodNumbers.length > 0 && (
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: '14px',
+                  background: '#EFF6FF',
+                  border: '2px solid #3B82F6',
+                  marginBottom: '16px',
+                }}
+              >
                 <div
-                  key={idx}
                   style={{
-                    padding: '10px 12px',
-                    borderRadius: '10px',
-                    background: '#FFFFFF',
-                    marginBottom: '8px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '10px',
-                    border: '1px solid #BFDBFE',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    color: '#1E40AF',
+                    marginBottom: '10px',
                   }}
                 >
+                  📱 Send Money To (AraiFood)
+                </div>
+                {activeAraifoodNumbers.map((item, idx) => (
                   <div
+                    key={idx}
                     style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: '#1E40AF',
-                    }}
-                  >
-                    {item.icon} {item.label}
-                  </div>
-                  <div
-                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: '#FFFFFF',
+                      marginBottom: '6px',
                       display: 'flex',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: '8px',
+                      gap: '10px',
+                      border: '1px solid #BFDBFE',
                     }}
                   >
-                    <span
+                    <div
                       style={{
-                        fontFamily: 'monospace',
-                        fontSize: '14px',
-                        fontWeight: 800,
-                        color: '#0F172A',
-                      }}
-                    >
-                      {item.number}
-                    </span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(item.number)
-                        toast.success('📋 Copied!')
-                      }}
-                      style={{
-                        background: '#DBEAFE',
-                        border: 'none',
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '11px',
+                        fontSize: '12.5px',
                         fontWeight: 700,
                         color: '#1E40AF',
                       }}
                     >
-                      Copy
-                    </button>
+                      {item.icon} {item.label}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                        }}
+                      >
+                        {item.number}
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(item.number)
+                          toast.success('📋 Copied!')
+                        }}
+                        style={{
+                          background: '#DBEAFE',
+                          border: 'none',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          color: '#1E40AF',
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {/* Request Settlement / Send button */}
-          {pendingRequest ? (
+          {/* ============ SECTION 2: ONLINE EARNINGS ============ */}
+          <div
+            style={{
+              padding: '20px',
+              borderRadius: '18px',
+              background:
+                'linear-gradient(135deg, #EDE9FE, #DDD6FE)',
+              border: '2px solid #8B5CF6',
+              marginBottom: '20px',
+            }}
+          >
             <div
               style={{
-                padding: '16px',
-                borderRadius: '14px',
-                background: '#FEF3C7',
-                border: '2px solid #F59E0B',
-                marginBottom: '20px',
-                textAlign: 'center',
-                fontSize: '13px',
-                fontWeight: 700,
-                color: '#92400E',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
               }}
             >
-              ⏳ Settlement request pending with Admin
-              <br />
-              <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                Requested: {tk(pendingRequest.amount || pendingRequest.dueToAdmin)} on{' '}
-                {pendingRequest.createdAt
-                  ?.toDate?.()
-                  ?.toLocaleDateString()}
-              </span>
+              <span style={{ fontSize: '20px' }}>📥</span>
+              <div>
+                <div
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    color: '#5B21B6',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Online Earnings
+                </div>
+                <div
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#6D28D9',
+                  }}
+                >
+                  From Admin (online payment orders)
+                </div>
+              </div>
             </div>
-          ) : lifetimeDue > 0 ? (
-            <button
-              onClick={() => setShowSendModal(true)}
-              disabled={submittingRequest}
-              style={{
-                width: '100%',
-                padding: '16px',
-                borderRadius: '14px',
-                background: '#F59E0B',
-                color: '#FFFFFF',
-                border: 'none',
-                fontSize: '15px',
-                fontWeight: 800,
-                cursor: submittingRequest ? 'not-allowed' : 'pointer',
-                marginBottom: '20px',
-              }}
-            >
-              {submittingRequest
-                ? '⏳ Sending...'
-                : `🔄 I Have Sent ${tk(lifetimeDue)} to Admin`}
-            </button>
-          ) : (
+
             <div
               style={{
-                padding: '16px',
-                borderRadius: '14px',
-                background: '#DCFCE7',
-                border: '2px solid #16A34A',
-                marginBottom: '20px',
-                textAlign: 'center',
-                fontSize: '13px',
-                fontWeight: 700,
-                color: '#15803D',
+                fontSize: '32px',
+                fontWeight: 900,
+                color: '#6D28D9',
+                lineHeight: 1,
+                marginBottom: '6px',
               }}
             >
-              ✅ Nothing to Settle — All Clear!
+              {tk(onlineStats.lifetimeEarnings)}
             </div>
-          )}
+
+            <div
+              style={{
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#5B21B6',
+                marginBottom: '10px',
+              }}
+            >
+              {onlineStats.totalDeliveries} online deliveries · Admin pays you
+            </div>
+
+            <div
+              style={{
+                padding: '10px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.6)',
+                border: '1px solid #A78BFA',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#5B21B6',
+              }}
+            >
+              ℹ️ Admin pays this. Contact admin for settlement.
+            </div>
+          </div>
 
           {/* Period Filter */}
-          <div className="rider-v2-view-title" style={{ fontSize: '16px' }}>
-            📊 Cash Breakdown
+          <div className="rider-v2-view-title" style={{ fontSize: '15px' }}>
+            📊 Breakdown
           </div>
           <div
             className="stl-period-bar"
-            style={{ marginBottom: '16px' }}
+            style={{ marginBottom: '14px' }}
           >
             {[
               { key: 'today', label: 'Today' },
@@ -1893,25 +2000,25 @@ function RiderPanel() {
               <div className="rider-v2-stat-icon blue">📦</div>
               <div>
                 <div className="rider-v2-stat-value">
-                  {cashStats.count}
+                  {codStats.count + onlineStats.count}
                 </div>
-                <div className="rider-v2-stat-label">COD Deliveries</div>
+                <div className="rider-v2-stat-label">Deliveries</div>
               </div>
             </div>
             <div className="rider-v2-stat-card">
               <div className="rider-v2-stat-icon green">💵</div>
               <div>
                 <div className="rider-v2-stat-value">
-                  {tk(cashStats.cashCollected)}
+                  {tk(codStats.cashCollected)}
                 </div>
-                <div className="rider-v2-stat-label">Cash Collected</div>
+                <div className="rider-v2-stat-label">COD Collected</div>
               </div>
             </div>
             <div className="rider-v2-stat-card">
               <div className="rider-v2-stat-icon purple">💰</div>
               <div>
                 <div className="rider-v2-stat-value">
-                  {tk(cashStats.totalFee)}
+                  {tk(codStats.codFee + onlineStats.earnings)}
                 </div>
                 <div className="rider-v2-stat-label">My Fee</div>
               </div>
@@ -1920,9 +2027,9 @@ function RiderPanel() {
               <div className="rider-v2-stat-icon orange">📤</div>
               <div>
                 <div className="rider-v2-stat-value">
-                  {tk(cashStats.dueToAdmin)}
+                  {tk(codStats.toSendAdmin)}
                 </div>
-                <div className="rider-v2-stat-label">To Give Admin</div>
+                <div className="rider-v2-stat-label">To Admin</div>
               </div>
             </div>
           </div>
@@ -1930,15 +2037,15 @@ function RiderPanel() {
           {/* Request History */}
           <div
             className="rider-v2-view-title"
-            style={{ fontSize: '16px', marginTop: '24px' }}
+            style={{ fontSize: '15px', marginTop: '20px' }}
           >
-            📜 Settlement History
+            📜 COD Send History
           </div>
           {riderPayments.length === 0 ? (
             <div className="rider-v2-empty" style={{ padding: '30px 20px' }}>
               <div className="rider-v2-empty-icon">📝</div>
-              <h3>No requests yet</h3>
-              <p>Your settlement requests will appear here</p>
+              <h3>No sends yet</h3>
+              <p>Your COD sends to Admin will appear here</p>
             </div>
           ) : (
             <div
@@ -1970,7 +2077,7 @@ function RiderPanel() {
                         color: '#0F172A',
                       }}
                     >
-                      {tk(req.amount || req.dueToAdmin)}
+                      {tk(req.amount)}
                     </div>
                     <div
                       style={{
@@ -1979,9 +2086,8 @@ function RiderPanel() {
                         fontWeight: 600,
                       }}
                     >
-                      {req.deliveryCount} deliveries ·{' '}
+                      {req.deliveryCount} COD · {req.method} ·{' '}
                       {req.createdAt?.toDate?.()?.toLocaleDateString()}
-                      {req.method && ` · ${req.method}`}
                     </div>
                   </div>
                   <span
@@ -2229,7 +2335,7 @@ function RiderPanel() {
         </div>
       )}
 
-      {/* SEND MONEY MODAL */}
+      {/* SEND MONEY MODAL (COD → Admin) */}
       {showSendModal && (
         <div
           style={{
@@ -2265,7 +2371,7 @@ function RiderPanel() {
                 color: '#0F172A',
               }}
             >
-              💸 Confirm Payment Sent
+              📤 Confirm COD Cash Sent
             </h3>
             <p
               style={{
@@ -2277,7 +2383,6 @@ function RiderPanel() {
               Admin এই তথ্য verify করবে
             </p>
 
-            {/* Amount */}
             <div
               style={{
                 padding: '14px 16px',
@@ -2306,11 +2411,10 @@ function RiderPanel() {
                   color: '#B45309',
                 }}
               >
-                {tk(lifetimeDue)}
+                {tk(codStats.lifetimeDue)}
               </div>
             </div>
 
-            {/* Method */}
             <div style={{ marginBottom: '14px' }}>
               <label
                 style={{
@@ -2358,7 +2462,6 @@ function RiderPanel() {
               </div>
             </div>
 
-            {/* TrxID */}
             {sendMethod !== 'Cash' && (
               <div style={{ marginBottom: '14px' }}>
                 <label
@@ -2378,7 +2481,6 @@ function RiderPanel() {
                   value={sendTrxId}
                   onChange={(e) => setSendTrxId(e.target.value)}
                   placeholder="e.g. TRX123456789"
-                  className="stl-input"
                   style={{
                     width: '100%',
                     padding: '11px 14px',
@@ -2392,7 +2494,6 @@ function RiderPanel() {
               </div>
             )}
 
-            {/* Note */}
             <div style={{ marginBottom: '20px' }}>
               <label
                 style={{
@@ -2411,7 +2512,6 @@ function RiderPanel() {
                 value={sendNote}
                 onChange={(e) => setSendNote(e.target.value)}
                 placeholder="Any message to admin"
-                className="stl-input"
                 style={{
                   width: '100%',
                   padding: '11px 14px',
@@ -2422,7 +2522,6 @@ function RiderPanel() {
               />
             </div>
 
-            {/* Actions */}
             <div
               style={{
                 display: 'flex',
@@ -2518,7 +2617,7 @@ function RiderPanel() {
         >
           <span className="rider-v2-navbtn-icon">💰</span>
           Cash
-          {lifetimeDue > 0 && !pendingRequest && (
+          {codStats.lifetimeDue > 0 && !pendingRequest && (
             <span className="rider-v2-navbadge">!</span>
           )}
         </button>
