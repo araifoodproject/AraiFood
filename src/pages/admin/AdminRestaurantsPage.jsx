@@ -1,7 +1,9 @@
 // ============================================================
 // src/pages/admin/AdminRestaurantsPage.jsx
-// FULLY REAL-TIME — with Edit form (rating, deliveryTime, isOpen,
-// location via map picker, deliveryFee, minimumOrder)
+// V2 — Location check before Approve
+// + Location required warning in list
+// + Approve button disabled if no location
+// + Quick edit to add location
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -28,6 +30,8 @@ import {
   Trash2,
   Pencil,
   Save,
+  MapPin,
+  AlertTriangle,
 } from 'lucide-react'
 
 function AdminRestaurantsPage() {
@@ -38,9 +42,7 @@ function AdminRestaurantsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [selected, setSelected] = useState(null)
 
-  // ------------------------------------------------------------
   // Edit state
-  // ------------------------------------------------------------
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -100,16 +102,38 @@ function AdminRestaurantsPage() {
       pending: restaurants.filter((r) => r.status === 'pending').length,
       approved: restaurants.filter((r) => r.status === 'approved').length,
       rejected: restaurants.filter((r) => r.status === 'rejected').length,
+      noLocation: restaurants.filter(
+        (r) => !r.location?.lat || !r.location?.lng
+      ).length,
     }
   }, [restaurants])
 
-  const updateStatus = async (firebaseId, newStatus, name) => {
-    if (
-      !window.confirm(
-        `${newStatus === 'approved' ? 'Approve' : 'Reject'} "${name}"?`
-      )
-    )
-      return
+  // ============================================================
+  // UPDATE STATUS — with location check for approve
+  // ============================================================
+  const updateStatus = async (firebaseId, newStatus, name, restaurant) => {
+    // ✅ Approve করার আগে location check
+    if (newStatus === 'approved') {
+      const hasLocation = restaurant?.location?.lat && restaurant?.location?.lng
+      if (!hasLocation) {
+        const confirmed = window.confirm(
+          `⚠️ "${name}" এর location set করা নেই!\n\n` +
+            `Location ছাড়া customer কে কাছের restaurant হিসেবে দেখানো যাবে না।\n\n` +
+            `আপনি কি location ছাড়াই approve করতে চান?\n\n` +
+            `(Recommended: আগে Edit করে location set করুন)`
+        )
+        if (!confirmed) {
+          // Edit modal খুলবো location set করার জন্য
+          openEdit(restaurant)
+          return
+        }
+      } else {
+        if (!window.confirm(`Approve "${name}"?`)) return
+      }
+    } else if (newStatus === 'rejected') {
+      if (!window.confirm(`Reject "${name}"?`)) return
+    }
+
     try {
       await updateDoc(doc(db, 'restaurants', firebaseId), {
         status: newStatus,
@@ -138,9 +162,9 @@ function AdminRestaurantsPage() {
     }
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // Edit handlers
-  // ------------------------------------------------------------
+  // ============================================================
   const openEdit = (r) => {
     setEditing(r)
     setForm({
@@ -151,7 +175,8 @@ function AdminRestaurantsPage() {
           ? r.isOpen
           : r.restaurantStatus === 'online' ||
             r.restaurantStatus === 'busy',
-      location: r.location?.lat && r.location?.lng ? r.location : null,
+      location:
+        r.location?.lat && r.location?.lng ? r.location : null,
       deliveryFee: r.deliveryFee != null ? String(r.deliveryFee) : '',
       minimumOrder: r.minimumOrder != null ? String(r.minimumOrder) : '',
     })
@@ -183,7 +208,6 @@ function AdminRestaurantsPage() {
         minimumOrder:
           form.minimumOrder !== '' ? parseFloat(form.minimumOrder) : 0,
       }
-      // Only set location if valid
       if (form.location?.lat && form.location?.lng) {
         updateData.location = {
           lat: form.location.lat,
@@ -228,9 +252,6 @@ function AdminRestaurantsPage() {
     return d.toLocaleDateString()
   }
 
-  // ------------------------------------------------------------
-  // Styles for edit form
-  // ------------------------------------------------------------
   const inputStyle = {
     width: '100%',
     padding: '11px 14px',
@@ -329,6 +350,60 @@ function AdminRestaurantsPage() {
             </div>
           </div>
         </div>
+
+        {/* Location warning banner */}
+        {stats.noLocation > 0 && (
+          <div
+            className="admin-section"
+            style={{
+              padding: '16px 20px',
+              marginBottom: '20px',
+              background:
+                'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(220,38,38,0.06))',
+              border: '1px solid rgba(245,158,11,0.4)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <AlertTriangle
+                size={20}
+                color="#F59E0B"
+                strokeWidth={2.4}
+                style={{ flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <strong
+                  style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    color: '#92400E',
+                    marginBottom: '2px',
+                  }}
+                >
+                  ⚠️ {stats.noLocation} restaurant
+                  {stats.noLocation !== 1 ? 's' : ''} without location
+                </strong>
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    color: '#78350F',
+                    fontWeight: 600,
+                  }}
+                >
+                  Location ছাড়া customer কে কাছের restaurant হিসেবে দেখানো
+                  যাবে না। Edit করে location set করুন।
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="admin-section" style={{ padding: '20px' }}>
@@ -452,7 +527,9 @@ function AdminRestaurantsPage() {
                   key={r.firebaseId}
                   style={{
                     background: 'var(--surface-soft)',
-                    border: '1px solid var(--border)',
+                    border: hasLocation
+                      ? '1px solid var(--border)'
+                      : '1px solid rgba(220,38,38,0.4)',
                     borderRadius: '16px',
                     padding: '18px',
                     marginBottom: '12px',
@@ -519,16 +596,38 @@ function AdminRestaurantsPage() {
                       {r.rating != null && <span>⭐ {r.rating}</span>}
                       {r.deliveryTime && <span>🕐 {r.deliveryTime}</span>}
                     </div>
-                    {!hasLocation && (
+                    {!hasLocation ? (
                       <div
                         style={{
                           marginTop: '6px',
                           fontSize: '11.5px',
                           fontWeight: 700,
                           color: '#dc2626',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '3px 10px',
+                          borderRadius: '999px',
+                          background: 'rgba(220,38,38,0.1)',
                         }}
                       >
-                        ⚠️ No location set — click ✏️ to add
+                        <AlertTriangle size={12} strokeWidth={2.6} />
+                        Location missing
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: '6px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#16a34a',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <MapPin size={12} strokeWidth={2.6} />
+                        Location set
                       </div>
                     )}
                   </div>
@@ -611,17 +710,26 @@ function AdminRestaurantsPage() {
                           updateStatus(
                             r.firebaseId,
                             'approved',
-                            r.restaurantName
+                            r.restaurantName,
+                            r
                           )
                         }
-                        title="Approve"
+                        title={
+                          hasLocation
+                            ? 'Approve'
+                            : 'Approve (no location)'
+                        }
                         style={{
                           width: '36px',
                           height: '36px',
                           borderRadius: '50%',
-                          background: 'rgba(22,163,74,0.12)',
-                          border: '1px solid rgba(22,163,74,0.3)',
-                          color: '#16a34a',
+                          background: hasLocation
+                            ? 'rgba(22,163,74,0.12)'
+                            : 'rgba(245,158,11,0.12)',
+                          border: hasLocation
+                            ? '1px solid rgba(22,163,74,0.3)'
+                            : '1px solid rgba(245,158,11,0.3)',
+                          color: hasLocation ? '#16a34a' : '#f59e0b',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -638,7 +746,8 @@ function AdminRestaurantsPage() {
                           updateStatus(
                             r.firebaseId,
                             'rejected',
-                            r.restaurantName
+                            r.restaurantName,
+                            r
                           )
                         }
                         title="Reject"
@@ -688,7 +797,7 @@ function AdminRestaurantsPage() {
       </main>
 
       {/* ============================================================ */}
-      {/* VIEW DETAILS MODAL (unchanged) */}
+      {/* VIEW DETAILS MODAL */}
       {/* ============================================================ */}
       {selected && (
         <div
@@ -801,6 +910,26 @@ function AdminRestaurantsPage() {
                 <strong
                   style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
                 >
+                  🗺️ LOCATION
+                </strong>
+                <p style={{ margin: '4px 0' }}>
+                  {selected.location?.lat && selected.location?.lng ? (
+                    <span style={{ color: '#16a34a', fontWeight: 700 }}>
+                      ✅ {selected.location.lat.toFixed(4)},{' '}
+                      {selected.location.lng.toFixed(4)}
+                    </span>
+                  ) : (
+                    <span style={{ color: '#dc2626', fontWeight: 700 }}>
+                      ⚠️ Not set — click Edit to add
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <strong
+                  style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}
+                >
                   🕐 HOURS
                 </strong>
                 <p style={{ margin: '4px 0' }}>
@@ -901,7 +1030,6 @@ function AdminRestaurantsPage() {
                 gap: '16px',
               }}
             >
-              {/* Rating + Delivery Time */}
               <div style={gridTwo}>
                 <div>
                   <label style={labelStyle}>⭐ Rating (0 - 5)</label>
@@ -932,7 +1060,6 @@ function AdminRestaurantsPage() {
                 </div>
               </div>
 
-              {/* Delivery Fee + Min Order */}
               <div style={gridTwo}>
                 <div>
                   <label style={labelStyle}>🚚 Delivery Fee (৳)</label>
@@ -960,7 +1087,6 @@ function AdminRestaurantsPage() {
                 </div>
               </div>
 
-              {/* isOpen toggle */}
               <div
                 style={{
                   display: 'flex',
@@ -1024,8 +1150,24 @@ function AdminRestaurantsPage() {
               {/* Location */}
               <div>
                 <label style={labelStyle}>
-                  📍 Restaurant Location (click on map to set)
+                  📍 Restaurant Location{' '}
+                  {!form.location?.lat && (
+                    <span style={{ color: '#DC2626' }}>* Required</span>
+                  )}
                 </label>
+                {!form.location?.lat && (
+                  <p
+                    style={{
+                      fontSize: '11.5px',
+                      color: '#DC2626',
+                      fontWeight: 700,
+                      marginBottom: '8px',
+                      marginTop: '-2px',
+                    }}
+                  >
+                    ⚠️ Location ছাড়া approve করা recommended না
+                  </p>
+                )}
                 <MapPicker
                   position={form.location}
                   setPosition={(loc) => setForm({ ...form, location: loc })}
@@ -1034,7 +1176,6 @@ function AdminRestaurantsPage() {
                 />
               </div>
 
-              {/* Save / Cancel */}
               <div
                 style={{
                   display: 'flex',
@@ -1043,8 +1184,7 @@ function AdminRestaurantsPage() {
                   marginTop: '6px',
                 }}
               >
-                <button
-                  onClick={closeEdit}
+                <button                  onClick={closeEdit}
                   disabled={saving}
                   style={{
                     padding: '12px 22px',

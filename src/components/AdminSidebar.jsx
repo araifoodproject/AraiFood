@@ -1,6 +1,6 @@
 // ============================================================
 // src/components/AdminSidebar.jsx
-// V7 — AraiFood Numbers + Rider Payments menu
+// V8 — + Zone Requests menu item
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -36,6 +36,7 @@ import {
   CreditCard,
   Building2,
   Inbox,
+  TrendingUp,
 } from 'lucide-react'
 
 const SIDEBAR_SCROLL_KEY = 'adminSidebarScrollTop'
@@ -52,6 +53,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     reviews: 0,
     pharmacies: 0,
     riderPayments: 0,
+    zoneRequests: 0,
   })
 
   const location = useLocation()
@@ -176,8 +178,21 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
         setCounts((c) => ({ ...c, riderPayments: pending }))
       },
       (err) => {
-        // Ignore if collection doesn't exist yet
         console.warn('riderPayments listener:', err.message)
+      }
+    )
+
+    // ✅ NEW: Zone Requests count (pending only)
+    const unsub10 = onSnapshot(
+      collection(db, 'zoneRequests'),
+      (snap) => {
+        const pending = snap.docs.filter(
+          (d) => d.data().status !== 'reviewed'
+        ).length
+        setCounts((c) => ({ ...c, zoneRequests: pending }))
+      },
+      (err) => {
+        console.warn('zoneRequests listener:', err.message)
       }
     )
 
@@ -191,6 +206,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       unsub7()
       unsub8()
       unsub9()
+      unsub10()
     }
   }, [])
 
@@ -316,6 +332,15 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
       label: 'Delivery Zones',
       icon: MapPin,
       path: '/admin/zones',
+      key: 'zones',
+    },
+    {
+      // ✅ NEW: Zone Requests
+      label: 'Zone Requests',
+      icon: TrendingUp,
+      path: '/admin/zone-requests',
+      badge: counts.zoneRequests,
+      badgeClass: 'orange',
       key: 'zones',
     },
     {

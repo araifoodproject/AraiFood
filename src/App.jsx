@@ -1,6 +1,6 @@
 // ============================================================
 // src/App.jsx
-// V8 — AraiFood Payment Numbers + Rider Payments routes
+// V10 — + LegalPage + CareersPage routes
 // ============================================================
 
 import { useState, useEffect, lazy, Suspense } from 'react'
@@ -8,15 +8,12 @@ import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
-// Firebase
 import { db, auth } from './firebase'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 
-// Hooks
 import useSettings from './hooks/useSettings'
 
-// Components
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ScrollToTop from './components/ScrollToTop'
@@ -57,6 +54,10 @@ const RestaurantSignupPage = lazy(() => import('./pages/RestaurantSignupPage'))
 const RiderLoginPage = lazy(() => import('./pages/RiderLoginPage'))
 const RiderSignupPage = lazy(() => import('./pages/RiderSignupPage'))
 
+// ✅ NEW: Legal + Careers pages
+const LegalPage = lazy(() => import('./pages/LegalPage'))
+const CareersPage = lazy(() => import('./pages/CareersPage'))
+
 // Static pages
 const HelpPage = lazy(() => import('./pages/HelpPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
@@ -74,6 +75,7 @@ const AdminMarketingPage = lazy(() => import('./pages/admin/AdminMarketingPage')
 const AdminReviewsPage = lazy(() => import('./pages/admin/AdminReviewsPage'))
 const AdminSupportPage = lazy(() => import('./pages/admin/AdminSupportPage'))
 const AdminZonesPage = lazy(() => import('./pages/admin/AdminZonesPage'))
+const AdminZoneRequestsPage = lazy(() => import('./pages/admin/AdminZoneRequestsPage'))
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'))
 const AdminSecurityPage = lazy(() => import('./pages/admin/AdminSecurityPage'))
 const AdminGamingProductsPage = lazy(() => import('./pages/admin/AdminGamingProductsPage'))
@@ -93,50 +95,22 @@ const AdminPaymentNumbersPage = lazy(() => import('./pages/admin/settlement/Admi
 const AdminAraiFoodPaymentNumbersPage = lazy(() => import('./pages/admin/settlement/AdminAraiFoodPaymentNumbersPage'))
 const AdminRiderPaymentsPage = lazy(() => import('./pages/admin/settlement/AdminRiderPaymentsPage'))
 
-// ============================================================
-// PAGE LOADER
-// ============================================================
 function PageLoader() {
   return (
-    <div
-      style={{
-        minHeight: '60vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '16px',
-        padding: '40px 20px',
-      }}
-    >
+    <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '40px 20px' }}>
       <div className="panel-loading-spinner"></div>
-      <p style={{ color: 'var(--text-tertiary)', fontSize: '13.5px', fontWeight: 600 }}>
-        Loading...
-      </p>
+      <p style={{ color: 'var(--text-tertiary)', fontSize: '13.5px', fontWeight: 600 }}>Loading...</p>
     </div>
   )
 }
 
-// ============================================================
-// HOME PAGE — Restaurant Card
-// ============================================================
 function RestaurantCardHome({ restaurant }) {
   const navigate = useNavigate()
   const { settings } = useSettings()
-
   const rating = restaurant.rating ?? null
-  const isOpen =
-    restaurant.restaurantStatus === 'online' ||
-    restaurant.restaurantStatus === 'busy'
-
-  const deliveryTime =
-    restaurant.deliveryTime || restaurant.delivery || settings.defaultDeliveryTime
-
-  const deliveryFee =
-    restaurant.deliveryFee != null
-      ? restaurant.deliveryFee
-      : settings.defaultDeliveryFee
-
+  const isOpen = restaurant.restaurantStatus === 'online' || restaurant.restaurantStatus === 'busy'
+  const deliveryTime = restaurant.deliveryTime || restaurant.delivery || settings.defaultDeliveryTime
+  const deliveryFee = restaurant.deliveryFee != null ? restaurant.deliveryFee : settings.defaultDeliveryFee
   const formatTime = (time24) => {
     if (!time24) return '10 AM'
     try {
@@ -145,19 +119,13 @@ function RestaurantCardHome({ restaurant }) {
       const ampm = hour >= 12 ? 'PM' : 'AM'
       const displayHour = hour % 12 || 12
       return `${displayHour}${m === '00' ? '' : ':' + m} ${ampm}`
-    } catch (e) {
-      return '10 AM'
-    }
+    } catch (e) { return '10 AM' }
   }
-
   const getStatusMessage = () => {
     if (isOpen) return 'Open · Now'
-    if (restaurant.openingTime) {
-      return `Closed · Opens ${formatTime(restaurant.openingTime)}`
-    }
+    if (restaurant.openingTime) return `Closed · Opens ${formatTime(restaurant.openingTime)}`
     return 'Closed'
   }
-
   const getCuisineEmoji = (cuisine) => {
     if (!cuisine) return '🍽️'
     const c = cuisine.toLowerCase()
@@ -172,108 +140,63 @@ function RestaurantCardHome({ restaurant }) {
     if (c.includes('rice') || c.includes('curry')) return '🍚'
     return '🍽️'
   }
-
   return (
-    <div
-      className="aa-restaurant-card"
-      onClick={() => navigate(`/restaurant?id=${restaurant.firebaseId}`)}
-    >
+    <div className="aa-restaurant-card" onClick={() => navigate(`/restaurant?id=${restaurant.firebaseId}`)}>
       <div className="aa-restaurant-image">
-        {restaurant.logo ? (
-          <img src={restaurant.logo} alt={restaurant.restaurantName} />
-        ) : (
-          <span>{getCuisineEmoji(restaurant.cuisine)}</span>
-        )}
-        {rating != null && (
-          <div className="aa-restaurant-rating">⭐ {rating}</div>
-        )}
+        {restaurant.logo ? <img src={restaurant.logo} alt={restaurant.restaurantName} /> : <span>{getCuisineEmoji(restaurant.cuisine)}</span>}
+        {rating != null && <div className="aa-restaurant-rating">⭐ {rating}</div>}
       </div>
-
       <div className="aa-restaurant-info">
         <h3 className="aa-restaurant-name">{restaurant.restaurantName}</h3>
-        <p className="aa-restaurant-cuisine">
-          {rating != null && `⭐ ${rating} · `}
-          {restaurant.cuisine || 'Restaurant'}
-        </p>
-
+        <p className="aa-restaurant-cuisine">{rating != null && `⭐ ${rating} · `}{restaurant.cuisine || 'Restaurant'}</p>
         <div className="aa-restaurant-meta">
           <span>🕐 {deliveryTime}</span>
           <span>🚚 ৳{deliveryFee}</span>
-          <span className={`aa-status-badge ${isOpen ? 'open' : 'closed'}`}>
-            {getStatusMessage()}
-          </span>
+          <span className={`aa-status-badge ${isOpen ? 'open' : 'closed'}`}>{getStatusMessage()}</span>
         </div>
       </div>
     </div>
   )
 }
 
-// ============================================================
-// HOME PAGE
-// ============================================================
 function HomePage() {
   const { settings } = useSettings()
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
-
   const home = settings.home || {}
   const popularLimit = home.popularLimit || 6
-
   useEffect(() => {
-    const restaurantQuery = query(
-      collection(db, 'restaurants'),
-      where('status', '==', 'approved')
-    )
-
+    const restaurantQuery = query(collection(db, 'restaurants'), where('status', '==', 'approved'))
     const unsubscribe = onSnapshot(restaurantQuery, (snapshot) => {
-      const list = snapshot.docs.map((d) => ({
-        firebaseId: d.id,
-        ...d.data(),
-      }))
+      const list = snapshot.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
       setRestaurants(list.slice(0, popularLimit))
       setLoading(false)
     })
-
     return () => unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popularLimit])
-
   return (
     <>
       <Hero />
       <Categories />
-
       <section className="aa-section">
         <div className="aa-section-header">
           <div>
             <h2 className="aa-section-title">{home.popularTitle}</h2>
             <p className="aa-section-sub">{home.popularSubtitle}</p>
           </div>
-          <Link to="/restaurants" className="aa-section-link">
-            See all <span>→</span>
-          </Link>
+          <Link to="/restaurants" className="aa-section-link">See all <span>→</span></Link>
         </div>
-
         {loading ? (
-          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
-            Loading restaurants...
-          </p>
+          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>Loading restaurants...</p>
         ) : restaurants.length === 0 ? (
-          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
-            No restaurants available yet.
-          </p>
+          <p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>No restaurants available yet.</p>
         ) : (
           <div className="aa-restaurant-grid">
-            {restaurants.map((restaurant) => (
-              <RestaurantCardHome
-                key={restaurant.firebaseId}
-                restaurant={restaurant}
-              />
-            ))}
+            {restaurants.map((restaurant) => <RestaurantCardHome key={restaurant.firebaseId} restaurant={restaurant} />)}
           </div>
         )}
       </section>
-
       <GamingBanner />
       <PartnerCTA />
       <DeliveryAreas />
@@ -281,19 +204,13 @@ function HomePage() {
   )
 }
 
-// ============================================================
-// OFFERS PAGE
-// ============================================================
 function OffersPage() {
   const { settings } = useSettings()
-
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
         <div className="restaurants-page-header">
-          <span className="glass-section-label">
-            {(settings.siteName || 'ARAIFOOD').toUpperCase()} OFFERS
-          </span>
+          <span className="glass-section-label">{(settings.siteName || 'ARAIFOOD').toUpperCase()} OFFERS</span>
           <h1>Special Offers</h1>
           <p>Enjoy delicious food with special offers from restaurants around Araihazar.</p>
         </div>
@@ -302,42 +219,27 @@ function OffersPage() {
   )
 }
 
-// ============================================================
-// ABOUT PAGE
-// ============================================================
 function AboutPage() {
   const { settings } = useSettings()
   const siteName = settings.siteName || 'AraiFood'
-
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
         <div className="restaurants-page-header">
-          <span className="glass-section-label">
-            ABOUT {(siteName || 'ARAIFOOD').toUpperCase()}
-          </span>
+          <span className="glass-section-label">ABOUT {(siteName || 'ARAIFOOD').toUpperCase()}</span>
           <h1>About {siteName}</h1>
           <p>Your local food delivery platform for Araihazar.</p>
         </div>
         <div className="account-card">
           <h2>Bringing Araihazar's Food Closer</h2>
-          <p>
-            {siteName} is a local food delivery platform created to make it
-            easier for people around Araihazar to discover restaurants and
-            order delicious food from their favourite local food spots.
-          </p>
-          <p>
-            From biryani and traditional Bangladeshi meals to burgers, pizza,
-            snacks and refreshing drinks, {siteName} brings local restaurants
-            together in one convenient place.
-          </p>
+          <p>{siteName} is a local food delivery platform created to make it easier for people around Araihazar to discover restaurants and order delicious food from their favourite local food spots.</p>
+          <p>From biryani and traditional Bangladeshi meals to burgers, pizza, snacks and refreshing drinks, {siteName} brings local restaurants together in one convenient place.</p>
           <div className="account-divider"></div>
           <h3>Why {siteName}?</h3>
           <p>🍛 Discover local restaurants</p>
           <p>🚴 Convenient food delivery</p>
           <p>⭐ Find highly-rated food spots</p>
           <p>❤️ Support local businesses</p>
-
           <div className="account-divider"></div>
           <h3>Get in Touch</h3>
           <p>📧 {settings.contactEmail}</p>
@@ -349,45 +251,23 @@ function AboutPage() {
   )
 }
 
-// ============================================================
-// APP
-// ============================================================
 function App() {
   const location = useLocation()
   const path = location.pathname
   const [currentUser, setCurrentUser] = useState(null)
-
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setCurrentUser(u))
     return () => unsub()
   }, [])
-
   const isCheckout = path === '/checkout' || path === '/pharmacy-checkout'
-  const isAuth =
-    path === '/login' ||
-    path === '/signup' ||
-    path === '/restaurant-login' ||
-    path === '/restaurant-signup' ||
-    path === '/rider-login' ||
-    path === '/rider-signup' ||
-    path === '/partner-login' ||
-    path === '/pharmacy-login' ||
-    path === '/pharmacy-signup'
-  const isPanel =
-    path.startsWith('/admin') ||
-    path.startsWith('/restaurant-panel') ||
-    path.startsWith('/rider-panel') ||
-    path.startsWith('/pharmacy-panel')
-
+  const isAuth = path === '/login' || path === '/signup' || path === '/restaurant-login' || path === '/restaurant-signup' || path === '/rider-login' || path === '/rider-signup' || path === '/partner-login' || path === '/pharmacy-login' || path === '/pharmacy-signup'
+  const isPanel = path.startsWith('/admin') || path.startsWith('/restaurant-panel') || path.startsWith('/rider-panel') || path.startsWith('/pharmacy-panel')
   const showNavbarAndFooter = !isCheckout && !isAuth && !isPanel
   const showSubscribePrompt = currentUser && !isAuth && !isPanel && !isCheckout
-
   return (
     <>
       <ScrollToTop />
-
       {showNavbarAndFooter && <Navbar />}
-
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* PUBLIC */}
@@ -399,14 +279,14 @@ function App() {
           <Route path="/help" element={<HelpPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/contact" element={<ContactPage />} />
-
+          {/* ✅ NEW: Legal + Careers */}
+          <Route path="/legal" element={<LegalPage />} />
+          <Route path="/careers" element={<CareersPage />} />
           {/* PHARMACY */}
           <Route path="/pharmacy" element={<PharmacyPage />} />
           <Route path="/pharmacy-detail" element={<PharmacyDetailPage />} />
-
           {/* GAMING */}
           <Route path="/gaming" element={<GamingPage />} />
-
           {/* AUTH */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
@@ -417,7 +297,6 @@ function App() {
           <Route path="/rider-signup" element={<RiderSignupPage />} />
           <Route path="/pharmacy-login" element={<PharmacyLoginPage />} />
           <Route path="/pharmacy-signup" element={<PharmacySignupPage />} />
-
           {/* CUSTOMER PROTECTED */}
           <Route path="/account" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><AccountPage /></ProtectedRoute>} />
           <Route path="/cart" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><CartPage /></ProtectedRoute>} />
@@ -427,16 +306,12 @@ function App() {
           <Route path="/order-history" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><OrderHistoryPage /></ProtectedRoute>} />
           <Route path="/track-order" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><TrackOrderPage /></ProtectedRoute>} />
           <Route path="/gaming-orders" element={<ProtectedRoute allowedRoles={['customer']} redirectTo="/login"><GamingOrdersPage /></ProtectedRoute>} />
-
           {/* RESTAURANT PANEL */}
           <Route path="/restaurant-panel" element={<ProtectedRoute allowedRoles={['restaurant']} redirectTo="/restaurant-login"><RestaurantPanel /></ProtectedRoute>} />
-
           {/* RIDER PANEL */}
           <Route path="/rider-panel" element={<ProtectedRoute allowedRoles={['rider']} redirectTo="/rider-login"><RiderPanel /></ProtectedRoute>} />
-
           {/* PHARMACY PANEL */}
           <Route path="/pharmacy-panel" element={<ProtectedRoute allowedRoles={['pharmacy']} redirectTo="/pharmacy-login"><PharmacyPanel /></ProtectedRoute>} />
-
           {/* ADMIN */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']} redirectTo="/login"><AdminPanel /></ProtectedRoute>} />
           <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="orders" redirectTo="/login"><AdminOrdersPage /></ProtectedRoute>} />
@@ -453,6 +328,7 @@ function App() {
           <Route path="/admin/reviews" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="reviews" redirectTo="/login"><AdminReviewsPage /></ProtectedRoute>} />
           <Route path="/admin/support" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="support" redirectTo="/login"><AdminSupportPage /></ProtectedRoute>} />
           <Route path="/admin/zones" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="zones" redirectTo="/login"><AdminZonesPage /></ProtectedRoute>} />
+          <Route path="/admin/zone-requests" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="zones" redirectTo="/login"><AdminZoneRequestsPage /></ProtectedRoute>} />
           <Route path="/admin/wallet-requests" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="walletRequests" redirectTo="/login"><AdminWalletRequestsPage /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="settings" redirectTo="/login"><AdminSettingsPage /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="security" redirectTo="/login"><AdminSecurityPage /></ProtectedRoute>} />
@@ -460,7 +336,6 @@ function App() {
           <Route path="/admin/gaming-orders" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingOrders" redirectTo="/login"><AdminGamingOrdersPage /></ProtectedRoute>} />
           <Route path="/admin/gaming-settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="gamingSettings" redirectTo="/login"><AdminGamingSettingsPage /></ProtectedRoute>} />
           <Route path="/admin/management" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="management" redirectTo="/login"><AdminManagementPage /></ProtectedRoute>} />
-
           {/* SETTLEMENT */}
           <Route path="/admin/settlement" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminSettlementPage /></ProtectedRoute>} />
           <Route path="/admin/settlement/settings" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminSettlementSettingsPage /></ProtectedRoute>} />
@@ -470,23 +345,10 @@ function App() {
           <Route path="/admin/settlement/rider-payments" element={<ProtectedRoute allowedRoles={['admin']} requiredPermission="finance" redirectTo="/login"><AdminRiderPaymentsPage /></ProtectedRoute>} />
         </Routes>
       </Suspense>
-
       {showNavbarAndFooter && <Footer />}
       {!isPanel && <LiveChat />}
-
       {showSubscribePrompt && <SubscribePromptModal user={currentUser} />}
-
-      <ToastContainer
-        position="top-right"
-        autoClose={2000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
+      <ToastContainer position="top-right" autoClose={2000} hideProgressBar={false} newestOnTop closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
     </>
   )
 }

@@ -1,9 +1,8 @@
 // ============================================================
 // src/pages/AccountPage.jsx
-// V5 — Mobile Responsive + OneSignal Push + Improved Edit/Save UX
-// + Inline <style> tag (কোনো external CSS লাগবে না)
-// + Sticky Save bar + Top Save/Cancel + Auto scroll
-// + 640px + 400px mobile breakpoints
+// V8 — Zone badge spacing fix + Zone + Location required
+// + Mobile responsive (inline style)
+// + Full Bangla comments where helpful
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -22,6 +21,7 @@ import {
 import { Link } from 'react-router-dom'
 import { auth, db } from '../firebase'
 import PageBackButton from '../components/PageBackButton'
+import MapPicker from '../components/MapPicker'
 import useSettings from '../hooks/useSettings'
 import { toast } from 'react-toastify'
 import {
@@ -37,6 +37,7 @@ import {
   BellOff,
   BellRing,
   Save,
+  MapPin,
 } from 'lucide-react'
 import {
   enableNotifications,
@@ -46,167 +47,45 @@ import {
 } from '../utils/oneSignal'
 
 // ============================================================
-// ✅ Mobile Responsive Styles — Inline <style> tag এর জন্য
+// Mobile Responsive Styles — inline <style> tag
 // ============================================================
 const MOBILE_STYLES = `
-  /* ====== Mobile Responsive — AccountPage ====== */
   @media (max-width: 640px) {
-    .account-container {
-      padding: 14px 12px 110px !important;
-    }
-
-    .account-header h1 {
-      font-size: 22px !important;
-      line-height: 1.3 !important;
-    }
-
-    .account-header p {
-      font-size: 13px !important;
-    }
-
-    .account-card {
-      padding: 16px 14px !important;
-      border-radius: 16px !important;
-    }
-
-    .account-profile {
-      flex-direction: column !important;
-      text-align: center !important;
-      gap: 14px !important;
-      align-items: center !important;
-    }
-
-    .profile-avatar-wrapper {
-      margin: 0 auto !important;
-    }
-
-    .profile-main-info {
-      text-align: center !important;
-      width: 100% !important;
-    }
-
-    .profile-main-info h2 {
-      font-size: 18px !important;
-    }
-
-    .profile-main-info p {
-      font-size: 12.5px !important;
-      word-break: break-all !important;
-    }
-
-    .account-avatar {
-      width: 84px !important;
-      height: 84px !important;
-      font-size: 32px !important;
-    }
-
-    .account-info-item {
-      padding: 12px 14px !important;
-    }
-
-    .account-info-content strong {
-      font-size: 13.5px !important;
-      word-break: break-word !important;
-    }
-
-    /* Top edit header buttons stack */
-    .account-edit-header {
-      flex-direction: column !important;
-      align-items: stretch !important;
-      gap: 10px !important;
-    }
-
-    .account-edit-header-actions {
-      width: 100% !important;
-      justify-content: stretch !important;
-    }
-
-    .account-edit-header-actions button {
-      flex: 1 !important;
-    }
-
-    /* Sticky save bar — bottom nav এর উপরে */
-    .account-sticky-save-bar {
-      bottom: 84px !important;
-      padding: 12px 14px !important;
-      flex-direction: column !important;
-      gap: 8px !important;
-    }
-
-    .account-sticky-save-bar button {
-      width: 100% !important;
-    }
-
-    /* Reward cards */
-    .reward-card {
-      padding: 12px 14px !important;
-    }
-
-    .reward-icon {
-      font-size: 22px !important;
-    }
-
-    .reward-info strong {
-      font-size: 15px !important;
-    }
-
-    .reward-info small {
-      font-size: 11px !important;
-    }
-
-    /* Notification toggle */
-    .notification-card-inner {
-      flex-direction: column !important;
-      align-items: stretch !important;
-    }
-
-    .notification-toggle-btn {
-      width: 100% !important;
-      justify-content: center !important;
-    }
+    .account-container { padding: 14px 12px 110px !important; }
+    .account-header h1 { font-size: 22px !important; line-height: 1.3 !important; }
+    .account-header p { font-size: 13px !important; }
+    .account-card { padding: 16px 14px !important; border-radius: 16px !important; }
+    .account-profile { flex-direction: column !important; text-align: center !important; gap: 14px !important; align-items: center !important; }
+    .profile-avatar-wrapper { margin: 0 auto !important; }
+    .profile-main-info { text-align: center !important; width: 100% !important; }
+    .profile-main-info h2 { font-size: 18px !important; }
+    .profile-main-info p { font-size: 12.5px !important; word-break: break-all !important; }
+    .account-avatar { width: 84px !important; height: 84px !important; font-size: 32px !important; }
+    .account-info-item { padding: 12px 14px !important; }
+    .account-info-content strong { font-size: 13.5px !important; word-break: break-word !important; }
+    .account-edit-header { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+    .account-edit-header-actions { width: 100% !important; justify-content: stretch !important; }
+    .account-edit-header-actions button { flex: 1 !important; }
+    .account-sticky-save-bar { bottom: 84px !important; padding: 12px 14px !important; flex-direction: column !important; gap: 8px !important; }
+    .account-sticky-save-bar button { width: 100% !important; }
+    .reward-card { padding: 12px 14px !important; }
+    .reward-icon { font-size: 22px !important; }
+    .reward-info strong { font-size: 15px !important; }
+    .reward-info small { font-size: 11px !important; }
+    .notification-card-inner { flex-direction: column !important; align-items: stretch !important; }
+    .notification-toggle-btn { width: 100% !important; justify-content: center !important; }
   }
 
   @media (max-width: 400px) {
-    .account-container {
-      padding: 12px 10px 100px !important;
-    }
-
-    .account-header h1 {
-      font-size: 19px !important;
-    }
-
-    .account-card {
-      padding: 14px 12px !important;
-      border-radius: 14px !important;
-    }
-
-    .account-avatar {
-      width: 72px !important;
-      height: 72px !important;
-      font-size: 28px !important;
-    }
-
-    .profile-main-info h2 {
-      font-size: 16px !important;
-    }
-
-    .reward-card {
-      padding: 10px 12px !important;
-    }
-
-    .reward-info strong {
-      font-size: 14px !important;
-    }
-
-    /* Stats grid — 2 column এ force */
-    .account-stats-grid {
-      grid-template-columns: repeat(2, 1fr) !important;
-    }
-
-    /* Quick actions stack */
-    .account-quick-actions {
-      grid-template-columns: 1fr !important;
-    }
+    .account-container { padding: 12px 10px 100px !important; }
+    .account-header h1 { font-size: 19px !important; }
+    .account-card { padding: 14px 12px !important; border-radius: 14px !important; }
+    .account-avatar { width: 72px !important; height: 72px !important; font-size: 28px !important; }
+    .profile-main-info h2 { font-size: 16px !important; }
+    .reward-card { padding: 10px 12px !important; }
+    .reward-info strong { font-size: 14px !important; }
+    .account-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .account-quick-actions { grid-template-columns: 1fr !important; }
   }
 `
 
@@ -221,12 +100,22 @@ function AccountPage() {
   const [address, setAddress] = useState('')
   const [profileImage, setProfileImage] = useState('')
 
-  // Original values — cancel করলে revert করার জন্য
+  // Zone + Location
+  const [zoneId, setZoneId] = useState('')
+  const [zoneName, setZoneName] = useState('')
+  const [location, setLocation] = useState(null)
+  const [zones, setZones] = useState([])
+  const [zonesLoading, setZonesLoading] = useState(true)
+
+  // Original — cancel এ revert
   const [originalData, setOriginalData] = useState({
     fullName: '',
     phone: '',
     address: '',
     profileImage: '',
+    zoneId: '',
+    zoneName: '',
+    location: null,
   })
 
   const [saving, setSaving] = useState(false)
@@ -246,12 +135,32 @@ function AccountPage() {
 
   const [editMode, setEditMode] = useState(false)
 
-  // ============ NOTIFICATION STATE ============
+  // Notification state
   const [notifStatus, setNotifStatus] = useState('checking')
   const [notifLoading, setNotifLoading] = useState(false)
 
   const fileInputRef = useRef(null)
   const editSectionRef = useRef(null)
+  const zoneSectionRef = useRef(null)
+  const mapSectionRef = useRef(null)
+
+  // ============ LOAD ZONES ============
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'deliveryZones'), where('active', '==', true)),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ firebaseId: d.id, ...d.data() }))
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        setZones(list)
+        setZonesLoading(false)
+      },
+      (err) => {
+        console.error('Zones load error:', err)
+        setZonesLoading(false)
+      }
+    )
+    return () => unsub()
+  }, [])
 
   // ============ AUTH ============
   useEffect(() => {
@@ -267,16 +176,28 @@ function AccountPage() {
             const data = userDoc.data()
             localStorage.setItem('userRole', 'customer')
 
-            setFullName(data.fullName || '')
-            setPhone(data.phone || '')
-            setAddress(data.address || '')
-            setProfileImage(data.profileImage || '')
-            setOriginalData({
+            const initial = {
               fullName: data.fullName || '',
               phone: data.phone || '',
               address: data.address || '',
               profileImage: data.profileImage || '',
-            })
+              zoneId: data.zoneId || '',
+              zoneName: data.zoneName || '',
+              location:
+                data.location?.lat && data.location?.lng
+                  ? data.location
+                  : null,
+            }
+
+            setFullName(initial.fullName)
+            setPhone(initial.phone)
+            setAddress(initial.address)
+            setProfileImage(initial.profileImage)
+            setZoneId(initial.zoneId)
+            setZoneName(initial.zoneName)
+            setLocation(initial.location)
+            setOriginalData(initial)
+
             setLoyaltyPoints(data.loyaltyPoints || 0)
             setWalletBalance(data.walletBalance || 0)
             setWalletTransactions(data.walletTransactions || [])
@@ -288,6 +209,9 @@ function AccountPage() {
               phone: '',
               address: '',
               profileImage: '',
+              zoneId: '',
+              zoneName: '',
+              location: null,
               role: 'customer',
               loyaltyPoints: 0,
               walletBalance: 0,
@@ -311,17 +235,15 @@ function AccountPage() {
   // ============ LOAD ORDERS STATS ============
   useEffect(() => {
     if (!user) return
-    const q = query(
-      collection(db, 'orders'),
-      where('userId', '==', user.uid)
-    )
+    const q = query(collection(db, 'orders'), where('userId', '==', user.uid))
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs.map((d) => d.data())
       setTotalOrders(list.length)
       setActiveOrders(
-        list.filter((o) =>
-          ['pending', 'preparing', 'delivering'].includes(o.status) ||
-          !o.status
+        list.filter(
+          (o) =>
+            ['pending', 'preparing', 'delivering'].includes(o.status) ||
+            !o.status
         ).length
       )
       setTotalSpent(
@@ -352,13 +274,11 @@ function AccountPage() {
     return () => unsub()
   }, [user])
 
-  // ============ NOTIFICATION STATUS CHECK ============
+  // ============ NOTIFICATION STATUS ============
   useEffect(() => {
     if (!user) return
-
     const checkStatus = async () => {
       const permission = getBrowserPermission()
-
       if (permission === 'unsupported') {
         setNotifStatus('unsupported')
         return
@@ -367,19 +287,15 @@ function AccountPage() {
         setNotifStatus('denied')
         return
       }
-
       const sub = await getSubscriptionStatus()
       setNotifStatus(sub.enabled ? 'enabled' : 'disabled')
     }
-
     checkStatus()
   }, [user])
 
-  // ============ ENABLE / DISABLE NOTIFICATIONS ============
   const handleToggleNotifications = async () => {
     if (!user) return
     setNotifLoading(true)
-
     try {
       if (notifStatus === 'enabled') {
         const res = await disableNotifications(user)
@@ -450,7 +366,6 @@ function AccountPage() {
         ctx.fillRect(0, 0, width, height)
         ctx.drawImage(img, 0, 0, width, height)
         setProfileImage(canvas.toDataURL('image/jpeg', 0.8))
-        // ✅ Photo upload হলে auto edit mode এ ঢুকবে
         setEditMode(true)
         toast.success('📷 Photo ready! Click "Save Changes" below.')
         setTimeout(() => {
@@ -477,20 +392,55 @@ function AccountPage() {
     if (!fullName.trim()) {
       setMessage('Please enter your full name.')
       toast.error('Full name is required')
+      editSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
       return
     }
+
+    // ✅ Zone required
+    if (!zoneId) {
+      setMessage('Please select your area / zone.')
+      toast.error('📍 Please select your area / zone')
+      zoneSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+      return
+    }
+
+    // ✅ Location required
+    if (!location?.lat || !location?.lng) {
+      setMessage('Please set your location on the map.')
+      toast.error('📍 Map এ আপনার location set করুন')
+      mapSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+      return
+    }
+
     setSaving(true)
     setMessage('')
     try {
+      const selectedZoneObj = zones.find((z) => z.firebaseId === zoneId)
       const dataToSave = {
         fullName: fullName.trim(),
         phone: phone.trim(),
         address: address.trim(),
         profileImage: profileImage || '',
+        zoneId: zoneId,
+        zoneName: selectedZoneObj?.name || zoneName || '',
+        location: {
+          lat: location.lat,
+          lng: location.lng,
+        },
         email: user.email,
         role: 'customer',
         updatedAt: new Date(),
       }
+
       await setDoc(doc(db, 'users', user.uid), dataToSave, { merge: true })
 
       setOriginalData({
@@ -498,8 +448,12 @@ function AccountPage() {
         phone: dataToSave.phone,
         address: dataToSave.address,
         profileImage: dataToSave.profileImage,
+        zoneId: dataToSave.zoneId,
+        zoneName: dataToSave.zoneName,
+        location: dataToSave.location,
       })
 
+      setZoneName(dataToSave.zoneName)
       setMessage('Profile saved successfully!')
       toast.success('✅ Profile saved!')
       setEditMode(false)
@@ -518,7 +472,9 @@ function AccountPage() {
       fullName !== originalData.fullName ||
       phone !== originalData.phone ||
       address !== originalData.address ||
-      profileImage !== originalData.profileImage
+      profileImage !== originalData.profileImage ||
+      zoneId !== originalData.zoneId ||
+      JSON.stringify(location) !== JSON.stringify(originalData.location)
 
     if (hasChanges) {
       const confirm = window.confirm(
@@ -531,12 +487,14 @@ function AccountPage() {
     setPhone(originalData.phone)
     setAddress(originalData.address)
     setProfileImage(originalData.profileImage)
+    setZoneId(originalData.zoneId)
+    setZoneName(originalData.zoneName)
+    setLocation(originalData.location)
     setMessage('')
     setEditMode(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // ============ ENTER EDIT MODE ============
   const enterEditMode = () => {
     setEditMode(true)
     setMessage('')
@@ -548,7 +506,6 @@ function AccountPage() {
     }, 100)
   }
 
-  // ============ LOGOUT ============
   const handleLogout = async () => {
     try {
       await signOut(auth)
@@ -598,7 +555,6 @@ function AccountPage() {
     )
   }
 
-  // Reusable input style
   const fieldInputStyle = {
     width: '100%',
     padding: '14px 16px 14px 48px',
@@ -632,10 +588,11 @@ function AccountPage() {
     marginBottom: '8px',
   }
 
-  // ============ MAIN ============
+  const selectedZoneDisplay = zones.find((z) => z.firebaseId === zoneId)
+  const canSave = Boolean(zoneId && location?.lat && location?.lng)
+
   return (
     <>
-      {/* ✅ Mobile responsive styles inject */}
       <style>{MOBILE_STYLES}</style>
 
       <div className="account-page">
@@ -682,9 +639,45 @@ function AccountPage() {
               <div className="profile-main-info">
                 <h2>{fullName || 'Food Lover'}</h2>
                 <p>{user.email}</p>
-                <div className="profile-status">
-                  <span className="profile-status-dot"></span>
-                  Active Customer Account
+
+                {/* ✅ FIXED: Zone badge + status — proper spacing */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    flexWrap: 'wrap',
+                    marginTop: '10px',
+                  }}
+                >
+                  <div
+                    className="profile-status"
+                    style={{ margin: 0 }}
+                  >
+                    <span className="profile-status-dot"></span>
+                    Active Customer Account
+                  </div>
+
+                  {selectedZoneDisplay && (
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '5px 12px',
+                        borderRadius: '999px',
+                        background: 'rgba(5,150,105,0.1)',
+                        color: '#047857',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <MapPin size={12} strokeWidth={2.6} />
+                      {selectedZoneDisplay.name}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1031,10 +1024,7 @@ function AccountPage() {
                 </p>
               ) : (
                 walletTransactions.slice(0, 5).map((transaction) => (
-                  <div
-                    className="wallet-transaction-card"
-                    key={transaction.id}
-                  >
+                  <div className="wallet-transaction-card" key={transaction.id}>
                     <div className="transaction-icon">
                       {transaction.type === 'credit' ? '⬇️' : '⬆️'}
                     </div>
@@ -1093,9 +1083,7 @@ function AccountPage() {
             ref={editSectionRef}
             style={{
               marginBottom: '20px',
-              border: editMode
-                ? '2px solid rgba(5,150,105,0.5)'
-                : undefined,
+              border: editMode ? '2px solid rgba(5,150,105,0.5)' : undefined,
               boxShadow: editMode
                 ? '0 0 0 4px rgba(5,150,105,0.08)'
                 : undefined,
@@ -1113,10 +1101,7 @@ function AccountPage() {
                 flexWrap: 'wrap',
               }}
             >
-              <div
-                className="account-section-title"
-                style={{ marginBottom: 0 }}
-              >
+              <div className="account-section-title" style={{ marginBottom: 0 }}>
                 <div className="account-section-icon">👤</div>
                 <div>
                   <h3>
@@ -1140,7 +1125,7 @@ function AccountPage() {
                   </h3>
                   <p>
                     {editMode
-                      ? 'Edit and save your details'
+                      ? 'Zone + Map location — both required'
                       : 'Your information'}
                   </p>
                 </div>
@@ -1155,8 +1140,7 @@ function AccountPage() {
                     gap: '6px',
                     padding: '10px 20px',
                     borderRadius: '999px',
-                    background:
-                      'linear-gradient(135deg, #059669, #047857)',
+                    background: 'linear-gradient(135deg, #059669, #047857)',
                     color: '#FFFFFF',
                     border: 'none',
                     fontSize: '13px',
@@ -1258,6 +1242,87 @@ function AccountPage() {
                   </div>
                 </div>
 
+                {/* Zone Selector — REQUIRED */}
+                <div
+                  style={{ marginBottom: '16px' }}
+                  ref={zoneSectionRef}
+                >
+                  <label style={fieldLabelStyle}>
+                    📍 Your Area / Zone{' '}
+                    <span style={{ color: '#DC2626' }}>* Required</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={zoneId}
+                      onChange={(e) => {
+                        setZoneId(e.target.value)
+                        setMessage('')
+                      }}
+                      disabled={zonesLoading}
+                      style={{
+                        width: '100%',
+                        padding: '14px 16px',
+                        borderRadius: '14px',
+                        border: zoneId
+                          ? '2px solid #059669'
+                          : '2px solid #DC2626',
+                        background: 'var(--surface)',
+                        color: 'var(--text-primary)',
+                        fontSize: '14.5px',
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-primary)',
+                        outline: 'none',
+                        cursor: zonesLoading ? 'wait' : 'pointer',
+                        boxSizing: 'border-box',
+                        appearance: 'auto',
+                      }}
+                    >
+                      <option value="">
+                        {zonesLoading
+                          ? '— Loading zones —'
+                          : '— Select your area (required) —'}
+                      </option>
+                      {zones.map((z) => (
+                        <option key={z.firebaseId} value={z.firebaseId}>
+                          {z.name} — ৳{z.deliveryFee} delivery
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {zoneId && selectedZoneDisplay ? (
+                    <p
+                      style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(5,150,105,0.08)',
+                        border: '1px solid rgba(5,150,105,0.25)',
+                        color: '#059669',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ✅ {selectedZoneDisplay.name} — Delivery ৳
+                      {selectedZoneDisplay.deliveryFee}
+                    </p>
+                  ) : (
+                    <p
+                      style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(220,38,38,0.06)',
+                        border: '1px solid rgba(220,38,38,0.2)',
+                        color: '#DC2626',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ⚠️ আপনার এলাকা select করা বাধ্যতামূলক
+                    </p>
+                  )}
+                </div>
+
                 <div style={{ marginBottom: '16px' }}>
                   <label style={fieldLabelStyle}>Delivery Address</label>
                   <div style={{ position: 'relative' }}>
@@ -1287,7 +1352,70 @@ function AccountPage() {
                   </div>
                 </div>
 
-                {/* ✅ Bottom Save Bar — sticky */}
+                {/* MapPicker — REQUIRED */}
+                <div
+                  style={{ marginBottom: '16px' }}
+                  ref={mapSectionRef}
+                >
+                  <label style={fieldLabelStyle}>
+                    🗺️ Your Location on Map{' '}
+                    <span style={{ color: '#DC2626' }}>* Required</span>
+                  </label>
+                  <p
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--text-tertiary)',
+                      fontWeight: 600,
+                      marginBottom: '10px',
+                      marginTop: '-4px',
+                    }}
+                  >
+                    👆 কাছের restaurant দেখাতে সাহায্য করে
+                  </p>
+                  <MapPicker
+                    position={location}
+                    setPosition={(loc) => {
+                      setLocation(loc)
+                      setMessage('')
+                    }}
+                    height={280}
+                    helperText="👆 Map এ click করে আপনার location set করুন (required)"
+                  />
+                  {location?.lat && location?.lng ? (
+                    <p
+                      style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(5,150,105,0.08)',
+                        border: '1px solid rgba(5,150,105,0.25)',
+                        color: '#059669',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ✅ Location set: {location.lat.toFixed(4)},{' '}
+                      {location.lng.toFixed(4)}
+                    </p>
+                  ) : (
+                    <p
+                      style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(220,38,38,0.06)',
+                        border: '1px solid rgba(220,38,38,0.2)',
+                        color: '#DC2626',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ⚠️ Map এ location set করা বাধ্যতামূলক
+                    </p>
+                  )}
+                </div>
+
+                {/* Sticky Save Bar */}
                 <div
                   className="account-sticky-save-bar"
                   style={{
@@ -1297,9 +1425,12 @@ function AccountPage() {
                     padding: '14px 16px',
                     borderRadius: '18px',
                     background: 'var(--surface)',
-                    border: '2px solid rgba(5,150,105,0.4)',
-                    boxShadow:
-                      '0 10px 30px rgba(5,150,105,0.2), 0 0 0 4px rgba(5,150,105,0.06)',
+                    border: canSave
+                      ? '2px solid rgba(5,150,105,0.4)'
+                      : '2px solid rgba(220,38,38,0.4)',
+                    boxShadow: canSave
+                      ? '0 10px 30px rgba(5,150,105,0.2), 0 0 0 4px rgba(5,150,105,0.06)'
+                      : '0 10px 30px rgba(220,38,38,0.15)',
                     display: 'flex',
                     gap: '10px',
                     flexWrap: 'wrap',
@@ -1317,10 +1448,15 @@ function AccountPage() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
+                      opacity: canSave ? 1 : 0.7,
                     }}
                   >
                     <Save size={16} />
-                    {saving ? '⏳ Saving...' : '✓ Save Changes'}
+                    {saving
+                      ? '⏳ Saving...'
+                      : canSave
+                      ? '✓ Save Changes'
+                      : '⚠️ Zone + Location Required'}
                   </button>
                   <button
                     onClick={cancelEdit}
@@ -1343,9 +1479,7 @@ function AccountPage() {
                 {message && (
                   <div
                     className={`account-message ${
-                      message.includes('successfully')
-                        ? 'success'
-                        : 'error'
+                      message.includes('successfully') ? 'success' : 'error'
                     }`}
                     style={{ marginTop: '12px' }}
                   >
@@ -1374,14 +1508,41 @@ function AccountPage() {
                   </div>
                 </div>
 
+                <div className="account-info-item">
+                  <div className="account-info-icon">📍</div>
+                  <div className="account-info-content">
+                    <span>Your Area</span>
+                    <strong>
+                      {selectedZoneDisplay?.name ||
+                        zoneName ||
+                        'Not set — Edit to add'}
+                    </strong>
+                  </div>
+                </div>
+
                 <div
                   className="account-info-item"
                   style={{ gridColumn: '1 / -1' }}
                 >
-                  <div className="account-info-icon">📍</div>
+                  <div className="account-info-icon">🏠</div>
                   <div className="account-info-content">
                     <span>Delivery Address</span>
                     <strong>{address || 'Not set'}</strong>
+                  </div>
+                </div>
+
+                <div
+                  className="account-info-item"
+                  style={{ gridColumn: '1 / -1' }}
+                >
+                  <div className="account-info-icon">🗺️</div>
+                  <div className="account-info-content">
+                    <span>Map Location</span>
+                    <strong>
+                      {location?.lat && location?.lng
+                        ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`
+                        : 'Not set — Edit to add'}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -1468,8 +1629,7 @@ function AccountPage() {
                   width: '46px',
                   height: '46px',
                   borderRadius: '14px',
-                  background:
-                    'linear-gradient(135deg, #3B82F6, #2563EB)',
+                  background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1533,8 +1693,7 @@ function AccountPage() {
                   width: '46px',
                   height: '46px',
                   borderRadius: '14px',
-                  background:
-                    'linear-gradient(135deg, #EC4899, #DB2777)',
+                  background: 'linear-gradient(135deg, #EC4899, #DB2777)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1621,8 +1780,7 @@ function AccountPage() {
                 gap: '10px',
                 padding: '16px 20px',
                 borderRadius: '18px',
-                background:
-                  'linear-gradient(135deg, #059669, #047857)',
+                background: 'linear-gradient(135deg, #059669, #047857)',
                 color: '#FFFFFF',
                 fontSize: '14px',
                 fontWeight: 800,
@@ -1701,7 +1859,6 @@ function AddMoneyModal({ user, settings, onClose }) {
     setSubmitting(true)
     try {
       const requestId = `WR-${Math.floor(100000 + Math.random() * 900000)}`
-
       const userDocRef = doc(db, 'users', user.uid)
       const userDoc = await getDoc(userDocRef)
       const userData = userDoc.exists() ? userDoc.data() : {}
@@ -1720,9 +1877,7 @@ function AddMoneyModal({ user, settings, onClose }) {
         createdAt: serverTimestamp(),
       })
 
-      toast.success(
-        `✅ Request submitted! We'll verify within 5 minutes.`
-      )
+      toast.success(`✅ Request submitted! We'll verify within 5 minutes.`)
       onClose()
     } catch (err) {
       console.error(err)
@@ -1830,7 +1985,6 @@ function AddMoneyModal({ user, settings, onClose }) {
             and add funds to your wallet within 5 minutes.
           </div>
 
-          {/* Amount */}
           <div>
             <label
               style={{
@@ -1899,7 +2053,6 @@ function AddMoneyModal({ user, settings, onClose }) {
             </div>
           </div>
 
-          {/* Method */}
           <div>
             <label
               style={{
@@ -1929,13 +2082,9 @@ function AddMoneyModal({ user, settings, onClose }) {
                       ? 'linear-gradient(135deg, #E2136E, #B10F53)'
                       : 'var(--surface-soft)',
                   border:
-                    method === 'bkash'
-                      ? 'none'
-                      : '1px solid var(--border)',
+                    method === 'bkash' ? 'none' : '1px solid var(--border)',
                   color:
-                    method === 'bkash'
-                      ? '#FFFFFF'
-                      : 'var(--text-primary)',
+                    method === 'bkash' ? '#FFFFFF' : 'var(--text-primary)',
                   fontSize: '13px',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -1953,13 +2102,9 @@ function AddMoneyModal({ user, settings, onClose }) {
                       ? 'linear-gradient(135deg, #F58220, #C96615)'
                       : 'var(--surface-soft)',
                   border:
-                    method === 'nagad'
-                      ? 'none'
-                      : '1px solid var(--border)',
+                    method === 'nagad' ? 'none' : '1px solid var(--border)',
                   color:
-                    method === 'nagad'
-                      ? '#FFFFFF'
-                      : 'var(--text-primary)',
+                    method === 'nagad' ? '#FFFFFF' : 'var(--text-primary)',
                   fontSize: '13px',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -1970,7 +2115,6 @@ function AddMoneyModal({ user, settings, onClose }) {
             </div>
           </div>
 
-          {/* Payment Number */}
           <div
             style={{
               padding: '14px 16px',
@@ -2051,7 +2195,6 @@ function AddMoneyModal({ user, settings, onClose }) {
             </button>
           </div>
 
-          {/* Transaction ID */}
           <div>
             <label
               style={{
@@ -2084,7 +2227,6 @@ function AddMoneyModal({ user, settings, onClose }) {
             />
           </div>
 
-          {/* Submit */}
           <button
             onClick={handleSubmit}
             disabled={submitting}

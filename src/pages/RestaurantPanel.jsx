@@ -1,6 +1,8 @@
 // ============================================================
-// src/pages/RestaurantPanel.jsx — PREMIUM V5.0
-// + Hides online-payment-pending orders (only COD + verified online)
+// src/pages/RestaurantPanel.jsx — PREMIUM V6.0
+// + Location REQUIRED for profile save
+// + Auto-scroll to map section on missing
+// + Hides online-payment-pending orders (COD + verified online only)
 // ============================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -22,7 +24,7 @@ import {
   sendNotification,
   notifyAllRiders,
 } from '../utils/sendNotification'
-import { Camera, X, Search, Star } from 'lucide-react'
+import { Camera, X, Search, Star, MapPin } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
 import PushToggleCard from '../components/PushToggleCard'
 import NotificationPanel from '../components/NotificationPanel'
@@ -90,6 +92,7 @@ function RestaurantPanel() {
 
   const logoInputRef = useRef(null)
   const authCheckedRef = useRef(false)
+  const mapSectionRef = useRef(null)
 
   // ============ AUTH LOADING ============
   useEffect(() => {
@@ -180,7 +183,7 @@ function RestaurantPanel() {
     }
   }, [])
 
-  // ============ LIVE ORDERS (with visibility filter) ============
+  // ============ LIVE ORDERS ============
   useEffect(() => {
     if (!restaurant?.firebaseId) return
 
@@ -197,9 +200,6 @@ function RestaurantPanel() {
             firebaseId: d.id,
             ...d.data(),
           }))
-          // ✅ Only show orders the restaurant should see:
-          //    - COD (any status)
-          //    - Online with paymentStatus === 'verified'
           .filter(isOrderVisibleToRestaurant)
           .sort((a, b) => {
             const aT = a.createdAt?.toDate?.()?.getTime() || 0
@@ -325,6 +325,16 @@ function RestaurantPanel() {
       return
     }
 
+    // ✅ Location REQUIRED
+    if (!location?.lat || !location?.lng) {
+      toast.error('📍 Restaurant location set করুন (Map এ click করুন)')
+      mapSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+      return
+    }
+
     setSavingProfile(true)
     try {
       const updateData = {
@@ -336,13 +346,11 @@ function RestaurantPanel() {
         cuisine: cuisine.trim(),
         description: description.trim(),
         deliveryTime: deliveryTime.trim() || '30-40 min',
-        updatedAt: new Date(),
-      }
-      if (location?.lat && location?.lng) {
-        updateData.location = {
+        location: {
           lat: location.lat,
           lng: location.lng,
-        }
+        },
+        updatedAt: new Date(),
       }
 
       await updateDoc(
@@ -408,7 +416,7 @@ function RestaurantPanel() {
   }
 
   // ============================================================
-  // UPDATE ORDER STATUS — With Optimistic UI
+  // UPDATE ORDER STATUS
   // ============================================================
   const updateOrderStatus = async (firebaseId, newStatus, order) => {
     const previousStatus = order.status
@@ -1961,14 +1969,19 @@ function RestaurantPanel() {
               />
             </div>
 
+            {/* ✅ Restaurant Location — REQUIRED */}
             <div
               className="rest-v2-form-group"
+              ref={mapSectionRef}
               style={{
                 paddingTop: '12px',
                 borderTop: '1px dashed var(--border)',
               }}
             >
-              <label>📍 Restaurant Location</label>
+              <label>
+                📍 Restaurant Location{' '}
+                <span style={{ color: '#DC2626' }}>* Required</span>
+              </label>
               <div
                 style={{
                   fontSize: '11px',
@@ -1977,15 +1990,47 @@ function RestaurantPanel() {
                   fontStyle: 'italic',
                 }}
               >
-                💡 Click on the map to set your restaurant's exact
-                location. This helps riders find you.
+                💡 Click on the map to set your restaurant's exact location.
+                রাইডার এবং কাস্টমার কাছের restaurant খুঁজতে এটি ব্যবহার করে।
               </div>
               <MapPicker
                 position={location}
                 setPosition={setLocation}
                 height={300}
-                helperText="👆 Click on the map to set your restaurant's location"
+                helperText="👆 Click on the map to set your restaurant's location (required)"
               />
+              {location?.lat && location?.lng ? (
+                <p
+                  style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(5,150,105,0.08)',
+                    border: '1px solid rgba(5,150,105,0.25)',
+                    color: '#059669',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                  }}
+                >
+                  ✅ Location set: {location.lat.toFixed(4)},{' '}
+                  {location.lng.toFixed(4)}
+                </p>
+              ) : (
+                <p
+                  style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(220,38,38,0.06)',
+                    border: '1px solid rgba(220,38,38,0.2)',
+                    color: '#DC2626',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                  }}
+                >
+                  ⚠️ Map এ location set করা বাধ্যতামূলক
+                </p>
+              )}
             </div>
 
             <div className="rest-v2-form-group">
@@ -2006,8 +2051,18 @@ function RestaurantPanel() {
               className="rest-v2-form-submit"
               onClick={saveProfile}
               disabled={savingProfile}
+              style={{
+                background:
+                  location?.lat && location?.lng
+                    ? undefined
+                    : 'linear-gradient(135deg, #DC2626, #991B1B)',
+              }}
             >
-              {savingProfile ? '⏳ Saving...' : '💾 Save Profile'}
+              {savingProfile
+                ? '⏳ Saving...'
+                : !location?.lat || !location?.lng
+                ? '⚠️ Location Required'
+                : '💾 Save Profile'}
             </button>
           </div>
         </div>

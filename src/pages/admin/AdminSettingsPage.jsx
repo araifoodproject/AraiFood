@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/admin/AdminSettingsPage.jsx
-// V2 — + Welcome Notifications editor
+// V3 — + Legal Pages editor (Refund / Privacy / Terms)
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -34,6 +34,8 @@ import {
   Store,
   Bike,
   Pill,
+  Scale,
+  FileText,
 } from 'lucide-react'
 import {
   FaFacebookF,
@@ -44,6 +46,7 @@ import {
 
 const SETTINGS_DOC_ID = 'platform'
 const NOTIFICATION_DOC_ID = 'notifications'
+const LEGAL_DOC_ID = 'legal'
 
 // ------------------------------------------------------------
 // Defaults
@@ -68,16 +71,13 @@ const DEFAULT_CATEGORIES = [
 
 const DEFAULT_COMPANY_LINKS = [
   { text: 'About Us', url: '/about', isExternal: false },
-  { text: 'Careers', url: '#', isExternal: false },
-  { text: 'Press', url: '#', isExternal: false },
-  { text: 'Blog', url: '#', isExternal: false },
+  { text: 'Careers', url: '/careers', isExternal: false },
 ]
 
 const DEFAULT_SUPPORT_LINKS = [
-  { text: 'Help Center', url: '#', isExternal: false },
-  { text: 'Contact Us', url: '#', isExternal: false },
-  { text: 'FAQs', url: '#', isExternal: false },
-  { text: 'Terms & Privacy', url: '#', isExternal: false },
+  { text: 'Help Center', url: '/help', isExternal: false },
+  { text: 'Contact Us', url: '/contact', isExternal: false },
+  { text: 'FAQs', url: '/help', isExternal: false },
 ]
 
 // ------------------------------------------------------------
@@ -104,6 +104,18 @@ const DEFAULT_WELCOME = {
     title: '💊 Welcome to AraiFood Pharmacy!',
     body: 'Your account is pending approval. We will notify you soon!',
   },
+}
+
+// ------------------------------------------------------------
+// Legal Pages Defaults
+// ------------------------------------------------------------
+const DEFAULT_LEGAL = {
+  refundTitle: 'Refund Policy',
+  refundContent: '',
+  privacyTitle: 'Privacy Policy',
+  privacyContent: '',
+  termsTitle: 'Terms & Conditions',
+  termsContent: '',
 }
 
 function AdminSettingsPage() {
@@ -191,6 +203,9 @@ function AdminSettingsPage() {
   // ---------- WELCOME NOTIFICATION STATE ----------
   const [welcome, setWelcome] = useState(DEFAULT_WELCOME)
 
+  // ---------- LEGAL PAGES STATE ----------
+  const [legal, setLegal] = useState(DEFAULT_LEGAL)
+
   const set = (key, value) =>
     setState((prev) => ({ ...prev, [key]: value }))
 
@@ -199,6 +214,10 @@ function AdminSettingsPage() {
       ...prev,
       [role]: { ...prev[role], [field]: value },
     }))
+  }
+
+  const setLegalField = (field, value) => {
+    setLegal((prev) => ({ ...prev, [field]: value }))
   }
 
   // ---------- LOAD ----------
@@ -344,6 +363,20 @@ function AdminSettingsPage() {
             },
           })
         }
+
+        // Load legal pages
+        const legalSnap = await getDoc(doc(db, 'settings', LEGAL_DOC_ID))
+        if (legalSnap.exists()) {
+          const l = legalSnap.data()
+          setLegal({
+            refundTitle: l.refundTitle ?? DEFAULT_LEGAL.refundTitle,
+            refundContent: l.refundContent ?? DEFAULT_LEGAL.refundContent,
+            privacyTitle: l.privacyTitle ?? DEFAULT_LEGAL.privacyTitle,
+            privacyContent: l.privacyContent ?? DEFAULT_LEGAL.privacyContent,
+            termsTitle: l.termsTitle ?? DEFAULT_LEGAL.termsTitle,
+            termsContent: l.termsContent ?? DEFAULT_LEGAL.termsContent,
+          })
+        }
       } catch (err) {
         console.error('Failed to load settings:', err)
         toast.error('Failed to load settings')
@@ -467,6 +500,21 @@ function AdminSettingsPage() {
           welcomeRestaurant: welcome.restaurant,
           welcomeRider: welcome.rider,
           welcomePharmacy: welcome.pharmacy,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+
+      // ✅ Save legal pages to separate doc
+      await setDoc(
+        doc(db, 'settings', LEGAL_DOC_ID),
+        {
+          refundTitle: legal.refundTitle.trim() || 'Refund Policy',
+          refundContent: legal.refundContent,
+          privacyTitle: legal.privacyTitle.trim() || 'Privacy Policy',
+          privacyContent: legal.privacyContent,
+          termsTitle: legal.termsTitle.trim() || 'Terms & Conditions',
+          termsContent: legal.termsContent,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -1465,6 +1513,124 @@ function AdminSettingsPage() {
               </button>
             </Section>
 
+            {/* ==================== ✅ LEGAL PAGES (NEW) ==================== */}
+            <Section
+              icon={<Scale size={20} />}
+              title="Legal Pages"
+              subtitle="Refund, Privacy & Terms content — যা লিখবেন সেটাই website এ show হবে"
+            >
+              {/* Refund Policy */}
+              <div style={legalCard}>
+                <div style={legalHeader}>
+                  <div style={legalIconWrap}>
+                    <FileText size={18} color="#059669" strokeWidth={2.4} />
+                  </div>
+                  <div>
+                    <strong style={legalTitle}>Refund Policy</strong>
+                    <span style={legalSub}>
+                      Payment refund নিয়মাবলী
+                    </span>
+                  </div>
+                </div>
+                <Field label="Page Title">
+                  <input
+                    type="text"
+                    style={inputStyle}
+                    value={legal.refundTitle}
+                    onChange={(e) =>
+                      setLegalField('refundTitle', e.target.value)
+                    }
+                    placeholder="Refund Policy"
+                  />
+                </Field>
+                <Field label="Content (পুরো নিয়ম লিখুন)">
+                  <textarea
+                    rows="8"
+                    style={legalTextarea}
+                    value={legal.refundContent}
+                    onChange={(e) =>
+                      setLegalField('refundContent', e.target.value)
+                    }
+                    placeholder="এখানে আপনার Refund Policy এর পুরো লেখা দিন..."
+                  />
+                </Field>
+              </div>
+
+              {/* Privacy Policy */}
+              <div style={legalCard}>
+                <div style={legalHeader}>
+                  <div style={legalIconWrap}>
+                    <FileText size={18} color="#3B82F6" strokeWidth={2.4} />
+                  </div>
+                  <div>
+                    <strong style={legalTitle}>Privacy Policy</strong>
+                    <span style={legalSub}>
+                      User data এবং privacy সংক্রান্ত
+                    </span>
+                  </div>
+                </div>
+                <Field label="Page Title">
+                  <input
+                    type="text"
+                    style={inputStyle}
+                    value={legal.privacyTitle}
+                    onChange={(e) =>
+                      setLegalField('privacyTitle', e.target.value)
+                    }
+                    placeholder="Privacy Policy"
+                  />
+                </Field>
+                <Field label="Content (পুরো নিয়ম লিখুন)">
+                  <textarea
+                    rows="8"
+                    style={legalTextarea}
+                    value={legal.privacyContent}
+                    onChange={(e) =>
+                      setLegalField('privacyContent', e.target.value)
+                    }
+                    placeholder="এখানে আপনার Privacy Policy এর পুরো লেখা দিন..."
+                  />
+                </Field>
+              </div>
+
+              {/* Terms & Conditions */}
+              <div style={legalCard}>
+                <div style={legalHeader}>
+                  <div style={legalIconWrap}>
+                    <FileText size={18} color="#F59E0B" strokeWidth={2.4} />
+                  </div>
+                  <div>
+                    <strong style={legalTitle}>Terms & Conditions</strong>
+                    <span style={legalSub}>
+                      Website ব্যবহারের শর্তাবলী
+                    </span>
+                  </div>
+                </div>
+                <Field label="Page Title">
+                  <input
+                    type="text"
+                    style={inputStyle}
+                    value={legal.termsTitle}
+                    onChange={(e) =>
+                      setLegalField('termsTitle', e.target.value)
+                    }
+                    placeholder="Terms & Conditions"
+                  />
+                </Field>
+                <Field label="Content (পুরো নিয়ম লিখুন)">
+                  <textarea
+                    rows="8"
+                    style={legalTextarea}
+                    value={legal.termsContent}
+                    onChange={(e) =>
+                      setLegalField('termsContent', e.target.value)
+                    }
+                    placeholder="এখানে আপনার Terms & Conditions এর পুরো লেখা দিন..."
+                  />
+                </Field>
+              </div>
+            </Section>
+
             {/* ==================== LIVE CHAT ==================== */}
             <Section icon={<MessageCircle size={20} />} title="Live Chat">
               <div style={gridTwo}>
@@ -1625,7 +1791,6 @@ function WelcomeCard({ role, icon, label, color, data, onChange }) {
         marginBottom: '10px',
       }}
     >
-      {/* Header */}
       <div
         style={{
           display: 'flex',
@@ -1671,7 +1836,6 @@ function WelcomeCard({ role, icon, label, color, data, onChange }) {
           </span>
         </div>
 
-        {/* Toggle */}
         <label
           style={{
             position: 'relative',
@@ -1712,7 +1876,6 @@ function WelcomeCard({ role, icon, label, color, data, onChange }) {
         </label>
       </div>
 
-      {/* Fields */}
       {data.enabled && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div>
@@ -1758,7 +1921,12 @@ function WelcomeCard({ role, icon, label, color, data, onChange }) {
               placeholder="Welcome message"
               rows={2}
               maxLength={200}
-              style={{ ...inputStyle, resize: 'vertical', minHeight: '60px', fontFamily: 'inherit' }}
+              style={{
+                ...inputStyle,
+                resize: 'vertical',
+                minHeight: '60px',
+                fontFamily: 'inherit',
+              }}
             />
           </div>
         </div>
@@ -1797,6 +1965,69 @@ const inputStyle = {
   color: 'var(--text-primary)',
   outline: 'none',
   boxSizing: 'border-box',
+}
+
+const legalTextarea = {
+  width: '100%',
+  padding: '14px 16px',
+  borderRadius: '12px',
+  border: '1px solid var(--border-strong)',
+  background: 'var(--surface)',
+  fontSize: '13.5px',
+  fontWeight: 500,
+  color: 'var(--text-primary)',
+  outline: 'none',
+  boxSizing: 'border-box',
+  resize: 'vertical',
+  fontFamily: 'inherit',
+  lineHeight: 1.6,
+  minHeight: '160px',
+}
+
+const legalCard = {
+  padding: '20px',
+  borderRadius: '16px',
+  border: '1px solid var(--border)',
+  background: 'var(--surface-soft)',
+  marginBottom: '14px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+}
+
+const legalHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  paddingBottom: '12px',
+  borderBottom: '1px dashed var(--border)',
+}
+
+const legalIconWrap = {
+  width: '40px',
+  height: '40px',
+  borderRadius: '12px',
+  background: 'var(--surface)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  border: '1px solid var(--border)',
+}
+
+const legalTitle = {
+  display: 'block',
+  fontFamily: 'var(--font-heading)',
+  fontSize: '15px',
+  fontWeight: 800,
+  color: 'var(--text-primary)',
+  marginBottom: '2px',
+}
+
+const legalSub = {
+  fontSize: '12px',
+  color: 'var(--text-tertiary)',
+  fontWeight: 600,
 }
 
 const gridTwo = {

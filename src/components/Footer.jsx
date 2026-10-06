@@ -1,6 +1,6 @@
 // ============================================================
 // src/components/Footer.jsx
-// V3 — Robust link handling (text-based routing)
+// V5 — Legal links dynamic from settings/legal
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -17,60 +17,45 @@ import {
 } from 'react-icons/fa'
 import { Moon, Sun, Headphones } from 'lucide-react'
 
-// ✅ Text → Route mapping (case-insensitive)
 const TEXT_ROUTE_MAP = {
   'about': '/about',
   'about us': '/about',
-  'about us ': '/about',
   'our story': '/about',
-  'careers': '/about',
-  'career': '/about',
-  'jobs': '/about',
-  'press': '/about',
-  'press kit': '/about',
-  'news': '/about',
-  'blog': '/about',
-  'blogs': '/about',
+  'careers': '/careers',
+  'career': '/careers',
+  'jobs': '/careers',
   'help': '/help',
   'help center': '/help',
-  'helpcentre': '/help',
   'support': '/help',
   'faqs': '/help',
   'faq': '/help',
   'contact': '/contact',
   'contact us': '/contact',
-  'terms': '/terms',
-  'terms & privacy': '/terms',
-  'terms and privacy': '/terms',
-  'privacy': '/terms',
-  'privacy policy': '/terms',
+  'refund': '/legal?type=refund',
+  'refund policy': '/legal?type=refund',
+  'privacy': '/legal?type=privacy',
+  'privacy policy': '/legal?type=privacy',
+  'terms': '/legal?type=terms',
+  'terms & conditions': '/legal?type=terms',
+  'terms and conditions': '/legal?type=terms',
 }
 
 function resolvePath(text, url) {
-  // 1. If url is valid internal path (starts with /)
   if (url && url !== '#' && url.startsWith('/')) {
     return { href: url, external: false }
   }
-
-  // 2. If url is external URL
   if (url && /^https?:\/\//i.test(url)) {
     return { href: url, external: true }
   }
-
-  // 3. Fallback: match by text
   const key = (text || '').toLowerCase().trim()
   if (TEXT_ROUTE_MAP[key]) {
     return { href: TEXT_ROUTE_MAP[key], external: false }
   }
-
-  // 4. Partial match
   for (const [k, v] of Object.entries(TEXT_ROUTE_MAP)) {
     if (key.includes(k) || k.includes(key)) {
       return { href: v, external: false }
     }
   }
-
-  // 5. Default fallback
   return { href: '/help', external: false }
 }
 
@@ -78,6 +63,7 @@ function Footer() {
   const { settings } = useSettings()
   const [user, setUser] = useState(null)
   const [walletBalance, setWalletBalance] = useState(0)
+  const [legal, setLegal] = useState(null)
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme')
     return saved === 'dark'
@@ -96,7 +82,6 @@ function Footer() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser)
-
       if (currentUser) {
         try {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
@@ -111,6 +96,21 @@ function Footer() {
       }
     })
     return () => unsub()
+  }, [])
+
+  // ✅ Load legal settings from Firestore
+  useEffect(() => {
+    const loadLegal = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'legal'))
+        if (snap.exists()) {
+          setLegal(snap.data())
+        }
+      } catch (e) {
+        console.error('Legal settings load error:', e)
+      }
+    }
+    loadLegal()
   }, [])
 
   const toggleDarkMode = () => setDarkMode(!darkMode)
@@ -159,6 +159,37 @@ function Footer() {
     )
   }
 
+  // ✅ Legal links from settings
+  const legalLinks = []
+  if (legal?.refundTitle?.trim()) {
+    legalLinks.push({
+      label: legal.refundTitle.trim(),
+      href: '/legal?type=refund',
+    })
+  }
+  if (legal?.privacyTitle?.trim()) {
+    legalLinks.push({
+      label: legal.privacyTitle.trim(),
+      href: '/legal?type=privacy',
+    })
+  }
+  if (legal?.termsTitle?.trim()) {
+    legalLinks.push({
+      label: legal.termsTitle.trim(),
+      href: '/legal?type=terms',
+    })
+  }
+
+  // Fallback যদি legal doc না থাকে (default English labels)
+  const finalLegalLinks =
+    legalLinks.length > 0
+      ? legalLinks
+      : [
+          { label: 'Refund Policy', href: '/legal?type=refund' },
+          { label: 'Privacy Policy', href: '/legal?type=privacy' },
+          { label: 'Terms & Conditions', href: '/legal?type=terms' },
+        ]
+
   return (
     <footer className="aa-footer">
       <div className="aa-footer-grid">
@@ -197,8 +228,7 @@ function Footer() {
           ) : (
             <>
               <Link to="/about">About Us</Link>
-              <Link to="/help">Help Center</Link>
-              <Link to="/contact">Contact Us</Link>
+              <Link to="/careers">Careers</Link>
             </>
           )}
         </div>
@@ -212,10 +242,21 @@ function Footer() {
             <>
               <Link to="/help">Help Center</Link>
               <Link to="/contact">Contact Us</Link>
-              <Link to="/terms">Terms & Privacy</Link>
             </>
           )}
         </div>
+
+        {/* ✅ Legal Column — Dynamic from settings */}
+        {finalLegalLinks.length > 0 && (
+          <div className="aa-footer-col">
+            <h4>Legal</h4>
+            {finalLegalLinks.map((l, idx) => (
+              <Link key={idx} to={l.href}>
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {/* AraiWallet Column */}
         <div className="aa-footer-col">

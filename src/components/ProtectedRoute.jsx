@@ -1,6 +1,6 @@
 // ============================================================
 // src/components/ProtectedRoute.jsx
-// Role-based route protection — includes pharmacy role
+// V3 — Customer হলে managementMembers query skip → console clean
 // ============================================================
 
 import { useEffect, useState } from 'react'
@@ -35,12 +35,7 @@ function ProtectedRoute({
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return
 
-      console.log('=== ProtectedRoute Auth Check ===')
-      console.log('User:', currentUser?.email || 'NO USER')
-      console.log('UID:', currentUser?.uid || 'NO UID')
-      console.log('localStorage userRole:', localStorage.getItem('userRole'))
-      console.log('localStorage isPartner:', localStorage.getItem('isPartner'))
-
+      // No user
       if (!currentUser) {
         setUser(null)
         setRole(null)
@@ -53,8 +48,10 @@ function ProtectedRoute({
       // ============================================================
       // STEP 1: Admin email check
       // ============================================================
-      if (currentUser.email === 'admin@araifood.com') {
-        console.log('ROLE DETECTED: admin (email)')
+      if (
+        currentUser.email === 'admin@araifood.com' ||
+        currentUser.email === 'sunnyrahman7890@gmail.com'
+      ) {
         if (!isMounted) return
         setRole('admin')
         setIsPartner(false)
@@ -69,12 +66,11 @@ function ProtectedRoute({
       }
 
       // ============================================================
-      // STEP 2: Pharmacy owner check (NEW)
+      // STEP 2: Pharmacy owner check
       // ============================================================
       try {
         const pharmDoc = await getDoc(doc(db, 'pharmacies', currentUser.uid))
         if (pharmDoc.exists()) {
-          console.log('ROLE DETECTED: pharmacy')
           if (!isMounted) return
           setRole('pharmacy')
           setIsPartner(false)
@@ -88,7 +84,7 @@ function ProtectedRoute({
           return
         }
       } catch (err) {
-        console.error('Pharmacy check error:', err)
+        // silently skip
       }
 
       // ============================================================
@@ -97,7 +93,6 @@ function ProtectedRoute({
       try {
         const restDoc = await getDoc(doc(db, 'restaurants', currentUser.uid))
         if (restDoc.exists()) {
-          console.log('ROLE DETECTED: restaurant')
           if (!isMounted) return
           setRole('restaurant')
           setIsPartner(false)
@@ -111,81 +106,88 @@ function ProtectedRoute({
           return
         }
       } catch (err) {
-        console.error('Restaurant check error:', err)
+        // silently skip
       }
 
       // ============================================================
-      // STEP 4: Partner (management member) check
+      // STEP 4: users/{uid}.role check (NEW — early detection)
+      // Customer হলে partner query একেবারে skip করবো → permission error হবে না
       // ============================================================
+      let knownUserRole = null
+      let knownUserData = null
       try {
-        let memberData = null
-
-        const partnerQuery = query(
-          collection(db, 'managementMembers'),
-          where('firebaseUid', '==', currentUser.uid)
-        )
-        const partnerSnap = await getDocs(partnerQuery)
-
-        if (!partnerSnap.empty) {
-          memberData = partnerSnap.docs[0].data()
-        } else {
-          const emailQuery = query(
-            collection(db, 'managementMembers'),
-            where('email', '==', currentUser.email?.toLowerCase())
-          )
-          const emailSnap = await getDocs(emailQuery)
-          if (!emailSnap.empty) {
-            memberData = emailSnap.docs[0].data()
-          }
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
+        if (userDoc.exists()) {
+          knownUserData = userDoc.data()
+          knownUserRole = knownUserData.role || 'customer'
         }
+      } catch (err) {
+        // silently skip
+      }
 
-        if (memberData) {
-          if (memberData.status !== 'active') {
-            console.log('Partner is inactive — signing out')
-            await auth.signOut()
+      // ============================================================
+      // STEP 5: Partner (management member) check
+      // ⚠️ Customer হলে skip — নাহলে Firestore query permission denied হবে
+      // ============================================================
+      if (knownUserRole !== 'customer') {
+        try {
+          let memberData = null
+
+          const partnerQuery = query(
+            collection(db, 'managementMembers'),
+            where('firebaseUid', '==', currentUser.uid)
+          )
+          const partnerSnap = await getDocs(partnerQuery)
+
+          if (!partnerSnap.empty) {
+            memberData = partnerSnap.docs[0].data()
+          }
+
+          if (memberData) {
+            if (memberData.status !== 'active') {
+              await auth.signOut()
+              if (!isMounted) return
+              setUser(null)
+              setRole(null)
+              setLoading(false)
+              return
+            }
+
             if (!isMounted) return
-            setUser(null)
-            setRole(null)
+            setRole('admin')
+            setIsPartner(true)
+            setPermissions(memberData.permissions || {})
+            setManagementRole(memberData.role || 'partner')
+
+            localStorage.setItem('userRole', 'admin')
+            localStorage.setItem('isPartner', 'true')
+            localStorage.setItem(
+              'managementRole',
+              memberData.role || 'partner'
+            )
+            localStorage.setItem(
+              'managementPermissions',
+              JSON.stringify(memberData.permissions || {})
+            )
+            localStorage.setItem(
+              'managementName',
+              memberData.fullName || ''
+            )
+            localStorage.setItem('managementId', memberData.memberId || '')
             setLoading(false)
             return
           }
-
-          console.log('ROLE DETECTED: admin (partner)')
-          if (!isMounted) return
-          setRole('admin')
-          setIsPartner(true)
-          setPermissions(memberData.permissions || {})
-          setManagementRole(memberData.role || 'partner')
-
-          localStorage.setItem('userRole', 'admin')
-          localStorage.setItem('isPartner', 'true')
-          localStorage.setItem(
-            'managementRole',
-            memberData.role || 'partner'
-          )
-          localStorage.setItem(
-            'managementPermissions',
-            JSON.stringify(memberData.permissions || {})
-          )
-          localStorage.setItem(
-            'managementName',
-            memberData.fullName || ''
-          )
-          localStorage.setItem('managementId', memberData.memberId || '')
-          setLoading(false)
-          return
+        } catch (err) {
+          // silently skip — non-customer হলে possible error
         }
-      } catch (err) {
-        console.error('Partner check error:', err)
       }
 
       // ============================================================
-      // STEP 5: Rider check
+      // STEP 6: Rider check
       // ============================================================
       try {
         const riderDoc = await getDoc(doc(db, 'riders', currentUser.uid))
         if (riderDoc.exists()) {
-          console.log('ROLE DETECTED: rider')
           if (!isMounted) return
           setRole('rider')
           setIsPartner(false)
@@ -199,43 +201,46 @@ function ProtectedRoute({
           return
         }
       } catch (err) {
-        console.error('Rider check error:', err)
+        // silently skip
       }
 
       // ============================================================
-      // STEP 6: users/{uid} doc check
+      // STEP 7: Known user role check (already loaded in STEP 4)
       // ============================================================
-      try {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
-        if (userDoc.exists()) {
-          const data = userDoc.data()
-          const userRole = data.role || 'customer'
-          console.log('ROLE DETECTED from users doc:', userRole)
-
-          if (userRole === 'customer') {
-            if (!isMounted) return
-            setRole('customer')
-            setIsPartner(false)
-            setPermissions({})
-            setManagementRole(null)
-            localStorage.setItem('userRole', 'customer')
-            localStorage.removeItem('isPartner')
-            localStorage.removeItem('managementRole')
-            localStorage.removeItem('managementPermissions')
-            setLoading(false)
-            return
-          }
-        } else {
-          console.log('No users doc found — defaulting to customer')
+      if (knownUserData && knownUserRole) {
+        if (knownUserRole === 'customer') {
+          if (!isMounted) return
+          setRole('customer')
+          setIsPartner(false)
+          setPermissions({})
+          setManagementRole(null)
+          localStorage.setItem('userRole', 'customer')
+          localStorage.removeItem('isPartner')
+          localStorage.removeItem('managementRole')
+          localStorage.removeItem('managementPermissions')
+          setLoading(false)
+          return
         }
-      } catch (err) {
-        console.error('users doc check error:', err)
+
+        // Admin role in users doc
+        if (knownUserRole === 'admin') {
+          if (!isMounted) return
+          setRole('admin')
+          setIsPartner(false)
+          setPermissions({})
+          setManagementRole(null)
+          localStorage.setItem('userRole', 'admin')
+          localStorage.removeItem('isPartner')
+          localStorage.removeItem('managementRole')
+          localStorage.removeItem('managementPermissions')
+          setLoading(false)
+          return
+        }
       }
 
       // ============================================================
-      // STEP 7: Default — customer
+      // STEP 8: Default — customer
       // ============================================================
-      console.log('ROLE DETECTED: customer (default)')
       if (!isMounted) return
       setRole('customer')
       setIsPartner(false)
@@ -269,7 +274,6 @@ function ProtectedRoute({
 
   // Role check
   if (!allowedRoles.includes(role)) {
-    console.log('Access denied for role:', role, '— redirecting')
     if (role === 'restaurant') {
       return <Navigate to="/restaurant-panel" replace />
     }
