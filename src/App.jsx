@@ -1,6 +1,6 @@
 // ============================================================
 // src/App.jsx
-// V10 — + LegalPage + CareersPage routes
+// V11 — Language Provider wrapped (Bilingual: BN/EN)
 // ============================================================
 
 import { useState, useEffect, lazy, Suspense } from 'react'
@@ -13,6 +13,9 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 
 import useSettings from './hooks/useSettings'
+
+// ✅ Language Provider
+import { LanguageProvider } from './i18n/LanguageContext'
 
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -54,7 +57,7 @@ const RestaurantSignupPage = lazy(() => import('./pages/RestaurantSignupPage'))
 const RiderLoginPage = lazy(() => import('./pages/RiderLoginPage'))
 const RiderSignupPage = lazy(() => import('./pages/RiderSignupPage'))
 
-// ✅ NEW: Legal + Careers pages
+// ✅ Legal + Careers pages
 const LegalPage = lazy(() => import('./pages/LegalPage'))
 const CareersPage = lazy(() => import('./pages/CareersPage'))
 
@@ -265,7 +268,7 @@ function App() {
   const showNavbarAndFooter = !isCheckout && !isAuth && !isPanel
   const showSubscribePrompt = currentUser && !isAuth && !isPanel && !isCheckout
   return (
-    <>
+    <LanguageProvider>
       <ScrollToTop />
       {showNavbarAndFooter && <Navbar />}
       <Suspense fallback={<PageLoader />}>
@@ -349,7 +352,7 @@ function App() {
       {!isPanel && <LiveChat />}
       {showSubscribePrompt && <SubscribePromptModal user={currentUser} />}
       <ToastContainer position="top-right" autoClose={2000} hideProgressBar={false} newestOnTop closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
-    </>
+    </LanguageProvider>
   )
 }
 

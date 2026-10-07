@@ -1,11 +1,12 @@
 // ============================================================
 // src/components/Footer.jsx
-// V5 — Legal links dynamic from settings/legal
+// V6 — Bilingual (BN/EN) with LanguageContext
 // ============================================================
 
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import useSettings from '../hooks/useSettings'
+import { useLanguage } from '../i18n/LanguageContext'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -61,6 +62,7 @@ function resolvePath(text, url) {
 
 function Footer() {
   const { settings } = useSettings()
+  const { t, language } = useLanguage()
   const [user, setUser] = useState(null)
   const [walletBalance, setWalletBalance] = useState(0)
   const [legal, setLegal] = useState(null)
@@ -98,7 +100,7 @@ function Footer() {
     return () => unsub()
   }, [])
 
-  // ✅ Load legal settings from Firestore
+  // Load legal settings from Firestore
   useEffect(() => {
     const loadLegal = async () => {
       try {
@@ -159,7 +161,7 @@ function Footer() {
     )
   }
 
-  // ✅ Legal links from settings
+  // Legal links from settings
   const legalLinks = []
   if (legal?.refundTitle?.trim()) {
     legalLinks.push({
@@ -180,14 +182,14 @@ function Footer() {
     })
   }
 
-  // Fallback যদি legal doc না থাকে (default English labels)
+  // ✅ Fallback legal links — TRANSLATED
   const finalLegalLinks =
     legalLinks.length > 0
       ? legalLinks
       : [
-          { label: 'Refund Policy', href: '/legal?type=refund' },
-          { label: 'Privacy Policy', href: '/legal?type=privacy' },
-          { label: 'Terms & Conditions', href: '/legal?type=terms' },
+          { label: t('footer.refund'), href: '/legal?type=refund' },
+          { label: t('footer.privacy'), href: '/legal?type=privacy' },
+          { label: t('footer.terms'), href: '/legal?type=terms' },
         ]
 
   return (
@@ -215,41 +217,41 @@ function Footer() {
               margin: '12px 0 0',
             }}
           >
-            © {new Date().getFullYear()} {footer.companyName}. All rights
-            reserved.
+            © {new Date().getFullYear()} {footer.companyName}.{' '}
+            {t('footer.rights')}
           </p>
         </div>
 
         {/* Company Column */}
         <div className="aa-footer-col">
-          <h4>Company</h4>
+          <h4>{language === 'bn' ? 'কোম্পানি' : 'Company'}</h4>
           {companyLinks.length > 0 ? (
             companyLinks.map(renderLink)
           ) : (
             <>
-              <Link to="/about">About Us</Link>
-              <Link to="/careers">Careers</Link>
+              <Link to="/about">{t('footer.about')}</Link>
+              <Link to="/careers">{t('footer.careers')}</Link>
             </>
           )}
         </div>
 
         {/* Support Column */}
         <div className="aa-footer-col">
-          <h4>Support</h4>
+          <h4>{language === 'bn' ? 'সহায়তা' : 'Support'}</h4>
           {supportLinks.length > 0 ? (
             supportLinks.map(renderLink)
           ) : (
             <>
-              <Link to="/help">Help Center</Link>
-              <Link to="/contact">Contact Us</Link>
+              <Link to="/help">{language === 'bn' ? 'সহায়তা কেন্দ্র' : 'Help Center'}</Link>
+              <Link to="/contact">{t('footer.contact')}</Link>
             </>
           )}
         </div>
 
-        {/* ✅ Legal Column — Dynamic from settings */}
+        {/* Legal Column — Dynamic from settings */}
         {finalLegalLinks.length > 0 && (
           <div className="aa-footer-col">
-            <h4>Legal</h4>
+            <h4>{language === 'bn' ? 'লিগ্যাল' : 'Legal'}</h4>
             {finalLegalLinks.map((l, idx) => (
               <Link key={idx} to={l.href}>
                 {l.label}
@@ -266,7 +268,8 @@ function Footer() {
             {user ? (
               <>
                 <p className="aa-wallet-balance">
-                  Balance: <strong>৳{formatBalance(walletBalance)}</strong>
+                  {language === 'bn' ? 'ব্যালেন্স' : 'Balance'}:{' '}
+                  <strong>৳{formatBalance(walletBalance)}</strong>
                 </p>
 
                 <Link
@@ -281,13 +284,21 @@ function Footer() {
                     gap: '4px',
                   }}
                 >
-                  Recharge →
+                  {language === 'bn' ? 'রিচার্জ' : 'Recharge'} →
                 </Link>
               </>
             ) : (
               <>
                 <p className="aa-wallet-balance">
-                  Login to view your <strong>wallet</strong>
+                  {language === 'bn' ? (
+                    <>
+                      আপনার <strong>ওয়ালেট</strong> দেখতে লগইন করুন
+                    </>
+                  ) : (
+                    <>
+                      Login to view your <strong>wallet</strong>
+                    </>
+                  )}
                 </p>
 
                 <Link
@@ -302,7 +313,7 @@ function Footer() {
                     gap: '4px',
                   }}
                 >
-                  Login →
+                  {language === 'bn' ? 'লগইন' : 'Login'} →
                 </Link>
               </>
             )}
@@ -317,7 +328,8 @@ function Footer() {
                       gap: '4px',
                     }}
                   >
-                    <Moon size={14} /> Dark Mode
+                    <Moon size={14} />{' '}
+                    {language === 'bn' ? 'ডার্ক মোড' : 'Dark Mode'}
                   </span>
                 ) : (
                   <span
@@ -327,7 +339,8 @@ function Footer() {
                       gap: '4px',
                     }}
                   >
-                    <Sun size={14} /> Light / Dark
+                    <Sun size={14} />{' '}
+                    {language === 'bn' ? 'লাইট / ডার্ক' : 'Light / Dark'}
                   </span>
                 )}
               </span>
@@ -340,7 +353,7 @@ function Footer() {
 
             <Link to="/help" className="aa-help-btn">
               <Headphones size={14} strokeWidth={2.4} />
-              Help
+              {language === 'bn' ? 'সহায়তা' : 'Help'}
             </Link>
           </div>
         </div>
@@ -384,14 +397,20 @@ function Footer() {
         </div>
 
         <div className="aa-footer-apps">
-          <span>{appsLabel}</span>
+          <span>
+            {appsLabel === 'Coming Soon on' && language === 'bn'
+              ? 'শীঘ্রই আসছে'
+              : appsLabel}
+          </span>
 
           {hasAppStore ? (
             <a href={settings.appStoreUrl} target="_blank" rel="noreferrer">
               App Store
             </a>
           ) : (
-            <span style={comingSoonStyle}>App Store · Coming Soon</span>
+            <span style={comingSoonStyle}>
+              App Store · {language === 'bn' ? 'শীঘ্রই আসছে' : 'Coming Soon'}
+            </span>
           )}
 
           <span>•</span>
@@ -402,7 +421,7 @@ function Footer() {
             </a>
           ) : (
             <span style={comingSoonStyle}>
-              Google Play · Coming Soon
+              Google Play · {language === 'bn' ? 'শীঘ্রই আসছে' : 'Coming Soon'}
             </span>
           )}
         </div>

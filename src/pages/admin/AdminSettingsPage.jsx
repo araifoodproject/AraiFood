@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/admin/AdminSettingsPage.jsx
-// V3 — + Legal Pages editor (Refund / Privacy / Terms)
+// V4 — FULL BILINGUAL (Bangla + English)
+// PART 1/3 — Imports + Defaults + State + Load Logic
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -49,66 +50,84 @@ const NOTIFICATION_DOC_ID = 'notifications'
 const LEGAL_DOC_ID = 'legal'
 
 // ------------------------------------------------------------
-// Defaults
+// Defaults — WITH Bangla (_bn) fields
 // ------------------------------------------------------------
 const DEFAULT_FEATURES = [
-  { icon: '🚚', color: 'green', title: 'Fast Delivery', desc: '30-45 min to your door' },
-  { icon: '📍', color: 'blue', title: 'Araihazar Focused', desc: 'Local sellers & services' },
-  { icon: '🛡️', color: 'dark', title: 'Secure Payment', desc: 'Safe & encrypted transactions' },
-  { icon: '🎧', color: 'pink', title: 'Local Support', desc: '24/7 friendly help nearby' },
+  {
+    icon: '🚚', color: 'green',
+    title: 'Fast Delivery', title_bn: 'দ্রুত ডেলিভারি',
+    desc: '30-45 min to your door', desc_bn: '৩০-৪৫ মিনিটে আপনার দরজায়',
+  },
+  {
+    icon: '📍', color: 'blue',
+    title: 'Araihazar Focused', title_bn: 'আরাইহাজার কেন্দ্রিক',
+    desc: 'Local sellers & services', desc_bn: 'স্থানীয় বিক্রেতা ও সেবা',
+  },
+  {
+    icon: '🛡️', color: 'dark',
+    title: 'Secure Payment', title_bn: 'নিরাপদ পেমেন্ট',
+    desc: 'Safe & encrypted transactions', desc_bn: 'নিরাপদ ও এনক্রিপ্টেড লেনদেন',
+  },
+  {
+    icon: '🎧', color: 'pink',
+    title: 'Local Support', title_bn: 'স্থানীয় সহায়তা',
+    desc: '24/7 friendly help nearby', desc_bn: '২৪/৭ কাছাকাছি বন্ধুত্বপূর্ণ সহায়তা',
+  },
 ]
 
 const DEFAULT_CATEGORIES = [
-  { name: 'Biryani', emoji: '🍛', color: 'biryani', query: 'biryani' },
-  { name: 'Burger', emoji: '🍔', color: 'burger', query: 'burger' },
-  { name: 'Pizza', emoji: '🍕', color: 'pizza', query: 'pizza' },
-  { name: 'Chinese', emoji: '🍜', color: 'chinese', query: 'chinese' },
-  { name: 'Chicken', emoji: '🍗', color: 'chicken', query: 'chicken' },
-  { name: 'Snacks', emoji: '🍟', color: 'snacks', query: 'snacks' },
-  { name: 'Drinks', emoji: '🥤', color: 'drinks', query: 'drinks' },
-  { name: 'Desserts', emoji: '🍰', color: 'desserts', query: 'dessert' },
+  { name: 'Biryani', name_bn: 'বিরিয়ানি', emoji: '🍛', color: 'biryani', query: 'biryani' },
+  { name: 'Burger', name_bn: 'বার্গার', emoji: '🍔', color: 'burger', query: 'burger' },
+  { name: 'Pizza', name_bn: 'পিজ্জা', emoji: '🍕', color: 'pizza', query: 'pizza' },
+  { name: 'Chinese', name_bn: 'চাইনিজ', emoji: '🍜', color: 'chinese', query: 'chinese' },
+  { name: 'Chicken', name_bn: 'চিকেন', emoji: '🍗', color: 'chicken', query: 'chicken' },
+  { name: 'Snacks', name_bn: 'স্ন্যাকস', emoji: '🍟', color: 'snacks', query: 'snacks' },
+  { name: 'Drinks', name_bn: 'ড্রিংকস', emoji: '🥤', color: 'drinks', query: 'drinks' },
+  { name: 'Desserts', name_bn: 'ডেজার্ট', emoji: '🍰', color: 'desserts', query: 'dessert' },
 ]
 
 const DEFAULT_COMPANY_LINKS = [
-  { text: 'About Us', url: '/about', isExternal: false },
-  { text: 'Careers', url: '/careers', isExternal: false },
+  { text: 'About Us', text_bn: 'আমাদের সম্পর্কে', url: '/about', isExternal: false },
+  { text: 'Careers', text_bn: 'ক্যারিয়ার', url: '/careers', isExternal: false },
 ]
 
 const DEFAULT_SUPPORT_LINKS = [
-  { text: 'Help Center', url: '/help', isExternal: false },
-  { text: 'Contact Us', url: '/contact', isExternal: false },
-  { text: 'FAQs', url: '/help', isExternal: false },
+  { text: 'Help Center', text_bn: 'সহায়তা কেন্দ্র', url: '/help', isExternal: false },
+  { text: 'Contact Us', text_bn: 'যোগাযোগ', url: '/contact', isExternal: false },
+  { text: 'FAQs', text_bn: 'সাধারণ প্রশ্ন', url: '/help', isExternal: false },
 ]
 
-// ------------------------------------------------------------
-// Welcome Notification Defaults
-// ------------------------------------------------------------
 const DEFAULT_WELCOME = {
   customer: {
     enabled: true,
     title: '🎉 Welcome to AraiFood!',
+    title_bn: '🎉 AraiFood এ স্বাগতম!',
     body: 'Thanks for joining AraiFood. Start ordering your favourite food now!',
+    body_bn: 'AraiFood এ যোগ দেওয়ার জন্য ধন্যবাদ। এখনই আপনার প্রিয় খাবার অর্ডার করুন!',
   },
   restaurant: {
     enabled: true,
     title: '🏪 Welcome to AraiFood Partner!',
+    title_bn: '🏪 AraiFood পার্টনার স্বাগতম!',
     body: 'Your account is under review. You will be notified once approved.',
+    body_bn: 'আপনার একাউন্ট রিভিউতে আছে। অনুমোদিত হলে জানানো হবে।',
   },
   rider: {
     enabled: true,
     title: '🛵 Welcome to AraiFood Riders!',
+    title_bn: '🛵 AraiFood রাইডার স্বাগতম!',
     body: 'Your application is pending admin approval. Stay tuned!',
+    body_bn: 'আপনার আবেদন এডমিন অনুমোদনের অপেক্ষায়। সাথে থাকুন!',
   },
   pharmacy: {
     enabled: true,
     title: '💊 Welcome to AraiFood Pharmacy!',
+    title_bn: '💊 AraiFood ফার্মেসি স্বাগতম!',
     body: 'Your account is pending approval. We will notify you soon!',
+    body_bn: 'আপনার একাউন্ট অনুমোদনের অপেক্ষায়। শীঘ্রই জানানো হবে!',
   },
 }
 
-// ------------------------------------------------------------
-// Legal Pages Defaults
-// ------------------------------------------------------------
 const DEFAULT_LEGAL = {
   refundTitle: 'Refund Policy',
   refundContent: '',
@@ -123,20 +142,31 @@ function AdminSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // ---------- PLATFORM STATE ----------
+  // ---------- PLATFORM STATE (English + Bangla) ----------
   const [state, setState] = useState({
+    // Brand
     siteName: 'AraiFood',
+    siteName_bn: 'AraiFood',
     tagline: 'Good Food, Good Mood',
+    tagline_bn: 'ভালো খাবার, ভালো মুড',
+
+    // Contact
     contactEmail: 'hello@araifood.com',
     contactPhone: '+880 1700-000000',
     address: 'Araihazar, Narayanganj',
+
+    // Fees
     defaultDeliveryFee: '30',
     minOrderAmount: '100',
     commissionPercent: '10',
     riderEarningPerDelivery: '30',
     freeDeliveryThreshold: '500',
+
+    // Hours
     openingTime: '10:00',
     closingTime: '22:00',
+
+    // Social
     facebookUrl: '',
     instagramUrl: '',
     twitterUrl: '',
@@ -144,60 +174,119 @@ function AdminSettingsPage() {
     whatsappNumber: '',
     appStoreUrl: '',
     playStoreUrl: '',
+
+    // Payment numbers
     gamingBkashNumber: '01700000000',
     gamingNagadNumber: '01700000000',
     walletBkashNumber: '01700000000',
     walletNagadNumber: '01700000000',
     walletMinAmount: '50',
     walletMaxAmount: '10000',
+
+    // Delivery
     defaultDeliveryTime: '30-40 min',
     deliveryAreaName: 'Araihazar Thana',
     deliverySlots: ['6-7pm', '7-8pm', '8-9pm', '9-10pm'],
+
+    // Map
     mapDefaultLat: '23.78',
     mapDefaultLng: '90.64',
     mapDefaultZoom: '14',
+
+    // Hero
     heroTitle1: 'App -',
+    heroTitle1_bn: 'অ্যাপ -',
     heroTitle2: 'Food, Pharmacy & Gaming',
+    heroTitle2_bn: 'খাবার, ফার্মেসি ও গেমিং',
     heroTitle3: 'in One Place',
+    heroTitle3_bn: 'এক জায়গায়',
     heroSearchPlaceholder: 'Search food, medicine or games...',
+    heroSearchPlaceholder_bn: 'খাবার, ঔষধ বা গেম খুঁজুন...',
+
+    // Trust Bar
     trustText1: 'Trusted by 50k+ in Araihazar',
+    trustText1_bn: 'আরাইহাজারে ৫০ হাজারের বেশি মানুষের বিশ্বাস',
     trustText2: '4.8★ Rating',
+    trustText2_bn: '৪.৮★ রেটিং',
     trustText3: 'Updated Oct 2025',
+    trustText3_bn: 'আপডেট অক্টোবর ২০২৫',
+
+    // Features
     features: DEFAULT_FEATURES,
+
+    // Home Section
     homePopularTitle: 'Popular Restaurants Near You',
+    homePopularTitle_bn: 'আপনার কাছের জনপ্রিয় রেস্টুরেন্ট',
     homePopularSubtitle: 'Top-rated picks from Araihazar',
+    homePopularSubtitle_bn: 'আরাইহাজারের সেরা পছন্দ',
     homePopularLimit: '6',
+
+    // Categories
     categoriesTitle: 'Food Categories',
+    categoriesTitle_bn: 'খাবারের ক্যাটাগরি',
     categoriesSubtitle: 'Browse by categories',
+    categoriesSubtitle_bn: 'ক্যাটাগরি অনুযায়ী দেখুন',
     categoriesList: DEFAULT_CATEGORIES,
+
+    // Delivery Areas
     deliveryAreasTitle: 'We Deliver Around Araihazar',
+    deliveryAreasTitle_bn: 'আমরা আরাইহাজারে ডেলিভারি দিই',
     deliveryAreasSubtitle: 'Fast delivery across your locality',
+    deliveryAreasSubtitle_bn: 'আপনার এলাকায় দ্রুত ডেলিভারি',
+
+    // Partner CTA
     partnerSectionTitle: 'Become a Partner',
+    partnerSectionTitle_bn: 'পার্টনার হোন',
     partnerSectionSubtitle: 'Grow with us in Araihazar',
+    partnerSectionSubtitle_bn: 'আরাইহাজারে আমাদের সাথে বেড়ে উঠুন',
+
     partnerRestaurantTitle: 'Own a Restaurant?',
+    partnerRestaurantTitle_bn: 'রেস্টুরেন্ট আছে?',
     partnerRestaurantSubtitle: 'Join AraiFood',
+    partnerRestaurantSubtitle_bn: 'AraiFood এ যোগ দিন',
     partnerRestaurantDesc:
       'List your restaurant, reach 50k+ customers, hassle-free onboarding & higher sales',
+    partnerRestaurantDesc_bn:
+      'আপনার রেস্টুরেন্ট লিস্ট করুন, ৫০ হাজার+ কাস্টমারের কাছে পৌঁছান, ঝামেলামুক্ত অনবোর্ডিং এবং বেশি বিক্রয়',
     partnerRestaurantBtn: 'Partner with us',
+    partnerRestaurantBtn_bn: 'পার্টনার হোন',
     partnerRestaurantPath: '/restaurant-signup',
+
     partnerRiderTitle: 'Want to Become a Rider?',
+    partnerRiderTitle_bn: 'রাইডার হতে চান?',
     partnerRiderSubtitle: 'Deliver with AraiFood',
+    partnerRiderSubtitle_bn: 'AraiFood এর সাথে ডেলিভারি করুন',
     partnerRiderDesc:
       'Flexible earnings, weekly payouts, support & safety gear provided',
+    partnerRiderDesc_bn:
+      'নমনীয় আয়, সাপ্তাহিক পেমেন্ট, সাপোর্ট ও সেফটি গিয়ার দেওয়া হয়',
     partnerRiderBtn: 'Ride with us',
+    partnerRiderBtn_bn: 'রাইডার হোন',
     partnerRiderPath: '/rider-signup',
+
+    // Footer
     footerTagline: 'Food, Pharmacy & Gaming in One Place',
+    footerTagline_bn: 'খাবার, ফার্মেসি ও গেমিং এক জায়গায়',
     footerCompanyName: 'AraiFood Ltd.',
     footerCompanyLinks: DEFAULT_COMPANY_LINKS,
     footerSupportLinks: DEFAULT_SUPPORT_LINKS,
     footerAppsLabel: 'Available on',
+    footerAppsLabel_bn: 'পাওয়া যাচ্ছে',
+
+    // Live Chat
     liveChatTeamName: 'Support Team',
+    liveChatTeamName_bn: 'সাপোর্ট টিম',
     liveChatStatus: 'Online Now',
+    liveChatStatus_bn: 'এখন অনলাইন',
     liveChatAvatar: '👨‍💼',
     liveChatWelcome: 'Hello! 👋 How can we help you today?',
+    liveChatWelcome_bn: 'হ্যালো! 👋 আজ আপনাকে কীভাবে সাহায্য করতে পারি?',
     liveChatAutoReply:
       'Thank you for your message! Our team will get back to you shortly. 😊',
+    liveChatAutoReply_bn:
+      'আপনার বার্তার জন্য ধন্যবাদ! আমাদের টিম শীঘ্রই যোগাযোগ করবে। 😊',
     liveChatPlaceholder: 'Type your message...',
+    liveChatPlaceholder_bn: 'আপনার বার্তা লিখুন...',
   })
 
   // ---------- WELCOME NOTIFICATION STATE ----------
@@ -224,17 +313,21 @@ function AdminSettingsPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        // Load platform settings
         const snap = await getDoc(doc(db, 'settings', SETTINGS_DOC_ID))
         if (snap.exists()) {
           const d = snap.data()
           setState((prev) => ({
             ...prev,
+            // Brand
             siteName: d.siteName ?? prev.siteName,
+            siteName_bn: d.siteName_bn ?? prev.siteName_bn,
             tagline: d.tagline ?? prev.tagline,
+            tagline_bn: d.tagline_bn ?? prev.tagline_bn,
+            // Contact
             contactEmail: d.contactEmail ?? prev.contactEmail,
             contactPhone: d.contactPhone ?? prev.contactPhone,
             address: d.address ?? prev.address,
+            // Fees
             defaultDeliveryFee: String(d.defaultDeliveryFee ?? prev.defaultDeliveryFee),
             minOrderAmount: String(d.minOrderAmount ?? prev.minOrderAmount),
             commissionPercent: String(d.commissionPercent ?? prev.commissionPercent),
@@ -244,8 +337,10 @@ function AdminSettingsPage() {
             freeDeliveryThreshold: String(
               d.freeDeliveryThreshold ?? prev.freeDeliveryThreshold
             ),
+            // Hours
             openingTime: d.openingTime ?? prev.openingTime,
             closingTime: d.closingTime ?? prev.closingTime,
+            // Social
             facebookUrl: d.facebookUrl ?? prev.facebookUrl,
             instagramUrl: d.instagramUrl ?? prev.instagramUrl,
             twitterUrl: d.twitterUrl ?? prev.twitterUrl,
@@ -253,68 +348,126 @@ function AdminSettingsPage() {
             whatsappNumber: d.whatsappNumber ?? prev.whatsappNumber,
             appStoreUrl: d.appStoreUrl ?? prev.appStoreUrl,
             playStoreUrl: d.playStoreUrl ?? prev.playStoreUrl,
+            // Payment
             gamingBkashNumber: d.gamingBkashNumber ?? prev.gamingBkashNumber,
             gamingNagadNumber: d.gamingNagadNumber ?? prev.gamingNagadNumber,
             walletBkashNumber: d.walletBkashNumber ?? prev.walletBkashNumber,
             walletNagadNumber: d.walletNagadNumber ?? prev.walletNagadNumber,
             walletMinAmount: String(d.walletMinAmount ?? prev.walletMinAmount),
             walletMaxAmount: String(d.walletMaxAmount ?? prev.walletMaxAmount),
+            // Delivery
             defaultDeliveryTime: d.defaultDeliveryTime ?? prev.defaultDeliveryTime,
             deliveryAreaName: d.deliveryAreaName ?? prev.deliveryAreaName,
             deliverySlots:
               Array.isArray(d.deliverySlots) && d.deliverySlots.length > 0
                 ? d.deliverySlots
                 : prev.deliverySlots,
+            // Map
             mapDefaultLat: String(d.mapDefaultCenter?.lat ?? prev.mapDefaultLat),
             mapDefaultLng: String(d.mapDefaultCenter?.lng ?? prev.mapDefaultLng),
             mapDefaultZoom: String(d.mapDefaultZoom ?? prev.mapDefaultZoom),
-            heroTitle1: d.hero?.title1 ?? d.heroTitle1 ?? prev.heroTitle1,
-            heroTitle2: d.hero?.title2 ?? d.heroTitle2 ?? prev.heroTitle2,
-            heroTitle3: d.hero?.title3 ?? d.heroTitle3 ?? prev.heroTitle3,
+            // Hero
+            heroTitle1: d.hero?.title1 ?? prev.heroTitle1,
+            heroTitle1_bn: d.hero?.title1_bn ?? prev.heroTitle1_bn,
+            heroTitle2: d.hero?.title2 ?? prev.heroTitle2,
+            heroTitle2_bn: d.hero?.title2_bn ?? prev.heroTitle2_bn,
+            heroTitle3: d.hero?.title3 ?? prev.heroTitle3,
+            heroTitle3_bn: d.hero?.title3_bn ?? prev.heroTitle3_bn,
             heroSearchPlaceholder:
-              d.hero?.searchPlaceholder ??
-              d.heroSearchPlaceholder ??
-              prev.heroSearchPlaceholder,
-            trustText1: d.trustBar?.text1 ?? d.trustText1 ?? prev.trustText1,
-            trustText2: d.trustBar?.text2 ?? d.trustText2 ?? prev.trustText2,
-            trustText3: d.trustBar?.text3 ?? d.trustText3 ?? prev.trustText3,
+              d.hero?.searchPlaceholder ?? prev.heroSearchPlaceholder,
+            heroSearchPlaceholder_bn:
+              d.hero?.searchPlaceholder_bn ?? prev.heroSearchPlaceholder_bn,
+            // Trust Bar
+            trustText1: d.trustBar?.text1 ?? prev.trustText1,
+            trustText1_bn: d.trustBar?.text1_bn ?? prev.trustText1_bn,
+            trustText2: d.trustBar?.text2 ?? prev.trustText2,
+            trustText2_bn: d.trustBar?.text2_bn ?? prev.trustText2_bn,
+            trustText3: d.trustBar?.text3 ?? prev.trustText3,
+            trustText3_bn: d.trustBar?.text3_bn ?? prev.trustText3_bn,
+            // Features
             features:
               Array.isArray(d.features) && d.features.length > 0
                 ? d.features
                 : prev.features,
+            // Home
             homePopularTitle: d.home?.popularTitle ?? prev.homePopularTitle,
-            homePopularSubtitle: d.home?.popularSubtitle ?? prev.homePopularSubtitle,
+            homePopularTitle_bn: d.home?.popularTitle_bn ?? prev.homePopularTitle_bn,
+            homePopularSubtitle:
+              d.home?.popularSubtitle ?? prev.homePopularSubtitle,
+            homePopularSubtitle_bn:
+              d.home?.popularSubtitle_bn ?? prev.homePopularSubtitle_bn,
             homePopularLimit: String(d.home?.popularLimit ?? prev.homePopularLimit),
+            // Categories
             categoriesTitle: d.categories?.title ?? prev.categoriesTitle,
-            categoriesSubtitle: d.categories?.subtitle ?? prev.categoriesSubtitle,
+            categoriesTitle_bn:
+              d.categories?.title_bn ?? prev.categoriesTitle_bn,
+            categoriesSubtitle:
+              d.categories?.subtitle ?? prev.categoriesSubtitle,
+            categoriesSubtitle_bn:
+              d.categories?.subtitle_bn ?? prev.categoriesSubtitle_bn,
             categoriesList:
               Array.isArray(d.categories?.list) && d.categories.list.length > 0
                 ? d.categories.list
                 : prev.categoriesList,
-            deliveryAreasTitle: d.deliveryAreas?.title ?? prev.deliveryAreasTitle,
+            // Delivery Areas
+            deliveryAreasTitle:
+              d.deliveryAreas?.title ?? prev.deliveryAreasTitle,
+            deliveryAreasTitle_bn:
+              d.deliveryAreas?.title_bn ?? prev.deliveryAreasTitle_bn,
             deliveryAreasSubtitle:
               d.deliveryAreas?.subtitle ?? prev.deliveryAreasSubtitle,
-            partnerSectionTitle: d.partner?.sectionTitle ?? prev.partnerSectionTitle,
+            deliveryAreasSubtitle_bn:
+              d.deliveryAreas?.subtitle_bn ?? prev.deliveryAreasSubtitle_bn,
+            // Partner CTA
+            partnerSectionTitle:
+              d.partner?.sectionTitle ?? prev.partnerSectionTitle,
+            partnerSectionTitle_bn:
+              d.partner?.sectionTitle_bn ?? prev.partnerSectionTitle_bn,
             partnerSectionSubtitle:
               d.partner?.sectionSubtitle ?? prev.partnerSectionSubtitle,
+            partnerSectionSubtitle_bn:
+              d.partner?.sectionSubtitle_bn ?? prev.partnerSectionSubtitle_bn,
             partnerRestaurantTitle:
               d.partner?.restaurant?.title ?? prev.partnerRestaurantTitle,
+            partnerRestaurantTitle_bn:
+              d.partner?.restaurant?.title_bn ?? prev.partnerRestaurantTitle_bn,
             partnerRestaurantSubtitle:
               d.partner?.restaurant?.subtitle ?? prev.partnerRestaurantSubtitle,
+            partnerRestaurantSubtitle_bn:
+              d.partner?.restaurant?.subtitle_bn ??
+              prev.partnerRestaurantSubtitle_bn,
             partnerRestaurantDesc:
               d.partner?.restaurant?.description ?? prev.partnerRestaurantDesc,
+            partnerRestaurantDesc_bn:
+              d.partner?.restaurant?.description_bn ??
+              prev.partnerRestaurantDesc_bn,
             partnerRestaurantBtn:
               d.partner?.restaurant?.buttonText ?? prev.partnerRestaurantBtn,
+            partnerRestaurantBtn_bn:
+              d.partner?.restaurant?.buttonText_bn ?? prev.partnerRestaurantBtn_bn,
             partnerRestaurantPath:
               d.partner?.restaurant?.path ?? prev.partnerRestaurantPath,
-            partnerRiderTitle: d.partner?.rider?.title ?? prev.partnerRiderTitle,
+            partnerRiderTitle:
+              d.partner?.rider?.title ?? prev.partnerRiderTitle,
+            partnerRiderTitle_bn:
+              d.partner?.rider?.title_bn ?? prev.partnerRiderTitle_bn,
             partnerRiderSubtitle:
               d.partner?.rider?.subtitle ?? prev.partnerRiderSubtitle,
+            partnerRiderSubtitle_bn:
+              d.partner?.rider?.subtitle_bn ?? prev.partnerRiderSubtitle_bn,
             partnerRiderDesc:
               d.partner?.rider?.description ?? prev.partnerRiderDesc,
-            partnerRiderBtn: d.partner?.rider?.buttonText ?? prev.partnerRiderBtn,
-            partnerRiderPath: d.partner?.rider?.path ?? prev.partnerRiderPath,
+            partnerRiderDesc_bn:
+              d.partner?.rider?.description_bn ?? prev.partnerRiderDesc_bn,
+            partnerRiderBtn:
+              d.partner?.rider?.buttonText ?? prev.partnerRiderBtn,
+            partnerRiderBtn_bn:
+              d.partner?.rider?.buttonText_bn ?? prev.partnerRiderBtn_bn,
+            partnerRiderPath:
+              d.partner?.rider?.path ?? prev.partnerRiderPath,
+            // Footer
             footerTagline: d.footer?.tagline ?? prev.footerTagline,
+            footerTagline_bn: d.footer?.tagline_bn ?? prev.footerTagline_bn,
             footerCompanyName: d.footer?.companyName ?? prev.footerCompanyName,
             footerCompanyLinks:
               Array.isArray(d.footer?.companyLinks) &&
@@ -327,14 +480,27 @@ function AdminSettingsPage() {
                 ? d.footer.supportLinks
                 : prev.footerSupportLinks,
             footerAppsLabel: d.footer?.appsLabel ?? prev.footerAppsLabel,
+            footerAppsLabel_bn:
+              d.footer?.appsLabel_bn ?? prev.footerAppsLabel_bn,
+            // Live Chat
             liveChatTeamName: d.liveChat?.teamName ?? prev.liveChatTeamName,
+            liveChatTeamName_bn:
+              d.liveChat?.teamName_bn ?? prev.liveChatTeamName_bn,
             liveChatStatus: d.liveChat?.statusText ?? prev.liveChatStatus,
+            liveChatStatus_bn:
+              d.liveChat?.statusText_bn ?? prev.liveChatStatus_bn,
             liveChatAvatar: d.liveChat?.avatarEmoji ?? prev.liveChatAvatar,
             liveChatWelcome:
               d.liveChat?.welcomeMessage ?? prev.liveChatWelcome,
+            liveChatWelcome_bn:
+              d.liveChat?.welcomeMessage_bn ?? prev.liveChatWelcome_bn,
             liveChatAutoReply: d.liveChat?.autoReply ?? prev.liveChatAutoReply,
+            liveChatAutoReply_bn:
+              d.liveChat?.autoReply_bn ?? prev.liveChatAutoReply_bn,
             liveChatPlaceholder:
               d.liveChat?.inputPlaceholder ?? prev.liveChatPlaceholder,
+            liveChatPlaceholder_bn:
+              d.liveChat?.inputPlaceholder_bn ?? prev.liveChatPlaceholder_bn,
           }))
         }
 
@@ -385,17 +551,23 @@ function AdminSettingsPage() {
     }
     load()
   }, [])
-
   // ---------- SAVE ----------
   const handleSave = async () => {
     setSaving(true)
     try {
       const payload = {
+        // Brand
         siteName: state.siteName.trim(),
+        siteName_bn: state.siteName_bn.trim(),
         tagline: state.tagline.trim(),
+        tagline_bn: state.tagline_bn.trim(),
+
+        // Contact
         contactEmail: state.contactEmail.trim(),
         contactPhone: state.contactPhone.trim(),
         address: state.address.trim(),
+
+        // Fees
         defaultDeliveryFee: parseFloat(state.defaultDeliveryFee) || 30,
         minOrderAmount: parseFloat(state.minOrderAmount) || 100,
         commissionPercent: parseFloat(state.commissionPercent) || 10,
@@ -403,8 +575,12 @@ function AdminSettingsPage() {
           parseFloat(state.riderEarningPerDelivery) || 30,
         freeDeliveryThreshold:
           parseFloat(state.freeDeliveryThreshold) || 500,
+
+        // Hours
         openingTime: state.openingTime,
         closingTime: state.closingTime,
+
+        // Social
         facebookUrl: state.facebookUrl.trim(),
         instagramUrl: state.instagramUrl.trim(),
         twitterUrl: state.twitterUrl.trim(),
@@ -412,79 +588,134 @@ function AdminSettingsPage() {
         whatsappNumber: state.whatsappNumber.trim(),
         appStoreUrl: state.appStoreUrl.trim(),
         playStoreUrl: state.playStoreUrl.trim(),
+
+        // Payment
         gamingBkashNumber: state.gamingBkashNumber.trim(),
         gamingNagadNumber: state.gamingNagadNumber.trim(),
         walletBkashNumber: state.walletBkashNumber.trim(),
         walletNagadNumber: state.walletNagadNumber.trim(),
         walletMinAmount: parseFloat(state.walletMinAmount) || 50,
         walletMaxAmount: parseFloat(state.walletMaxAmount) || 10000,
+
+        // Delivery
         defaultDeliveryTime: state.defaultDeliveryTime.trim(),
         deliveryAreaName: state.deliveryAreaName.trim(),
         deliverySlots: state.deliverySlots,
+
+        // Map
         mapDefaultCenter: {
           lat: parseFloat(state.mapDefaultLat) || 23.78,
           lng: parseFloat(state.mapDefaultLng) || 90.64,
         },
         mapDefaultZoom: parseFloat(state.mapDefaultZoom) || 14,
+
+        // Hero
         hero: {
           title1: state.heroTitle1.trim(),
+          title1_bn: state.heroTitle1_bn.trim(),
           title2: state.heroTitle2.trim(),
+          title2_bn: state.heroTitle2_bn.trim(),
           title3: state.heroTitle3.trim(),
+          title3_bn: state.heroTitle3_bn.trim(),
           searchPlaceholder: state.heroSearchPlaceholder.trim(),
+          searchPlaceholder_bn: state.heroSearchPlaceholder_bn.trim(),
         },
+
+        // Trust Bar
         trustBar: {
           text1: state.trustText1.trim(),
+          text1_bn: state.trustText1_bn.trim(),
           text2: state.trustText2.trim(),
+          text2_bn: state.trustText2_bn.trim(),
           text3: state.trustText3.trim(),
+          text3_bn: state.trustText3_bn.trim(),
         },
+
+        // Features
         features: state.features,
+
+        // Home
         home: {
           popularTitle: state.homePopularTitle.trim(),
+          popularTitle_bn: state.homePopularTitle_bn.trim(),
           popularSubtitle: state.homePopularSubtitle.trim(),
+          popularSubtitle_bn: state.homePopularSubtitle_bn.trim(),
           popularLimit: parseInt(state.homePopularLimit) || 6,
         },
+
+        // Categories
         categories: {
           title: state.categoriesTitle.trim(),
+          title_bn: state.categoriesTitle_bn.trim(),
           subtitle: state.categoriesSubtitle.trim(),
+          subtitle_bn: state.categoriesSubtitle_bn.trim(),
           list: state.categoriesList,
         },
+
+        // Delivery Areas
         deliveryAreas: {
           title: state.deliveryAreasTitle.trim(),
+          title_bn: state.deliveryAreasTitle_bn.trim(),
           subtitle: state.deliveryAreasSubtitle.trim(),
+          subtitle_bn: state.deliveryAreasSubtitle_bn.trim(),
         },
+
+        // Partner CTA
         partner: {
           sectionTitle: state.partnerSectionTitle.trim(),
+          sectionTitle_bn: state.partnerSectionTitle_bn.trim(),
           sectionSubtitle: state.partnerSectionSubtitle.trim(),
+          sectionSubtitle_bn: state.partnerSectionSubtitle_bn.trim(),
           restaurant: {
             title: state.partnerRestaurantTitle.trim(),
+            title_bn: state.partnerRestaurantTitle_bn.trim(),
             subtitle: state.partnerRestaurantSubtitle.trim(),
+            subtitle_bn: state.partnerRestaurantSubtitle_bn.trim(),
             description: state.partnerRestaurantDesc.trim(),
+            description_bn: state.partnerRestaurantDesc_bn.trim(),
             buttonText: state.partnerRestaurantBtn.trim(),
+            buttonText_bn: state.partnerRestaurantBtn_bn.trim(),
             path: state.partnerRestaurantPath.trim(),
           },
           rider: {
             title: state.partnerRiderTitle.trim(),
+            title_bn: state.partnerRiderTitle_bn.trim(),
             subtitle: state.partnerRiderSubtitle.trim(),
+            subtitle_bn: state.partnerRiderSubtitle_bn.trim(),
             description: state.partnerRiderDesc.trim(),
+            description_bn: state.partnerRiderDesc_bn.trim(),
             buttonText: state.partnerRiderBtn.trim(),
+            buttonText_bn: state.partnerRiderBtn_bn.trim(),
             path: state.partnerRiderPath.trim(),
           },
         },
+
+        // Footer
         footer: {
           tagline: state.footerTagline.trim(),
+          tagline_bn: state.footerTagline_bn.trim(),
           companyName: state.footerCompanyName.trim(),
           companyLinks: state.footerCompanyLinks,
           supportLinks: state.footerSupportLinks,
           appsLabel: state.footerAppsLabel.trim(),
+          appsLabel_bn: state.footerAppsLabel_bn.trim(),
         },
+
+        // Live Chat
         liveChat: {
           teamName: state.liveChatTeamName.trim(),
+          teamName_bn: state.liveChatTeamName_bn.trim(),
           statusText: state.liveChatStatus.trim(),
+          statusText_bn: state.liveChatStatus_bn.trim(),
           avatarEmoji: state.liveChatAvatar.trim(),
           welcomeMessage: state.liveChatWelcome.trim(),
+          welcomeMessage_bn: state.liveChatWelcome_bn.trim(),
           autoReply: state.liveChatAutoReply.trim(),
+          autoReply_bn: state.liveChatAutoReply_bn.trim(),
           inputPlaceholder: state.liveChatPlaceholder.trim(),
+          inputPlaceholder_bn: state.liveChatPlaceholder_bn.trim(),
         },
+
         updatedAt: serverTimestamp(),
       }
 
@@ -492,7 +723,7 @@ function AdminSettingsPage() {
         merge: true,
       })
 
-      // Save welcome notifications to separate doc
+      // Save welcome notifications
       await setDoc(
         doc(db, 'settings', NOTIFICATION_DOC_ID),
         {
@@ -505,7 +736,7 @@ function AdminSettingsPage() {
         { merge: true }
       )
 
-      // ✅ Save legal pages to separate doc
+      // Save legal pages
       await setDoc(
         doc(db, 'settings', LEGAL_DOC_ID),
         {
@@ -648,58 +879,58 @@ function AdminSettingsPage() {
 
             {/* ==================== BRAND ==================== */}
             <Section icon={<Globe size={20} />} title="Brand Information">
-              <div style={gridTwo}>
-                <Field label="Site Name">
-                  <input
-                    style={inputStyle}
-                    value={state.siteName}
-                    onChange={(e) => set('siteName', e.target.value)}
-                  />
-                </Field>
-                <Field label="Tagline">
-                  <input
-                    style={inputStyle}
-                    value={state.tagline}
-                    onChange={(e) => set('tagline', e.target.value)}
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Site Name (English)"
+                labelBn="Site Name (বাংলা)"
+                valueEn={state.siteName}
+                valueBn={state.siteName_bn}
+                onChangeEn={(v) => set('siteName', v)}
+                onChangeBn={(v) => set('siteName_bn', v)}
+              />
+              <BiField
+                labelEn="Tagline (English)"
+                labelBn="Tagline (বাংলা)"
+                valueEn={state.tagline}
+                valueBn={state.tagline_bn}
+                onChangeEn={(v) => set('tagline', v)}
+                onChangeBn={(v) => set('tagline_bn', v)}
+              />
             </Section>
 
             {/* ==================== HERO ==================== */}
             <Section icon={<Layout size={20} />} title="Hero Section">
-              <div style={gridThree}>
-                <Field label="Title Part 1">
-                  <input
-                    style={inputStyle}
-                    value={state.heroTitle1}
-                    onChange={(e) => set('heroTitle1', e.target.value)}
-                  />
-                </Field>
-                <Field label="Title Part 2 (Highlight)">
-                  <input
-                    style={inputStyle}
-                    value={state.heroTitle2}
-                    onChange={(e) => set('heroTitle2', e.target.value)}
-                  />
-                </Field>
-                <Field label="Title Part 3">
-                  <input
-                    style={inputStyle}
-                    value={state.heroTitle3}
-                    onChange={(e) => set('heroTitle3', e.target.value)}
-                  />
-                </Field>
-              </div>
-              <Field label="Search Placeholder">
-                <input
-                  style={inputStyle}
-                  value={state.heroSearchPlaceholder}
-                  onChange={(e) =>
-                    set('heroSearchPlaceholder', e.target.value)
-                  }
-                />
-              </Field>
+              <BiField
+                labelEn="Title Part 1 (English)"
+                labelBn="Title Part 1 (বাংলা)"
+                valueEn={state.heroTitle1}
+                valueBn={state.heroTitle1_bn}
+                onChangeEn={(v) => set('heroTitle1', v)}
+                onChangeBn={(v) => set('heroTitle1_bn', v)}
+              />
+              <BiField
+                labelEn="Title Part 2 — Highlight (English)"
+                labelBn="Title Part 2 — Highlight (বাংলা)"
+                valueEn={state.heroTitle2}
+                valueBn={state.heroTitle2_bn}
+                onChangeEn={(v) => set('heroTitle2', v)}
+                onChangeBn={(v) => set('heroTitle2_bn', v)}
+              />
+              <BiField
+                labelEn="Title Part 3 (English)"
+                labelBn="Title Part 3 (বাংলা)"
+                valueEn={state.heroTitle3}
+                valueBn={state.heroTitle3_bn}
+                onChangeEn={(v) => set('heroTitle3', v)}
+                onChangeBn={(v) => set('heroTitle3_bn', v)}
+              />
+              <BiField
+                labelEn="Search Placeholder (English)"
+                labelBn="Search Placeholder (বাংলা)"
+                valueEn={state.heroSearchPlaceholder}
+                valueBn={state.heroSearchPlaceholder_bn}
+                onChangeEn={(v) => set('heroSearchPlaceholder', v)}
+                onChangeBn={(v) => set('heroSearchPlaceholder_bn', v)}
+              />
             </Section>
 
             {/* ==================== FEATURES ==================== */}
@@ -745,7 +976,7 @@ function AdminSettingsPage() {
                         <option value="pink">pink</option>
                       </select>
                     </Field>
-                    <Field label="Title">
+                    <Field label="Title (EN)">
                       <input
                         style={inputStyle}
                         value={f.title}
@@ -754,12 +985,32 @@ function AdminSettingsPage() {
                         }
                       />
                     </Field>
-                    <Field label="Description">
+                    <Field label="Title (বাংলা)">
+                      <input
+                        style={inputStyle}
+                        value={f.title_bn || ''}
+                        onChange={(e) =>
+                          updateArrayItem('features', idx, 'title_bn', e.target.value)
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div style={gridTwo}>
+                    <Field label="Description (EN)">
                       <input
                         style={inputStyle}
                         value={f.desc}
                         onChange={(e) =>
                           updateArrayItem('features', idx, 'desc', e.target.value)
+                        }
+                      />
+                    </Field>
+                    <Field label="Description (বাংলা)">
+                      <input
+                        style={inputStyle}
+                        value={f.desc_bn || ''}
+                        onChange={(e) =>
+                          updateArrayItem('features', idx, 'desc_bn', e.target.value)
                         }
                       />
                     </Field>
@@ -773,7 +1024,9 @@ function AdminSettingsPage() {
                     icon: '⭐',
                     color: 'green',
                     title: 'New Feature',
+                    title_bn: 'নতুন ফিচার',
                     desc: 'Description',
+                    desc_bn: 'বিবরণ',
                   })
                 }
               >
@@ -783,51 +1036,49 @@ function AdminSettingsPage() {
 
             {/* ==================== TRUST BAR ==================== */}
             <Section icon={<Sparkles size={20} />} title="Trust Bar">
-              <div style={gridThree}>
-                <Field label="Text 1">
-                  <input
-                    style={inputStyle}
-                    value={state.trustText1}
-                    onChange={(e) => set('trustText1', e.target.value)}
-                  />
-                </Field>
-                <Field label="Text 2">
-                  <input
-                    style={inputStyle}
-                    value={state.trustText2}
-                    onChange={(e) => set('trustText2', e.target.value)}
-                  />
-                </Field>
-                <Field label="Text 3">
-                  <input
-                    style={inputStyle}
-                    value={state.trustText3}
-                    onChange={(e) => set('trustText3', e.target.value)}
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Text 1 (English)"
+                labelBn="Text 1 (বাংলা)"
+                valueEn={state.trustText1}
+                valueBn={state.trustText1_bn}
+                onChangeEn={(v) => set('trustText1', v)}
+                onChangeBn={(v) => set('trustText1_bn', v)}
+              />
+              <BiField
+                labelEn="Text 2 (English)"
+                labelBn="Text 2 (বাংলা)"
+                valueEn={state.trustText2}
+                valueBn={state.trustText2_bn}
+                onChangeEn={(v) => set('trustText2', v)}
+                onChangeBn={(v) => set('trustText2_bn', v)}
+              />
+              <BiField
+                labelEn="Text 3 (English)"
+                labelBn="Text 3 (বাংলা)"
+                valueEn={state.trustText3}
+                valueBn={state.trustText3_bn}
+                onChangeEn={(v) => set('trustText3', v)}
+                onChangeBn={(v) => set('trustText3_bn', v)}
+              />
             </Section>
-
             {/* ==================== HOME ==================== */}
             <Section icon={<Home size={20} />} title="Home Section">
-              <div style={gridTwo}>
-                <Field label="Popular Restaurants Title">
-                  <input
-                    style={inputStyle}
-                    value={state.homePopularTitle}
-                    onChange={(e) => set('homePopularTitle', e.target.value)}
-                  />
-                </Field>
-                <Field label="Popular Restaurants Subtitle">
-                  <input
-                    style={inputStyle}
-                    value={state.homePopularSubtitle}
-                    onChange={(e) =>
-                      set('homePopularSubtitle', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Popular Title (English)"
+                labelBn="Popular Title (বাংলা)"
+                valueEn={state.homePopularTitle}
+                valueBn={state.homePopularTitle_bn}
+                onChangeEn={(v) => set('homePopularTitle', v)}
+                onChangeBn={(v) => set('homePopularTitle_bn', v)}
+              />
+              <BiField
+                labelEn="Popular Subtitle (English)"
+                labelBn="Popular Subtitle (বাংলা)"
+                valueEn={state.homePopularSubtitle}
+                valueBn={state.homePopularSubtitle_bn}
+                onChangeEn={(v) => set('homePopularSubtitle', v)}
+                onChangeBn={(v) => set('homePopularSubtitle_bn', v)}
+              />
               <Field label="Popular Restaurants Count (limit)">
                 <input
                   type="number"
@@ -840,24 +1091,22 @@ function AdminSettingsPage() {
 
             {/* ==================== CATEGORIES ==================== */}
             <Section icon={<Layers size={20} />} title="Categories Section">
-              <div style={gridTwo}>
-                <Field label="Title">
-                  <input
-                    style={inputStyle}
-                    value={state.categoriesTitle}
-                    onChange={(e) => set('categoriesTitle', e.target.value)}
-                  />
-                </Field>
-                <Field label="Subtitle">
-                  <input
-                    style={inputStyle}
-                    value={state.categoriesSubtitle}
-                    onChange={(e) =>
-                      set('categoriesSubtitle', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Title (English)"
+                labelBn="Title (বাংলা)"
+                valueEn={state.categoriesTitle}
+                valueBn={state.categoriesTitle_bn}
+                onChangeEn={(v) => set('categoriesTitle', v)}
+                onChangeBn={(v) => set('categoriesTitle_bn', v)}
+              />
+              <BiField
+                labelEn="Subtitle (English)"
+                labelBn="Subtitle (বাংলা)"
+                valueEn={state.categoriesSubtitle}
+                valueBn={state.categoriesSubtitle_bn}
+                onChangeEn={(v) => set('categoriesSubtitle', v)}
+                onChangeBn={(v) => set('categoriesSubtitle_bn', v)}
+              />
 
               {state.categoriesList.map((c, idx) => (
                 <div key={idx} style={arrayCard}>
@@ -870,8 +1119,8 @@ function AdminSettingsPage() {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <div style={gridFour}>
-                    <Field label="Name">
+                  <div style={gridTwo}>
+                    <Field label="Name (EN)">
                       <input
                         style={inputStyle}
                         value={c.name}
@@ -885,6 +1134,22 @@ function AdminSettingsPage() {
                         }
                       />
                     </Field>
+                    <Field label="Name (বাংলা)">
+                      <input
+                        style={inputStyle}
+                        value={c.name_bn || ''}
+                        onChange={(e) =>
+                          updateArrayItem(
+                            'categoriesList',
+                            idx,
+                            'name_bn',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div style={gridThree}>
                     <Field label="Emoji">
                       <input
                         style={inputStyle}
@@ -935,6 +1200,7 @@ function AdminSettingsPage() {
                 onClick={() =>
                   addArrayItem('categoriesList', {
                     name: 'New',
+                    name_bn: 'নতুন',
                     emoji: '🍽️',
                     color: 'green',
                     query: 'new',
@@ -947,146 +1213,128 @@ function AdminSettingsPage() {
 
             {/* ==================== DELIVERY AREAS ==================== */}
             <Section icon={<MapPin size={20} />} title="Delivery Areas Section">
-              <div style={gridTwo}>
-                <Field label="Title">
-                  <input
-                    style={inputStyle}
-                    value={state.deliveryAreasTitle}
-                    onChange={(e) =>
-                      set('deliveryAreasTitle', e.target.value)
-                    }
-                  />
-                </Field>
-                <Field label="Subtitle">
-                  <input
-                    style={inputStyle}
-                    value={state.deliveryAreasSubtitle}
-                    onChange={(e) =>
-                      set('deliveryAreasSubtitle', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Title (English)"
+                labelBn="Title (বাংলা)"
+                valueEn={state.deliveryAreasTitle}
+                valueBn={state.deliveryAreasTitle_bn}
+                onChangeEn={(v) => set('deliveryAreasTitle', v)}
+                onChangeBn={(v) => set('deliveryAreasTitle_bn', v)}
+              />
+              <BiField
+                labelEn="Subtitle (English)"
+                labelBn="Subtitle (বাংলা)"
+                valueEn={state.deliveryAreasSubtitle}
+                valueBn={state.deliveryAreasSubtitle_bn}
+                onChangeEn={(v) => set('deliveryAreasSubtitle', v)}
+                onChangeBn={(v) => set('deliveryAreasSubtitle_bn', v)}
+              />
             </Section>
 
             {/* ==================== PARTNER CTA ==================== */}
             <Section icon={<Handshake size={20} />} title="Partner CTA">
-              <div style={gridTwo}>
-                <Field label="Section Title">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerSectionTitle}
-                    onChange={(e) =>
-                      set('partnerSectionTitle', e.target.value)
-                    }
-                  />
-                </Field>
-                <Field label="Section Subtitle">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerSectionSubtitle}
-                    onChange={(e) =>
-                      set('partnerSectionSubtitle', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Section Title (English)"
+                labelBn="Section Title (বাংলা)"
+                valueEn={state.partnerSectionTitle}
+                valueBn={state.partnerSectionTitle_bn}
+                onChangeEn={(v) => set('partnerSectionTitle', v)}
+                onChangeBn={(v) => set('partnerSectionTitle_bn', v)}
+              />
+              <BiField
+                labelEn="Section Subtitle (English)"
+                labelBn="Section Subtitle (বাংলা)"
+                valueEn={state.partnerSectionSubtitle}
+                valueBn={state.partnerSectionSubtitle_bn}
+                onChangeEn={(v) => set('partnerSectionSubtitle', v)}
+                onChangeBn={(v) => set('partnerSectionSubtitle_bn', v)}
+              />
 
               <h4 style={subHeading}>Restaurant Card</h4>
-              <div style={gridTwo}>
-                <Field label="Title">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRestaurantTitle}
-                    onChange={(e) =>
-                      set('partnerRestaurantTitle', e.target.value)
-                    }
-                  />
-                </Field>
-                <Field label="Subtitle">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRestaurantSubtitle}
-                    onChange={(e) =>
-                      set('partnerRestaurantSubtitle', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
-              <Field label="Description">
-                <textarea
-                  rows="2"
+              <BiField
+                labelEn="Title (English)"
+                labelBn="Title (বাংলা)"
+                valueEn={state.partnerRestaurantTitle}
+                valueBn={state.partnerRestaurantTitle_bn}
+                onChangeEn={(v) => set('partnerRestaurantTitle', v)}
+                onChangeBn={(v) => set('partnerRestaurantTitle_bn', v)}
+              />
+              <BiField
+                labelEn="Subtitle (English)"
+                labelBn="Subtitle (বাংলা)"
+                valueEn={state.partnerRestaurantSubtitle}
+                valueBn={state.partnerRestaurantSubtitle_bn}
+                onChangeEn={(v) => set('partnerRestaurantSubtitle', v)}
+                onChangeBn={(v) => set('partnerRestaurantSubtitle_bn', v)}
+              />
+              <BiField
+                labelEn="Description (English)"
+                labelBn="Description (বাংলা)"
+                valueEn={state.partnerRestaurantDesc}
+                valueBn={state.partnerRestaurantDesc_bn}
+                onChangeEn={(v) => set('partnerRestaurantDesc', v)}
+                onChangeBn={(v) => set('partnerRestaurantDesc_bn', v)}
+                multiline
+              />
+              <BiField
+                labelEn="Button Text (English)"
+                labelBn="Button Text (বাংলা)"
+                valueEn={state.partnerRestaurantBtn}
+                valueBn={state.partnerRestaurantBtn_bn}
+                onChangeEn={(v) => set('partnerRestaurantBtn', v)}
+                onChangeBn={(v) => set('partnerRestaurantBtn_bn', v)}
+              />
+              <Field label="Button Path">
+                <input
                   style={inputStyle}
-                  value={state.partnerRestaurantDesc}
+                  value={state.partnerRestaurantPath}
                   onChange={(e) =>
-                    set('partnerRestaurantDesc', e.target.value)
+                    set('partnerRestaurantPath', e.target.value)
                   }
                 />
               </Field>
-              <div style={gridTwo}>
-                <Field label="Button Text">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRestaurantBtn}
-                    onChange={(e) =>
-                      set('partnerRestaurantBtn', e.target.value)
-                    }
-                  />
-                </Field>
-                <Field label="Button Path">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRestaurantPath}
-                    onChange={(e) =>
-                      set('partnerRestaurantPath', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
 
               <h4 style={subHeading}>Rider Card</h4>
-              <div style={gridTwo}>
-                <Field label="Title">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRiderTitle}
-                    onChange={(e) => set('partnerRiderTitle', e.target.value)}
-                  />
-                </Field>
-                <Field label="Subtitle">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRiderSubtitle}
-                    onChange={(e) =>
-                      set('partnerRiderSubtitle', e.target.value)
-                    }
-                  />
-                </Field>
-              </div>
-              <Field label="Description">
-                <textarea
-                  rows="2"
+              <BiField
+                labelEn="Title (English)"
+                labelBn="Title (বাংলা)"
+                valueEn={state.partnerRiderTitle}
+                valueBn={state.partnerRiderTitle_bn}
+                onChangeEn={(v) => set('partnerRiderTitle', v)}
+                onChangeBn={(v) => set('partnerRiderTitle_bn', v)}
+              />
+              <BiField
+                labelEn="Subtitle (English)"
+                labelBn="Subtitle (বাংলা)"
+                valueEn={state.partnerRiderSubtitle}
+                valueBn={state.partnerRiderSubtitle_bn}
+                onChangeEn={(v) => set('partnerRiderSubtitle', v)}
+                onChangeBn={(v) => set('partnerRiderSubtitle_bn', v)}
+              />
+              <BiField
+                labelEn="Description (English)"
+                labelBn="Description (বাংলা)"
+                valueEn={state.partnerRiderDesc}
+                valueBn={state.partnerRiderDesc_bn}
+                onChangeEn={(v) => set('partnerRiderDesc', v)}
+                onChangeBn={(v) => set('partnerRiderDesc_bn', v)}
+                multiline
+              />
+              <BiField
+                labelEn="Button Text (English)"
+                labelBn="Button Text (বাংলা)"
+                valueEn={state.partnerRiderBtn}
+                valueBn={state.partnerRiderBtn_bn}
+                onChangeEn={(v) => set('partnerRiderBtn', v)}
+                onChangeBn={(v) => set('partnerRiderBtn_bn', v)}
+              />
+              <Field label="Button Path">
+                <input
                   style={inputStyle}
-                  value={state.partnerRiderDesc}
-                  onChange={(e) => set('partnerRiderDesc', e.target.value)}
+                  value={state.partnerRiderPath}
+                  onChange={(e) => set('partnerRiderPath', e.target.value)}
                 />
               </Field>
-              <div style={gridTwo}>
-                <Field label="Button Text">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRiderBtn}
-                    onChange={(e) => set('partnerRiderBtn', e.target.value)}
-                  />
-                </Field>
-                <Field label="Button Path">
-                  <input
-                    style={inputStyle}
-                    value={state.partnerRiderPath}
-                    onChange={(e) => set('partnerRiderPath', e.target.value)}
-                  />
-                </Field>
-              </div>
             </Section>
 
             {/* ==================== CONTACT ==================== */}
@@ -1119,15 +1367,9 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== FEES ==================== */}
-            <Section
-              icon={<DollarSign size={20} />}
-              title="Fees & Commission"
-            >
+            <Section icon={<DollarSign size={20} />} title="Fees & Commission">
               <div style={gridTwo}>
-                <Field
-                  label="Default Delivery Fee (৳)"
-                  icon={<Truck size={14} />}
-                >
+                <Field label="Default Delivery Fee (৳)" icon={<Truck size={14} />}>
                   <input
                     type="number"
                     style={inputStyle}
@@ -1143,10 +1385,7 @@ function AdminSettingsPage() {
                     onChange={(e) => set('minOrderAmount', e.target.value)}
                   />
                 </Field>
-                <Field
-                  label="Platform Commission (%)"
-                  icon={<Percent size={14} />}
-                >
+                <Field label="Platform Commission (%)" icon={<Percent size={14} />}>
                   <input
                     type="number"
                     style={inputStyle}
@@ -1178,10 +1417,7 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== DELIVERY SETTINGS ==================== */}
-            <Section
-              icon={<Truck size={20} />}
-              title="Delivery / Checkout Settings"
-            >
+            <Section icon={<Truck size={20} />} title="Delivery / Checkout Settings">
               <div style={gridTwo}>
                 <Field label="Default Delivery Time (text)">
                   <input
@@ -1251,10 +1487,7 @@ function AdminSettingsPage() {
             </Section>
 
             {/* ==================== HOURS ==================== */}
-            <Section
-              icon={<Clock size={20} />}
-              title="Platform Operating Hours"
-            >
+            <Section icon={<Clock size={20} />} title="Platform Operating Hours">
               <div style={gridTwo}>
                 <Field label="Opening Time">
                   <input
@@ -1336,29 +1569,29 @@ function AdminSettingsPage() {
 
             {/* ==================== FOOTER ==================== */}
             <Section icon={<Layout size={20} />} title="Footer">
-              <div style={gridTwo}>
-                <Field label="Tagline">
-                  <input
-                    style={inputStyle}
-                    value={state.footerTagline}
-                    onChange={(e) => set('footerTagline', e.target.value)}
-                  />
-                </Field>
-                <Field label="Company Name (©)">
-                  <input
-                    style={inputStyle}
-                    value={state.footerCompanyName}
-                    onChange={(e) => set('footerCompanyName', e.target.value)}
-                  />
-                </Field>
-              </div>
-              <Field label="Apps Row Label">
+              <BiField
+                labelEn="Tagline (English)"
+                labelBn="Tagline (বাংলা)"
+                valueEn={state.footerTagline}
+                valueBn={state.footerTagline_bn}
+                onChangeEn={(v) => set('footerTagline', v)}
+                onChangeBn={(v) => set('footerTagline_bn', v)}
+              />
+              <Field label="Company Name (©)">
                 <input
                   style={inputStyle}
-                  value={state.footerAppsLabel}
-                  onChange={(e) => set('footerAppsLabel', e.target.value)}
+                  value={state.footerCompanyName}
+                  onChange={(e) => set('footerCompanyName', e.target.value)}
                 />
               </Field>
+              <BiField
+                labelEn="Apps Row Label (English)"
+                labelBn="Apps Row Label (বাংলা)"
+                valueEn={state.footerAppsLabel}
+                valueBn={state.footerAppsLabel_bn}
+                onChangeEn={(v) => set('footerAppsLabel', v)}
+                onChangeBn={(v) => set('footerAppsLabel_bn', v)}
+              />
 
               <h4 style={subHeading}>Company Links</h4>
               {state.footerCompanyLinks.map((l, idx) => (
@@ -1367,15 +1600,13 @@ function AdminSettingsPage() {
                     <strong>Link {idx + 1}</strong>
                     <button
                       style={deleteBtn}
-                      onClick={() =>
-                        removeArrayItem('footerCompanyLinks', idx)
-                      }
+                      onClick={() => removeArrayItem('footerCompanyLinks', idx)}
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <div style={gridThree}>
-                    <Field label="Text">
+                  <div style={gridTwo}>
+                    <Field label="Text (EN)">
                       <input
                         style={inputStyle}
                         value={l.text}
@@ -1389,6 +1620,22 @@ function AdminSettingsPage() {
                         }
                       />
                     </Field>
+                    <Field label="Text (বাংলা)">
+                      <input
+                        style={inputStyle}
+                        value={l.text_bn || ''}
+                        onChange={(e) =>
+                          updateArrayItem(
+                            'footerCompanyLinks',
+                            idx,
+                            'text_bn',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div style={gridTwo}>
                     <Field label="URL">
                       <input
                         style={inputStyle}
@@ -1428,6 +1675,7 @@ function AdminSettingsPage() {
                 onClick={() =>
                   addArrayItem('footerCompanyLinks', {
                     text: 'New Link',
+                    text_bn: 'নতুন লিংক',
                     url: '#',
                     isExternal: false,
                   })
@@ -1443,15 +1691,13 @@ function AdminSettingsPage() {
                     <strong>Link {idx + 1}</strong>
                     <button
                       style={deleteBtn}
-                      onClick={() =>
-                        removeArrayItem('footerSupportLinks', idx)
-                      }
+                      onClick={() => removeArrayItem('footerSupportLinks', idx)}
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <div style={gridThree}>
-                    <Field label="Text">
+                  <div style={gridTwo}>
+                    <Field label="Text (EN)">
                       <input
                         style={inputStyle}
                         value={l.text}
@@ -1465,6 +1711,22 @@ function AdminSettingsPage() {
                         }
                       />
                     </Field>
+                    <Field label="Text (বাংলা)">
+                      <input
+                        style={inputStyle}
+                        value={l.text_bn || ''}
+                        onChange={(e) =>
+                          updateArrayItem(
+                            'footerSupportLinks',
+                            idx,
+                            'text_bn',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div style={gridTwo}>
                     <Field label="URL">
                       <input
                         style={inputStyle}
@@ -1504,6 +1766,7 @@ function AdminSettingsPage() {
                 onClick={() =>
                   addArrayItem('footerSupportLinks', {
                     text: 'New Link',
+                    text_bn: 'নতুন লিংক',
                     url: '#',
                     isExternal: false,
                   })
@@ -1513,13 +1776,12 @@ function AdminSettingsPage() {
               </button>
             </Section>
 
-            {/* ==================== ✅ LEGAL PAGES (NEW) ==================== */}
+            {/* ==================== LEGAL PAGES ==================== */}
             <Section
               icon={<Scale size={20} />}
               title="Legal Pages"
               subtitle="Refund, Privacy & Terms content — যা লিখবেন সেটাই website এ show হবে"
             >
-              {/* Refund Policy */}
               <div style={legalCard}>
                 <div style={legalHeader}>
                   <div style={legalIconWrap}>
@@ -1527,9 +1789,7 @@ function AdminSettingsPage() {
                   </div>
                   <div>
                     <strong style={legalTitle}>Refund Policy</strong>
-                    <span style={legalSub}>
-                      Payment refund নিয়মাবলী
-                    </span>
+                    <span style={legalSub}>Payment refund নিয়মাবলী</span>
                   </div>
                 </div>
                 <Field label="Page Title">
@@ -1537,10 +1797,7 @@ function AdminSettingsPage() {
                     type="text"
                     style={inputStyle}
                     value={legal.refundTitle}
-                    onChange={(e) =>
-                      setLegalField('refundTitle', e.target.value)
-                    }
-                    placeholder="Refund Policy"
+                    onChange={(e) => setLegalField('refundTitle', e.target.value)}
                   />
                 </Field>
                 <Field label="Content (পুরো নিয়ম লিখুন)">
@@ -1551,12 +1808,10 @@ function AdminSettingsPage() {
                     onChange={(e) =>
                       setLegalField('refundContent', e.target.value)
                     }
-                    placeholder="এখানে আপনার Refund Policy এর পুরো লেখা দিন..."
                   />
                 </Field>
               </div>
 
-              {/* Privacy Policy */}
               <div style={legalCard}>
                 <div style={legalHeader}>
                   <div style={legalIconWrap}>
@@ -1564,9 +1819,7 @@ function AdminSettingsPage() {
                   </div>
                   <div>
                     <strong style={legalTitle}>Privacy Policy</strong>
-                    <span style={legalSub}>
-                      User data এবং privacy সংক্রান্ত
-                    </span>
+                    <span style={legalSub}>User data এবং privacy সংক্রান্ত</span>
                   </div>
                 </div>
                 <Field label="Page Title">
@@ -1574,10 +1827,7 @@ function AdminSettingsPage() {
                     type="text"
                     style={inputStyle}
                     value={legal.privacyTitle}
-                    onChange={(e) =>
-                      setLegalField('privacyTitle', e.target.value)
-                    }
-                    placeholder="Privacy Policy"
+                    onChange={(e) => setLegalField('privacyTitle', e.target.value)}
                   />
                 </Field>
                 <Field label="Content (পুরো নিয়ম লিখুন)">
@@ -1588,12 +1838,10 @@ function AdminSettingsPage() {
                     onChange={(e) =>
                       setLegalField('privacyContent', e.target.value)
                     }
-                    placeholder="এখানে আপনার Privacy Policy এর পুরো লেখা দিন..."
                   />
                 </Field>
               </div>
 
-              {/* Terms & Conditions */}
               <div style={legalCard}>
                 <div style={legalHeader}>
                   <div style={legalIconWrap}>
@@ -1601,9 +1849,7 @@ function AdminSettingsPage() {
                   </div>
                   <div>
                     <strong style={legalTitle}>Terms & Conditions</strong>
-                    <span style={legalSub}>
-                      Website ব্যবহারের শর্তাবলী
-                    </span>
+                    <span style={legalSub}>Website ব্যবহারের শর্তাবলী</span>
                   </div>
                 </div>
                 <Field label="Page Title">
@@ -1611,10 +1857,7 @@ function AdminSettingsPage() {
                     type="text"
                     style={inputStyle}
                     value={legal.termsTitle}
-                    onChange={(e) =>
-                      setLegalField('termsTitle', e.target.value)
-                    }
-                    placeholder="Terms & Conditions"
+                    onChange={(e) => setLegalField('termsTitle', e.target.value)}
                   />
                 </Field>
                 <Field label="Content (পুরো নিয়ম লিখুন)">
@@ -1625,7 +1868,6 @@ function AdminSettingsPage() {
                     onChange={(e) =>
                       setLegalField('termsContent', e.target.value)
                     }
-                    placeholder="এখানে আপনার Terms & Conditions এর পুরো লেখা দিন..."
                   />
                 </Field>
               </div>
@@ -1633,22 +1875,22 @@ function AdminSettingsPage() {
 
             {/* ==================== LIVE CHAT ==================== */}
             <Section icon={<MessageCircle size={20} />} title="Live Chat">
-              <div style={gridTwo}>
-                <Field label="Team Name">
-                  <input
-                    style={inputStyle}
-                    value={state.liveChatTeamName}
-                    onChange={(e) => set('liveChatTeamName', e.target.value)}
-                  />
-                </Field>
-                <Field label="Status Text">
-                  <input
-                    style={inputStyle}
-                    value={state.liveChatStatus}
-                    onChange={(e) => set('liveChatStatus', e.target.value)}
-                  />
-                </Field>
-              </div>
+              <BiField
+                labelEn="Team Name (English)"
+                labelBn="Team Name (বাংলা)"
+                valueEn={state.liveChatTeamName}
+                valueBn={state.liveChatTeamName_bn}
+                onChangeEn={(v) => set('liveChatTeamName', v)}
+                onChangeBn={(v) => set('liveChatTeamName_bn', v)}
+              />
+              <BiField
+                labelEn="Status Text (English)"
+                labelBn="Status Text (বাংলা)"
+                valueEn={state.liveChatStatus}
+                valueBn={state.liveChatStatus_bn}
+                onChangeEn={(v) => set('liveChatStatus', v)}
+                onChangeBn={(v) => set('liveChatStatus_bn', v)}
+              />
               <div style={gridTwo}>
                 <Field label="Avatar Emoji">
                   <input
@@ -1657,32 +1899,33 @@ function AdminSettingsPage() {
                     onChange={(e) => set('liveChatAvatar', e.target.value)}
                   />
                 </Field>
-                <Field label="Input Placeholder">
-                  <input
-                    style={inputStyle}
-                    value={state.liveChatPlaceholder}
-                    onChange={(e) =>
-                      set('liveChatPlaceholder', e.target.value)
-                    }
-                  />
-                </Field>
               </div>
-              <Field label="Welcome Message">
-                <textarea
-                  rows="2"
-                  style={inputStyle}
-                  value={state.liveChatWelcome}
-                  onChange={(e) => set('liveChatWelcome', e.target.value)}
-                />
-              </Field>
-              <Field label="Auto Reply">
-                <textarea
-                  rows="2"
-                  style={inputStyle}
-                  value={state.liveChatAutoReply}
-                  onChange={(e) => set('liveChatAutoReply', e.target.value)}
-                />
-              </Field>
+              <BiField
+                labelEn="Welcome Message (English)"
+                labelBn="Welcome Message (বাংলা)"
+                valueEn={state.liveChatWelcome}
+                valueBn={state.liveChatWelcome_bn}
+                onChangeEn={(v) => set('liveChatWelcome', v)}
+                onChangeBn={(v) => set('liveChatWelcome_bn', v)}
+                multiline
+              />
+              <BiField
+                labelEn="Auto Reply (English)"
+                labelBn="Auto Reply (বাংলা)"
+                valueEn={state.liveChatAutoReply}
+                valueBn={state.liveChatAutoReply_bn}
+                onChangeEn={(v) => set('liveChatAutoReply', v)}
+                onChangeBn={(v) => set('liveChatAutoReply_bn', v)}
+                multiline
+              />
+              <BiField
+                labelEn="Input Placeholder (English)"
+                labelBn="Input Placeholder (বাংলা)"
+                valueEn={state.liveChatPlaceholder}
+                valueBn={state.liveChatPlaceholder_bn}
+                onChangeEn={(v) => set('liveChatPlaceholder', v)}
+                onChangeBn={(v) => set('liveChatPlaceholder_bn', v)}
+              />
             </Section>
 
             {/* ==================== SOCIAL ==================== */}
@@ -1725,7 +1968,7 @@ function AdminSettingsPage() {
                 </Field>
               </div>
 
-              <h4 style={subHeading}>Mobile App Links (Coming Soon if empty)</h4>
+              <h4 style={subHeading}>Mobile App Links</h4>
               <div style={gridTwo}>
                 <Field label="App Store URL">
                   <input
@@ -1776,7 +2019,7 @@ function AdminSettingsPage() {
 }
 
 // ============================================================
-// WELCOME CARD COMPONENT
+// WELCOME CARD COMPONENT — WITH BILINGUAL
 // ============================================================
 function WelcomeCard({ role, icon, label, color, data, onChange }) {
   return (
@@ -1878,57 +2121,23 @@ function WelcomeCard({ role, icon, label, color, data, onChange }) {
 
       {data.enabled && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '11.5px',
-                fontWeight: 700,
-                color: 'var(--text-secondary)',
-                marginBottom: '5px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.3px',
-              }}
-            >
-              Title
-            </label>
-            <input
-              type="text"
-              value={data.title}
-              onChange={(e) => onChange('title', e.target.value)}
-              placeholder="Notification title"
-              maxLength={80}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '11.5px',
-                fontWeight: 700,
-                color: 'var(--text-secondary)',
-                marginBottom: '5px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.3px',
-              }}
-            >
-              Body / Message
-            </label>
-            <textarea
-              value={data.body}
-              onChange={(e) => onChange('body', e.target.value)}
-              placeholder="Welcome message"
-              rows={2}
-              maxLength={200}
-              style={{
-                ...inputStyle,
-                resize: 'vertical',
-                minHeight: '60px',
-                fontFamily: 'inherit',
-              }}
-            />
-          </div>
+          <BiField
+            labelEn="Title (English)"
+            labelBn="Title (বাংলা)"
+            valueEn={data.title || ''}
+            valueBn={data.title_bn || ''}
+            onChangeEn={(v) => onChange('title', v)}
+            onChangeBn={(v) => onChange('title_bn', v)}
+          />
+          <BiField
+            labelEn="Body / Message (English)"
+            labelBn="Body / Message (বাংলা)"
+            valueEn={data.body || ''}
+            valueBn={data.body_bn || ''}
+            onChangeEn={(v) => onChange('body', v)}
+            onChangeBn={(v) => onChange('body_bn', v)}
+            multiline
+          />
         </div>
       )}
     </div>
@@ -2181,6 +2390,54 @@ function Field({ label, icon, children }) {
         {label}
       </label>
       {children}
+    </div>
+  )
+}
+
+// ✅ BiField — Dual input for English + Bangla
+function BiField({
+  labelEn,
+  labelBn,
+  valueEn,
+  valueBn,
+  onChangeEn,
+  onChangeBn,
+  multiline = false,
+}) {
+  const inputProps = {
+    style: inputStyle,
+    value: valueEn,
+    onChange: (e) => onChangeEn(e.target.value),
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={gridTwo}>
+        <Field label={labelEn}>
+          {multiline ? (
+            <textarea {...inputProps} rows="3" />
+          ) : (
+            <input type="text" {...inputProps} />
+          )}
+        </Field>
+        <Field label={labelBn}>
+          {multiline ? (
+            <textarea
+              style={inputStyle}
+              value={valueBn}
+              onChange={(e) => onChangeBn(e.target.value)}
+              rows="3"
+            />
+          ) : (
+            <input
+              type="text"
+              style={inputStyle}
+              value={valueBn}
+              onChange={(e) => onChangeBn(e.target.value)}
+            />
+          )}
+        </Field>
+      </div>
     </div>
   )
 }

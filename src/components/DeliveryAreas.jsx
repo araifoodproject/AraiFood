@@ -1,7 +1,6 @@
 // ============================================================
 // src/components/DeliveryAreas.jsx
-// V3 — Full zone name show (no auto-short)
-// + Request Area button
+// V4 — Bilingual (BN/EN) + Request Area button
 // ============================================================
 
 import { useEffect, useState } from 'react'
@@ -9,6 +8,7 @@ import { MapPin, Plus } from 'lucide-react'
 import { db } from '../firebase'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import useSettings from '../hooks/useSettings'
+import { useLanguage } from '../i18n/LanguageContext'
 import ZoneRequestModal from './ZoneRequestModal'
 
 const COLOR_CYCLE = [
@@ -23,8 +23,11 @@ const COLOR_CYCLE = [
 
 function DeliveryAreas() {
   const { settings } = useSettings()
+  const { t, language } = useLanguage()
   const [zones, setZones] = useState([])
   const [showRequestModal, setShowRequestModal] = useState(false)
+
+  const isBn = language === 'bn'
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -38,8 +41,6 @@ function DeliveryAreas() {
     return () => unsub()
   }, [])
 
-  // ✅ Admin এ যা নাম দিবেন সেটাই show হবে
-  // displayName থাকলে সেটা, নাহলে name পুরোটা
   const getDisplayName = (zone) => {
     if (zone.displayName) return zone.displayName
     return zone.name || 'Area'
@@ -47,13 +48,20 @@ function DeliveryAreas() {
 
   const areas = settings.deliveryAreas || {}
 
+  // Fallback title/subtitle — translated
+  const sectionTitle =
+    areas.title || (isBn ? 'আমরা ডেলিভারি দিই' : 'We Deliver To')
+  const sectionSubtitle =
+    areas.subtitle ||
+    (isBn ? 'আপনার এলাকায় ডেলিভারি আছে কিনা দেখুন' : 'Check if we deliver to your area')
+
   return (
     <>
       <section className="aa-section">
         <div className="aa-section-header">
           <div>
-            <h2 className="aa-section-title">{areas.title}</h2>
-            <p className="aa-section-sub">{areas.subtitle}</p>
+            <h2 className="aa-section-title">{sectionTitle}</h2>
+            <p className="aa-section-sub">{sectionSubtitle}</p>
           </div>
         </div>
 
@@ -65,7 +73,7 @@ function DeliveryAreas() {
                 key={zone.firebaseId}
                 className={`aa-area-chip ${color}`}
                 style={{
-                  whiteSpace: 'nowrap',  // ← line break হবে না
+                  whiteSpace: 'nowrap',
                 }}
               >
                 <MapPin size={14} strokeWidth={2.5} />
@@ -74,7 +82,7 @@ function DeliveryAreas() {
             )
           })}
 
-          {/* ✅ Request Area button */}
+          {/* Request Area button — TRANSLATED */}
           <button
             onClick={() => setShowRequestModal(true)}
             className="aa-area-chip"
@@ -93,12 +101,12 @@ function DeliveryAreas() {
             }}
           >
             <Plus size={14} strokeWidth={2.8} />
-            আপনার এলাকা নেই?
+            {isBn ? 'আপনার এলাকা নেই?' : "Don't see your area?"}
           </button>
         </div>
       </section>
 
-      {/* ✅ Request Modal */}
+      {/* Request Modal */}
       <ZoneRequestModal
         open={showRequestModal}
         onClose={() => setShowRequestModal(false)}

@@ -1,7 +1,6 @@
 // ============================================================
 // src/components/Hero.jsx
-// V2 — Compact Feature Strip (4 columns everywhere)
-// + Inline style overrides for .aa-features
+// V3 — Bilingual (BN/EN) + Compact Feature Strip
 // ============================================================
 
 import { useState } from 'react'
@@ -11,6 +10,7 @@ import serviceFood from '../assets/images/service-food.png'
 import servicePharmacy from '../assets/images/service-pharmacy.png'
 import serviceGaming from '../assets/images/service-gaming.png'
 import useSettings from '../hooks/useSettings'
+import { useLanguage } from '../i18n/LanguageContext'
 
 // ============================================================
 // Compact Feature Strip CSS — 4 columns everywhere
@@ -134,6 +134,7 @@ function Hero() {
   const [query, setQuery] = useState('')
   const navigate = useNavigate()
   const { settings } = useSettings()
+  const { t, language } = useLanguage()
 
   const handleSearch = () => {
     const q = query.trim()
@@ -148,30 +149,32 @@ function Hero() {
     if (e.key === 'Enter') handleSearch()
   }
 
-  // Service cards — fixed
+  const isBn = language === 'bn'
+
+  // Service cards — TRANSLATED
   const services = [
     {
       key: 'food',
-      title: 'Food',
-      subtitle: 'Restaurants & Groceries',
+      title: isBn ? 'খাবার' : 'Food',
+      subtitle: isBn ? 'রেস্টুরেন্ট ও মুদি' : 'Restaurants & Groceries',
       image: serviceFood,
-      button: 'Order Food',
+      button: isBn ? 'খাবার অর্ডার করুন' : 'Order Food',
       path: '/restaurants',
     },
     {
       key: 'pharmacy',
-      title: 'Pharmacy',
-      subtitle: 'Medicines & Wellness',
+      title: isBn ? 'ফার্মেসি' : 'Pharmacy',
+      subtitle: isBn ? 'ঔষধ ও স্বাস্থ্যসেবা' : 'Medicines & Wellness',
       image: servicePharmacy,
-      button: 'Shop Pharmacy',
+      button: isBn ? 'ফার্মেসি দেখুন' : 'Shop Pharmacy',
       path: '/pharmacy',
     },
     {
       key: 'gaming',
-      title: 'Gaming',
-      subtitle: 'Games & Entertainment',
+      title: isBn ? 'গেমিং' : 'Gaming',
+      subtitle: isBn ? 'গেম ও বিনোদন' : 'Games & Entertainment',
       image: serviceGaming,
-      button: 'Play Games',
+      button: isBn ? 'গেম খেলুন' : 'Play Games',
       path: '/gaming',
     },
   ]
@@ -179,6 +182,13 @@ function Hero() {
   const hero = settings.hero || {}
   const trustBar = settings.trustBar || {}
   const features = settings.features || []
+
+  // Fallback search placeholder — translated
+  const searchPlaceholder =
+    hero.searchPlaceholder ||
+    (isBn
+      ? 'রেস্টুরেন্ট, খাবার বা ঔষধ খুঁজুন...'
+      : 'Search for restaurants, food, or medicine...')
 
   return (
     <>
@@ -198,7 +208,7 @@ function Hero() {
           <Search size={22} strokeWidth={2.2} color="#059669" />
           <input
             type="text"
-            placeholder={hero.searchPlaceholder}
+            placeholder={searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -206,7 +216,7 @@ function Hero() {
           <button
             className="aa-hero-search-btn"
             onClick={handleSearch}
-            title="Search"
+            title={isBn ? 'খুঁজুন' : 'Search'}
           >
             <SlidersHorizontal size={20} strokeWidth={2.2} />
           </button>

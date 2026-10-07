@@ -1,12 +1,21 @@
+// ============================================================
+// src/components/GamingBanner.jsx
+// V2 — Bilingual (BN/EN)
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { db } from '../firebase'
 import { collection, onSnapshot } from 'firebase/firestore'
+import { useLanguage } from '../i18n/LanguageContext'
 import pubgImg from '../assets/images/game-pubg.png'
 import freefireImg from '../assets/images/game-freefire.png'
 
 function GamingBanner() {
+  const { language } = useLanguage()
+  const isBn = language === 'bn'
+
   const [pubgProducts, setPubgProducts] = useState([])
   const [ffProducts, setFFProducts] = useState([])
 
@@ -16,12 +25,10 @@ function GamingBanner() {
         .map((d) => ({ firebaseId: d.id, ...d.data() }))
         .filter((p) => p.active !== false)
 
-      // PUBG products — sorted by price
       const pubg = all
         .filter((p) => p.game === 'PUBG')
         .sort((a, b) => (a.price || 0) - (b.price || 0))
 
-      // Free Fire products — sorted by price
       const ff = all
         .filter((p) => p.game === 'Free Fire')
         .sort((a, b) => (a.price || 0) - (b.price || 0))
@@ -40,7 +47,6 @@ function GamingBanner() {
   const getTopChips = (products) => {
     if (products.length === 0) return []
     if (products.length <= 3) return products
-    // Cheapest + middle + most expensive for variety
     return [
       products[0],
       products[Math.floor(products.length / 2)],
@@ -52,13 +58,17 @@ function GamingBanner() {
     <section className="aa-section">
       <div className="aa-section-header">
         <div>
-          <h2 className="aa-section-title">Top-Ups & Game Currency</h2>
+          <h2 className="aa-section-title">
+            {isBn ? 'টপ-আপ ও গেম কারেন্সি' : 'Top-Ups & Game Currency'}
+          </h2>
           <p className="aa-section-sub">
-            Instant delivery to your game account
+            {isBn
+              ? 'আপনার গেম একাউন্টে সাথে সাথে ডেলিভারি'
+              : 'Instant delivery to your game account'}
           </p>
         </div>
         <Link to="/gaming" className="aa-section-link">
-          Explore all games <span>→</span>
+          {isBn ? 'সব গেম দেখুন' : 'Explore all games'} <span>→</span>
         </Link>
       </div>
 
@@ -74,7 +84,9 @@ function GamingBanner() {
           <div className="aa-gaming-content">
             <h3 className="aa-gaming-title">PUBG UC</h3>
             <p className="aa-gaming-desc">
-              Instant PUBG Unknown Cash top-up
+              {isBn
+                ? 'সাথে সাথে PUBG Unknown Cash টপ-আপ'
+                : 'Instant PUBG Unknown Cash top-up'}
             </p>
             <div className="aa-gaming-prices">
               {getTopChips(pubgProducts).map((p) => (
@@ -95,10 +107,12 @@ function GamingBanner() {
             </div>
             <div className="aa-gaming-bottom">
               <span className="aa-gaming-from">
-                From ৳{getMinPrice(pubgProducts) || 100}
+                {isBn ? 'শুরু' : 'From'} ৳
+                {getMinPrice(pubgProducts) || 100}
               </span>
               <span className="aa-gaming-btn">
-                Top-Up <ArrowRight size={14} strokeWidth={2.8} />
+                {isBn ? 'টপ-আপ' : 'Top-Up'}{' '}
+                <ArrowRight size={14} strokeWidth={2.8} />
               </span>
             </div>
           </div>
@@ -115,7 +129,9 @@ function GamingBanner() {
           <div className="aa-gaming-content">
             <h3 className="aa-gaming-title">Free Fire Diamonds</h3>
             <p className="aa-gaming-desc">
-              Get diamonds instantly for Free Fire
+              {isBn
+                ? 'Free Fire এর জন্য সাথে সাথে ডায়মন্ড পান'
+                : 'Get diamonds instantly for Free Fire'}
             </p>
             <div className="aa-gaming-prices">
               {getTopChips(ffProducts).map((p) => (
@@ -136,10 +152,12 @@ function GamingBanner() {
             </div>
             <div className="aa-gaming-bottom">
               <span className="aa-gaming-from">
-                From ৳{getMinPrice(ffProducts) || 80}
+                {isBn ? 'শুরু' : 'From'} ৳
+                {getMinPrice(ffProducts) || 80}
               </span>
               <span className="aa-gaming-btn">
-                Top-Up <ArrowRight size={14} strokeWidth={2.8} />
+                {isBn ? 'টপ-আপ' : 'Top-Up'}{' '}
+                <ArrowRight size={14} strokeWidth={2.8} />
               </span>
             </div>
           </div>

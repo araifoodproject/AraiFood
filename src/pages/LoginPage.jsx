@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/LoginPage.jsx
-// V2 — Premium redesign, role detection unchanged
+// V3 — Bilingual (BN/EN)
 // ============================================================
 
 import { useState } from 'react'
@@ -22,9 +22,11 @@ import {
   getDocs,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import { useLanguage } from '../i18n/LanguageContext'
 import { Eye, EyeOff } from 'lucide-react'
 
 function LoginPage() {
+  const { t } = useLanguage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -36,7 +38,6 @@ function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
-
     setError('')
     setMessage('')
     setLoading(true)
@@ -44,14 +45,12 @@ function LoginPage() {
     const cleanEmail = email.trim().toLowerCase()
 
     try {
-      // STEP 1: Force signout
       try {
         if (auth.currentUser) await signOut(auth)
       } catch (err) {
         console.warn('Sign out warning:', err)
       }
 
-      // STEP 2: Clear role storage
       localStorage.removeItem('userRole')
       localStorage.removeItem('isPartner')
       localStorage.removeItem('managementRole')
@@ -59,10 +58,8 @@ function LoginPage() {
       localStorage.removeItem('managementName')
       localStorage.removeItem('managementId')
 
-      // STEP 3: Set persistence
       await setPersistence(auth, browserLocalPersistence)
 
-      // STEP 4: Sign in
       const userCred = await signInWithEmailAndPassword(
         auth,
         cleanEmail,
@@ -70,16 +67,14 @@ function LoginPage() {
       )
       const uid = userCred.user.uid
 
-      // STEP 5: Determine role
-
-      // 5a. Admin email
+      // Admin email
       if (cleanEmail === 'admin@araifood.com') {
         localStorage.setItem('userRole', 'admin')
         window.location.href = '/admin'
         return
       }
 
-      // 5b. Management member
+      // Management member
       try {
         let memberData = null
         const partnerQuery = query(
@@ -101,10 +96,7 @@ function LoginPage() {
         if (memberData && memberData.status === 'active') {
           localStorage.setItem('userRole', 'admin')
           localStorage.setItem('isPartner', 'true')
-          localStorage.setItem(
-            'managementRole',
-            memberData.role || 'partner'
-          )
+          localStorage.setItem('managementRole', memberData.role || 'partner')
           localStorage.setItem(
             'managementPermissions',
             JSON.stringify(memberData.permissions || {})
@@ -118,23 +110,19 @@ function LoginPage() {
         console.error('Partner check error:', err)
       }
 
-      // 5c. Pharmacy / Restaurant / Rider doc check
+      // Pharmacy
       try {
         const pharmDoc = await getDoc(doc(db, 'pharmacies', uid))
         if (pharmDoc.exists()) {
-          const d = pharmDoc.data()
           localStorage.setItem('userRole', 'pharmacy')
-          if (d.status === 'approved') {
-            window.location.href = '/pharmacy-panel'
-          } else {
-            window.location.href = '/pharmacy-panel'
-          }
+          window.location.href = '/pharmacy-panel'
           return
         }
       } catch (err) {
         console.error('Pharmacy check error:', err)
       }
 
+      // Restaurant
       try {
         const restDoc = await getDoc(doc(db, 'restaurants', uid))
         if (restDoc.exists()) {
@@ -146,6 +134,7 @@ function LoginPage() {
         console.error('Restaurant check error:', err)
       }
 
+      // Rider
       try {
         const riderDoc = await getDoc(doc(db, 'riders', uid))
         if (riderDoc.exists()) {
@@ -157,7 +146,7 @@ function LoginPage() {
         console.error('Rider check error:', err)
       }
 
-      // 5d. Customer (users doc)
+      // Customer
       try {
         const userDocRef = doc(db, 'users', uid)
         const userDoc = await getDoc(userDocRef)
@@ -194,7 +183,6 @@ function LoginPage() {
         localStorage.setItem('userRole', 'customer')
       }
 
-      // STEP 6: Redirect home
       window.location.href = '/'
     } catch (err) {
       console.error('Login failed:', err)
@@ -203,13 +191,13 @@ function LoginPage() {
         err.code === 'auth/user-not-found' ||
         err.code === 'auth/wrong-password'
       ) {
-        setError('Invalid email or password.')
+        setError(t('login.errInvalid'))
       } else if (err.code === 'auth/invalid-email') {
-        setError('Please enter a valid email address.')
+        setError(t('login.errInvalidEmail'))
       } else if (err.code === 'auth/too-many-requests') {
-        setError('Too many login attempts. Please try again later.')
+        setError(t('login.errTooMany'))
       } else {
-        setError('Login failed. Please try again.')
+        setError(t('login.errGeneric'))
       }
     } finally {
       setLoading(false)
@@ -220,20 +208,20 @@ function LoginPage() {
     setError('')
     setMessage('')
     if (!email.trim()) {
-      setError('Enter your email address first.')
+      setError(t('login.errEnterEmail'))
       return
     }
     setResetLoading(true)
     try {
       await sendPasswordResetEmail(auth, email.trim())
-      setMessage('Password reset email sent. Please check your inbox.')
+      setMessage(t('login.resetSent'))
     } catch (error) {
       if (error.code === 'auth/invalid-email') {
-        setError('Please enter a valid email address.')
+        setError(t('login.errInvalidEmail'))
       } else if (error.code === 'auth/user-not-found') {
-        setError('No account found with this email.')
+        setError(t('login.errNoAccount'))
       } else {
-        setError('Could not send reset email. Please try again.')
+        setError(t('login.errResetFailed'))
       }
     } finally {
       setResetLoading(false)
@@ -251,7 +239,6 @@ function LoginPage() {
       <div className="floating-food food-four">🍗</div>
 
       <div className="premium-login-card">
-        {/* Logo */}
         <div className="premium-login-logo">
           <img
             src="/araifood-logo.png"
@@ -262,19 +249,18 @@ function LoginPage() {
           <p>Good Food, Good Mood</p>
         </div>
 
-        {/* Header */}
         <div className="premium-login-header">
-          <span className="section-label">WELCOME BACK</span>
-          <h2>Login to Continue</h2>
-          <p>Your delicious food is waiting for you.</p>
+          <span className="section-label">{t('login.welcomeBack')}</span>
+          <h2>{t('login.title')}</h2>
+          <p>{t('login.subtitle')}</p>
         </div>
 
         <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label>Email Address</label>
+            <label>{t('login.emailLabel')}</label>
             <input
               type="email"
-              placeholder="Enter your email"
+              placeholder={t('login.emailPlaceholder')}
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value)
@@ -287,11 +273,11 @@ function LoginPage() {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label>{t('login.passwordLabel')}</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your password"
+                placeholder={t('login.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value)
@@ -347,7 +333,7 @@ function LoginPage() {
                 padding: '4px 0',
               }}
             >
-              Forgot Password?
+              {t('login.forgotPassword')}
             </button>
           </div>
 
@@ -369,7 +355,7 @@ function LoginPage() {
                   fontSize: '14px',
                 }}
               >
-                Reset your password
+                {t('login.resetTitle')}
               </strong>
               <p
                 style={{
@@ -379,7 +365,7 @@ function LoginPage() {
                   color: 'var(--text-secondary)',
                 }}
               >
-                Enter your email above and we'll send you a reset link.
+                {t('login.resetDesc')}
               </p>
               <button
                 type="button"
@@ -390,8 +376,7 @@ function LoginPage() {
                   padding: '11px',
                   border: 'none',
                   borderRadius: '10px',
-                  background:
-                    'linear-gradient(135deg, #059669, #047857)',
+                  background: 'linear-gradient(135deg, #059669, #047857)',
                   color: '#fff',
                   fontWeight: 800,
                   fontSize: '13.5px',
@@ -399,7 +384,7 @@ function LoginPage() {
                   opacity: resetLoading ? 0.7 : 1,
                 }}
               >
-                {resetLoading ? 'Sending...' : 'Send Reset Email'}
+                {resetLoading ? t('login.sending') : t('login.sendReset')}
               </button>
             </div>
           )}
@@ -427,18 +412,18 @@ function LoginPage() {
             className="login-submit-button"
             disabled={loading}
           >
-            {loading ? 'Logging in...' : 'Login →'}
+            {loading ? t('login.submitting') : t('login.submit') + ' →'}
           </button>
         </form>
 
         <div className="login-footer">
-          <p>Don't have an account?</p>
+          <p>{t('login.noAccount')}</p>
           <Link
             to="/signup"
             className="signup-link"
             style={{ textDecoration: 'none' }}
           >
-            Create an account
+            {t('login.createAccount')}
           </Link>
         </div>
       </div>

@@ -1,12 +1,14 @@
 // ============================================================
 // src/components/Navbar.jsx
-// V2 — Help now goes to /help
+// V3 — Language Switcher + Bilingual (BN/EN)
 // ============================================================
 
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import NotificationPanel from './NotificationPanel'
+import LanguageSwitcher from './LanguageSwitcher'
 import useSettings from '../hooks/useSettings'
+import { useLanguage } from '../i18n/LanguageContext'
 import {
   Search,
   ShoppingBag,
@@ -14,10 +16,12 @@ import {
   MapPin,
   ChevronDown,
   X,
+  Menu,
 } from 'lucide-react'
 
 function Navbar() {
   const { settings } = useSettings()
+  const { t } = useLanguage()
   const [menuOpen, setMenuOpen] = useState(false)
   const [cartCount, setCartCount] = useState(0)
   const [user, setUser] = useState(null)
@@ -78,10 +82,10 @@ function Navbar() {
   const currentPath = location.pathname
 
   const navLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/order-history', label: 'Orders' },
-    { path: '/offers', label: 'Offers' },
-    { path: '/help', label: 'Help' },
+    { path: '/', label: t('nav.home') },
+    { path: '/order-history', label: t('nav.orders') },
+    { path: '/offers', label: t('nav.offers') },
+    { path: '/help', label: t('nav.help') },
   ]
 
   return (
@@ -117,13 +121,22 @@ function Navbar() {
             ))}
           </nav>
 
-          <button className="aa-nav-location" title="Location">
+          <button
+            className="aa-nav-location"
+            title={t('nav.location')}
+            type="button"
+          >
             <MapPin size={14} strokeWidth={2.5} color="#F97316" />
             <span>Araihazar</span>
             <ChevronDown size={14} strokeWidth={2.5} />
           </button>
 
           <div className="aa-nav-actions">
+            {/* Language Switcher — DESKTOP */}
+            <div className="aa-nav-lang-desktop">
+              <LanguageSwitcher />
+            </div>
+
             <Link
               to="/restaurants"
               className="aa-nav-icon-btn"
@@ -136,7 +149,11 @@ function Navbar() {
               <NotificationPanel />
             </div>
 
-            <Link to="/cart" className="aa-nav-icon-btn" title="Cart">
+            <Link
+              to="/cart"
+              className="aa-nav-icon-btn"
+              title={t('nav.cart')}
+            >
               <ShoppingBag size={18} strokeWidth={2.2} />
               {cartCount > 0 && (
                 <span className="aa-nav-cart-badge">
@@ -148,7 +165,7 @@ function Navbar() {
             <Link
               to="/account"
               className="aa-nav-profile-btn"
-              title={user ? 'My Account' : 'Login'}
+              title={user ? t('nav.account') : t('nav.login')}
             >
               {profileImage ? (
                 <img
@@ -164,6 +181,17 @@ function Navbar() {
                 <User size={20} strokeWidth={2.2} />
               )}
             </Link>
+
+            {/* Mobile hamburger — opens mobile menu */}
+            <button
+              className="aa-nav-mobile-menu-btn"
+              onClick={() => setMenuOpen(true)}
+              title={t('nav.menu')}
+              type="button"
+              aria-label={t('nav.menu')}
+            >
+              <Menu size={20} strokeWidth={2.2} />
+            </button>
           </div>
         </div>
       </header>
@@ -178,13 +206,25 @@ function Navbar() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="glass-mobile-header">
-              <span className="glass-mobile-title">Menu</span>
+              <span className="glass-mobile-title">{t('nav.menu')}</span>
               <button
                 className="glass-icon-btn"
                 onClick={() => setMenuOpen(false)}
               >
                 <X size={20} strokeWidth={2} />
               </button>
+            </div>
+
+            {/* Language Switcher — MOBILE */}
+            <div
+              style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
+              <LanguageSwitcher />
             </div>
 
             <div className="glass-mobile-links">
@@ -206,21 +246,21 @@ function Navbar() {
                 className="glass-mobile-link"
                 onClick={() => setMenuOpen(false)}
               >
-                My Favorites
+                {t('nav.favorites')}
               </Link>
               <Link
                 to="/gaming"
                 className="glass-mobile-link"
                 onClick={() => setMenuOpen(false)}
               >
-                Gaming
+                {t('nav.gaming')}
               </Link>
               <Link
                 to="/account"
                 className="glass-mobile-link"
                 onClick={() => setMenuOpen(false)}
               >
-                My Account
+                {t('nav.account')}
               </Link>
             </div>
           </div>

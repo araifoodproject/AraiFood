@@ -17125,4 +17125,37 @@ header.aa-navbar-pill {
     max-height: calc(100vh - 180px);
     border-radius: 20px;
   }
+}/* ============================================================
+   Language Switcher + Mobile Menu — Navbar
+   ============================================================ */
+
+.aa-nav-lang-desktop {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.aa-nav-mobile-menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  color: var(--text-primary);
+  align-items: center;
+  justify-content: center;
+}
+
+.aa-nav-mobile-menu-btn:hover {
+  background: var(--surface-soft);
+}
+
+@media (max-width: 900px) {
+  .aa-nav-lang-desktop {
+    display: none;
+  }
+  .aa-nav-mobile-menu-btn {
+    display: inline-flex;
+  }
 }

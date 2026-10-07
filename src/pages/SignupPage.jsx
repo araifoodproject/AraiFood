@@ -1,6 +1,6 @@
 // ============================================================
 // src/pages/SignupPage.jsx
-// V4 — Customer signup + Welcome + Admin notify
+// V5 — Bilingual (BN/EN)
 // ============================================================
 
 import { useState } from 'react'
@@ -10,17 +10,21 @@ import { doc, setDoc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { toast } from 'react-toastify'
 import { Eye, EyeOff } from 'lucide-react'
+import { useLanguage } from '../i18n/LanguageContext'
 import { saveInAppNotification } from '../utils/sendNotification'
 import { notifyAdminsOfSignup } from '../utils/notifyAdmin'
 
 const DEFAULT_WELCOME = {
   enabled: true,
   title: '🎉 Welcome to AraiFood!',
+  title_bn: '🎉 AraiFood এ স্বাগতম!',
   body: 'Thanks for joining AraiFood. Start ordering your favourite food now!',
+  body_bn: 'AraiFood এ যোগ দেওয়ার জন্য ধন্যবাদ। এখনই আপনার প্রিয় খাবার অর্ডার করুন!',
 }
 
 function SignupPage() {
   const navigate = useNavigate()
+  const { t, language } = useLanguage()
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -36,23 +40,23 @@ function SignupPage() {
     e.preventDefault()
     setError('')
 
-    if (!fullName.trim()) { setError('Please enter your full name.'); return }
-    if (!email.trim()) { setError('Please enter your email.'); return }
-    if (!phone.trim()) { setError('Please enter your mobile number.'); return }
+    if (!fullName.trim()) { setError(t('signup.errName')); return }
+    if (!email.trim()) { setError(t('signup.errEmail')); return }
+    if (!phone.trim()) { setError(t('signup.errPhone')); return }
     if (!/^01[0-9]{9}$/.test(phone.trim())) {
-      setError('Please enter a valid 11-digit mobile number.')
+      setError(t('signup.errPhoneInvalid'))
       return
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.')
+      setError(t('signup.errPassword'))
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.')
+      setError(t('signup.errPasswordMismatch'))
       return
     }
     if (!acceptedTerms) {
-      setError('Please accept the Terms & Privacy Policy.')
+      setError(t('signup.errTerms'))
       return
     }
 
@@ -82,7 +86,7 @@ function SignupPage() {
         createdAt: new Date(),
       })
 
-      // 🔔 Welcome Notification
+      // Welcome Notification (language-aware)
       try {
         let welcome = DEFAULT_WELCOME
         const settingsRef = doc(db, 'settings', 'notifications')
@@ -96,37 +100,43 @@ function SignupPage() {
         }
 
         if (welcome.enabled !== false) {
-          await saveInAppNotification(
-            uid,
-            welcome.title || DEFAULT_WELCOME.title,
-            welcome.body || DEFAULT_WELCOME.body,
-            'promotion',
-            { url: '/' }
-          )
+          const title =
+            language === 'bn'
+              ? welcome.title_bn || welcome.title || DEFAULT_WELCOME.title
+              : welcome.title || DEFAULT_WELCOME.title
+
+          const body =
+            language === 'bn'
+              ? welcome.body_bn || welcome.body || DEFAULT_WELCOME.body
+              : welcome.body || DEFAULT_WELCOME.body
+
+          await saveInAppNotification(uid, title, body, 'promotion', {
+            url: '/',
+          })
         }
       } catch (notifErr) {
         console.warn('Welcome notification skipped:', notifErr)
       }
 
-      // 🔔 Notify Admin (in background, no await)
+      // Notify Admin (background)
       notifyAdminsOfSignup('customer', fullName.trim(), { uid }).catch((err) =>
         console.warn('Admin notify failed:', err)
       )
 
       localStorage.setItem('userRole', 'customer')
-      toast.success('🎉 Welcome to AraiFood!')
+      toast.success(t('signup.welcomeToast'))
       setTimeout(() => {
         window.location.href = '/'
       }, 500)
     } catch (error) {
       if (error.code === 'auth/email-already-in-use') {
-        setError('An account with this email already exists.')
+        setError(t('signup.errEmailInUse'))
       } else if (error.code === 'auth/invalid-email') {
-        setError('Please enter a valid email address.')
+        setError(t('signup.errInvalidEmail'))
       } else if (error.code === 'auth/weak-password') {
-        setError('Password is too weak. Use at least 6 characters.')
+        setError(t('signup.errWeakPassword'))
       } else {
-        setError('Signup failed. Please try again.')
+        setError(t('signup.errGeneric'))
       }
     } finally {
       setLoading(false)
@@ -155,17 +165,17 @@ function SignupPage() {
         </div>
 
         <div className="premium-login-header">
-          <span className="section-label">JOIN US</span>
-          <h2>Create Account</h2>
-          <p>Sign up to start ordering delicious food.</p>
+          <span className="section-label">{t('signup.joinUs')}</span>
+          <h2>{t('signup.title')}</h2>
+          <p>{t('signup.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSignup}>
           <div className="form-group">
-            <label>Full Name</label>
+            <label>{t('signup.fullName')}</label>
             <input
               type="text"
-              placeholder="Enter your full name"
+              placeholder={t('signup.fullNamePlaceholder')}
               value={fullName}
               onChange={(e) => {
                 setFullName(e.target.value)
@@ -177,10 +187,10 @@ function SignupPage() {
           </div>
 
           <div className="form-group">
-            <label>Email Address</label>
+            <label>{t('signup.email')}</label>
             <input
               type="email"
-              placeholder="Enter your email"
+              placeholder={t('signup.emailPlaceholder')}
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value)
@@ -192,10 +202,10 @@ function SignupPage() {
           </div>
 
           <div className="form-group">
-            <label>Mobile Number</label>
+            <label>{t('signup.mobile')}</label>
             <input
               type="tel"
-              placeholder="01XXXXXXXXX"
+              placeholder={t('signup.mobilePlaceholder')}
               value={phone}
               onChange={(e) => {
                 setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))
@@ -207,11 +217,11 @@ function SignupPage() {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label>{t('signup.password')}</label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
-                placeholder="Create a password (min 6 characters)"
+                placeholder={t('signup.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value)
@@ -244,10 +254,10 @@ function SignupPage() {
           </div>
 
           <div className="form-group">
-            <label>Confirm Password</label>
+            <label>{t('signup.confirmPassword')}</label>
             <input
               type={showPassword ? 'text' : 'password'}
-              placeholder="Confirm your password"
+              placeholder={t('signup.confirmPasswordPlaceholder')}
               value={confirmPassword}
               onChange={(e) => {
                 setConfirmPassword(e.target.value)
@@ -291,13 +301,13 @@ function SignupPage() {
               }}
             />
             <span>
-              I agree to the{' '}
+              {t('signup.agreeTo')}{' '}
               <span style={{ color: '#059669', fontWeight: 800 }}>
-                Terms & Conditions
+                {t('signup.terms')}
               </span>{' '}
-              and{' '}
+              {t('signup.and')}{' '}
               <span style={{ color: '#059669', fontWeight: 800 }}>
-                Privacy Policy
+                {t('signup.privacy')}
               </span>
             </span>
           </label>
@@ -313,18 +323,18 @@ function SignupPage() {
             className="login-submit-button"
             disabled={loading}
           >
-            {loading ? 'Creating Account...' : 'Create Account →'}
+            {loading ? t('signup.submitting') : t('signup.submit') + ' →'}
           </button>
         </form>
 
         <div className="login-footer">
-          <p>Already have an account?</p>
+          <p>{t('signup.haveAccount')}</p>
           <Link
             to="/login"
             className="signup-link"
             style={{ textDecoration: 'none' }}
           >
-            Login
+            {t('signup.loginLink')}
           </Link>
         </div>
 
@@ -346,7 +356,7 @@ function SignupPage() {
               letterSpacing: '0.5px',
             }}
           >
-            Want to partner with us?
+            {t('signup.partnerTitle')}
           </p>
           <div
             style={{
@@ -369,7 +379,7 @@ function SignupPage() {
                 textDecoration: 'none',
               }}
             >
-              🏪 Restaurant
+              {t('signup.partnerRestaurant')}
             </Link>
             <Link
               to="/rider-signup"
@@ -384,7 +394,7 @@ function SignupPage() {
                 textDecoration: 'none',
               }}
             >
-              🛵 Rider
+              {t('signup.partnerRider')}
             </Link>
             <Link
               to="/pharmacy-signup"
@@ -399,7 +409,7 @@ function SignupPage() {
                 textDecoration: 'none',
               }}
             >
-              💊 Pharmacy
+              {t('signup.partnerPharmacy')}
             </Link>
           </div>
         </div>
