@@ -1,28 +1,30 @@
 // ============================================================
 // src/pages/CareersPage.jsx
 // No openings currently message
+// Bilingual (BN/EN)
 // ============================================================
 
 import { Link } from 'react-router-dom'
 import PageBackButton from '../components/PageBackButton'
 import useSettings from '../hooks/useSettings'
 import { Briefcase, Mail, Heart } from 'lucide-react'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function CareersPage() {
+  const { t } = useLanguage()
   const { settings } = useSettings()
+  const siteName = settings.siteName || 'AraiFood'
+  const contactEmail = settings.contactEmail || t('contact.defaultEmail')
 
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('careers.back')} fallback="/" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">CAREERS</span>
-          <h1>Join Our Team 💼</h1>
-          <p>
-            Grow with {settings.siteName || 'AraiFood'} — build the future of
-            local delivery in Araihazar.
-          </p>
+          <span className="glass-section-label">{t('careers.badge')}</span>
+          <h1>{t('careers.title')}</h1>
+          <p>{t('careers.subtitle').replace('{siteName}', siteName)}</p>
         </div>
 
         <div
@@ -40,8 +42,7 @@ function CareersPage() {
               width: '88px',
               height: '88px',
               borderRadius: '50%',
-              background:
-                'linear-gradient(135deg, #FEF3C7, #FDE68A)',
+              background: 'linear-gradient(135deg, #FEF3C7, #FDE68A)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -60,7 +61,7 @@ function CareersPage() {
               marginBottom: '10px',
             }}
           >
-            এখন কোনো vacancy নেই
+            {t('careers.noVacancyTitle')}
           </h2>
 
           <p
@@ -73,8 +74,7 @@ function CareersPage() {
               fontWeight: 500,
             }}
           >
-            আমরা এখন নতুন team member খুঁজছি না। কিন্তু আপনি চাইলে আপনার
-            CV পাঠাতে পারেন — vacancy খুললে আমরা যোগাযোগ করবো।
+            {t('careers.noVacancyDesc')}
           </p>
 
           <div
@@ -86,7 +86,9 @@ function CareersPage() {
             }}
           >
             <a
-              href={`mailto:${settings.contactEmail || 'hello@araifood.com'}?subject=Career Application`}
+              href={`mailto:${contactEmail}?subject=${encodeURIComponent(
+                t('careers.emailSubject')
+              )}`}
               style={{
                 padding: '12px 24px',
                 borderRadius: '999px',
@@ -102,7 +104,7 @@ function CareersPage() {
               }}
             >
               <Mail size={16} />
-              Send CV
+              {t('careers.sendCv')}
             </a>
             <Link
               to="/contact"
@@ -121,7 +123,7 @@ function CareersPage() {
               }}
             >
               <Heart size={16} />
-              Contact Us
+              {t('careers.contactUs')}
             </Link>
           </div>
         </div>

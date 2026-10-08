@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/ContactPage.jsx
 // Contact Us — form + info
+// Bilingual (BN/EN)
 // ============================================================
 
 import { useState } from 'react'
@@ -18,8 +19,10 @@ import {
   User,
   Loader2,
 } from 'lucide-react'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function ContactPage() {
+  const { t } = useLanguage()
   const { settings } = useSettings()
 
   const [name, setName] = useState('')
@@ -30,19 +33,19 @@ function ContactPage() {
   const [sending, setSending] = useState(false)
 
   const subjects = [
-    { value: 'general', label: '💬 General Inquiry' },
-    { value: 'order', label: '📦 Order Issue' },
-    { value: 'refund', label: '💰 Refund Request' },
-    { value: 'partner', label: '🤝 Partnership' },
-    { value: 'technical', label: '🔧 Technical Support' },
-    { value: 'feedback', label: '⭐ Feedback' },
+    { value: 'general', label: t('contact.subjectGeneral') },
+    { value: 'order', label: t('contact.subjectOrder') },
+    { value: 'refund', label: t('contact.subjectRefund') },
+    { value: 'partner', label: t('contact.subjectPartner') },
+    { value: 'technical', label: t('contact.subjectTechnical') },
+    { value: 'feedback', label: t('contact.subjectFeedback') },
   ]
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
     if (!name.trim() || !email.trim() || !message.trim()) {
-      toast.error('Please fill in all required fields')
+      toast.error(t('contact.toastFillRequired'))
       return
     }
 
@@ -50,9 +53,7 @@ function ContactPage() {
 
     // Simulate sending — in real app you'd send to Firebase or email service
     setTimeout(() => {
-      toast.success(
-        "✅ Message sent! We'll get back to you within 24 hours."
-      )
+      toast.success(t('contact.toastSuccess'))
       setName('')
       setEmail('')
       setPhone('')
@@ -66,36 +67,35 @@ function ContactPage() {
     {
       icon: Mail,
       color: '#3B82F6',
-      label: 'Email',
-      value: settings.contactEmail || 'hello@araifood.com',
-      href: `mailto:${settings.contactEmail || 'hello@araifood.com'}`,
+      label: t('contact.labelEmail'),
+      value: settings.contactEmail || t('contact.defaultEmail'),
+      href: `mailto:${settings.contactEmail || t('contact.defaultEmail')}`,
     },
     {
       icon: Phone,
       color: '#10B981',
-      label: 'Phone',
-      value: settings.contactPhone || '+880 1700-000000',
-      href: `tel:${(settings.contactPhone || '+8801700000000').replace(
-        /\s/g,
-        ''
-      )}`,
+      label: t('contact.labelPhone'),
+      value: settings.contactPhone || t('contact.defaultPhone'),
+      href: `tel:${(
+        settings.contactPhone || t('contact.defaultPhone')
+      ).replace(/\s/g, '')}`,
     },
     {
       icon: MapPin,
       color: '#F59E0B',
-      label: 'Address',
-      value: settings.address || 'Araihazar, Narayanganj',
+      label: t('contact.labelAddress'),
+      value: settings.address || t('contact.defaultAddress'),
       href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        settings.address || 'Araihazar'
+        settings.address || t('contact.defaultAddress')
       )}`,
     },
     {
       icon: Clock,
       color: '#8B5CF6',
-      label: 'Hours',
-      value: `${settings.openingTime || '10:00'} - ${
-        settings.closingTime || '22:00'
-      } (Daily)`,
+      label: t('contact.labelHours'),
+      value: `${settings.openingTime || t('contact.defaultOpening')} - ${
+        settings.closingTime || t('contact.defaultClosing')
+      } ${t('contact.hoursSuffix')}`,
       href: null,
     },
   ]
@@ -103,16 +103,13 @@ function ContactPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('contact.back')} fallback="/" />
 
         {/* Header */}
         <div className="restaurants-page-header">
-          <span className="glass-section-label">CONTACT</span>
-          <h1>Get in Touch 📬</h1>
-          <p>
-            Have a question, feedback, or partnership inquiry? We'd love to
-            hear from you.
-          </p>
+          <span className="glass-section-label">{t('contact.badge')}</span>
+          <h1>{t('contact.title')}</h1>
+          <p>{t('contact.subtitle')}</p>
         </div>
 
         <div
@@ -131,8 +128,8 @@ function ContactPage() {
               <div className="account-section-title">
                 <div className="account-section-icon">📞</div>
                 <div>
-                  <h3>Contact Information</h3>
-                  <p>Reach us anytime</p>
+                  <h3>{t('contact.infoTitle')}</h3>
+                  <p>{t('contact.infoSubtitle')}</p>
                 </div>
               </div>
 
@@ -259,7 +256,7 @@ function ContactPage() {
                   color: 'var(--text-primary)',
                 }}
               >
-                Need instant help?
+                {t('contact.chatTitle')}
               </h3>
               <p
                 style={{
@@ -269,7 +266,7 @@ function ContactPage() {
                   fontWeight: 500,
                 }}
               >
-                Chat with our support team live
+                {t('contact.chatSubtitle')}
               </p>
               <button
                 onClick={() => {
@@ -277,7 +274,7 @@ function ContactPage() {
                     '.live-chat-button, [class*="chat"] button, .lc-toggle'
                   )
                   if (chatBtn) chatBtn.click()
-                  else toast.info('Live Chat button এর জন্য page scroll করুন')
+                  else toast.info(t('contact.chatNotFound'))
                 }}
                 style={{
                   padding: '12px 22px',
@@ -296,7 +293,7 @@ function ContactPage() {
                 }}
               >
                 <MessageCircle size={16} strokeWidth={2.4} />
-                Open Live Chat
+                {t('contact.chatBtn')}
               </button>
             </div>
           </div>
@@ -306,8 +303,8 @@ function ContactPage() {
             <div className="account-section-title">
               <div className="account-section-icon">✉️</div>
               <div>
-                <h3>Send Us a Message</h3>
-                <p>We typically reply within 24 hours</p>
+                <h3>{t('contact.formTitle')}</h3>
+                <p>{t('contact.formSubtitle')}</p>
               </div>
             </div>
 
@@ -328,26 +325,28 @@ function ContactPage() {
               >
                 <div>
                   <label style={labelStyle}>
-                    <User size={12} /> Your Name *
+                    <User size={12} /> {t('contact.nameLabel')}{' '}
+                    {t('contact.requiredStar')}
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your name"
+                    placeholder={t('contact.namePlaceholder')}
                     required
                     style={inputStyle}
                   />
                 </div>
                 <div>
                   <label style={labelStyle}>
-                    <Mail size={12} /> Email *
+                    <Mail size={12} /> {t('contact.emailLabel')}{' '}
+                    {t('contact.requiredStar')}
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder={t('contact.emailPlaceholder')}
                     required
                     style={inputStyle}
                   />
@@ -363,18 +362,18 @@ function ContactPage() {
               >
                 <div>
                   <label style={labelStyle}>
-                    <Phone size={12} /> Phone (Optional)
+                    <Phone size={12} /> {t('contact.phoneLabel')}
                   </label>
                   <input
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="01XXXXXXXXX"
+                    placeholder={t('contact.phonePlaceholder')}
                     style={inputStyle}
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>📌 Subject</label>
+                  <label style={labelStyle}>{t('contact.subjectLabel')}</label>
                   <select
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
@@ -390,11 +389,11 @@ function ContactPage() {
               </div>
 
               <div>
-                <label style={labelStyle}>💬 Message *</label>
+                <label style={labelStyle}>{t('contact.messageLabel')}</label>
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Tell us how we can help..."
+                  placeholder={t('contact.messagePlaceholder')}
                   rows={6}
                   required
                   style={{
@@ -436,12 +435,12 @@ function ContactPage() {
                       size={18}
                       style={{ animation: 'spin 1s linear infinite' }}
                     />
-                    Sending...
+                    {t('contact.sendingBtn')}
                   </>
                 ) : (
                   <>
                     <Send size={18} strokeWidth={2.5} />
-                    Send Message
+                    {t('contact.sendBtn')}
                   </>
                 )}
               </button>
@@ -455,7 +454,7 @@ function ContactPage() {
                   fontWeight: 600,
                 }}
               >
-                🔒 Your information is secure and will never be shared
+                {t('contact.secureNote')}
               </p>
             </form>
           </div>
@@ -494,7 +493,7 @@ function ContactPage() {
                   marginBottom: '2px',
                 }}
               >
-                Help Center
+                {t('contact.relatedHelpTitle')}
               </strong>
               <span
                 style={{
@@ -503,7 +502,7 @@ function ContactPage() {
                   fontWeight: 600,
                 }}
               >
-                FAQs & guides
+                {t('contact.relatedHelpDesc')}
               </span>
             </div>
           </Link>
@@ -532,7 +531,7 @@ function ContactPage() {
                   marginBottom: '2px',
                 }}
               >
-                Terms & Privacy
+                {t('contact.relatedTermsTitle')}
               </strong>
               <span
                 style={{
@@ -541,7 +540,7 @@ function ContactPage() {
                   fontWeight: 600,
                 }}
               >
-                Legal info
+                {t('contact.relatedTermsDesc')}
               </span>
             </div>
           </Link>
@@ -570,7 +569,7 @@ function ContactPage() {
                   marginBottom: '2px',
                 }}
               >
-                About Us
+                {t('contact.relatedAboutTitle')}
               </strong>
               <span
                 style={{
@@ -579,7 +578,7 @@ function ContactPage() {
                   fontWeight: 600,
                 }}
               >
-                Our story
+                {t('contact.relatedAboutDesc')}
               </span>
             </div>
           </Link>

@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/TrackOrderPage.jsx
 // V2 — + Payment status visibility + prominent OTP display
+// Bilingual (BN/EN)
 // ============================================================
 
 import { useState, useEffect, useMemo, useRef } from 'react'
@@ -16,6 +17,7 @@ import {
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
 import PageBackButton from '../components/PageBackButton'
 import useSettings from '../hooks/useSettings'
+import { useLanguage } from '../i18n/LanguageContext'
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
@@ -31,6 +33,7 @@ const customerIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="55" heig
 const restaurantIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="55" height="55" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="#f59e0b" opacity="0.9" stroke="#ffffff" stroke-width="4"/><text x="50" y="65" font-size="40" text-anchor="middle">🏪</text></svg>`
 
 function TrackOrderPage() {
+  const { t } = useLanguage()
   const [searchParams] = useSearchParams()
   const orderIdParam = searchParams.get('id')
   const { settings } = useSettings()
@@ -161,23 +164,31 @@ function TrackOrderPage() {
   }
 
   // ============================================================
-  // UPDATED: Status label with payment awareness
+  // Status label with payment awareness
   // ============================================================
   const getStatusLabel = (ord) => {
-    if (!ord) return '⏳ Waiting for order...'
+    if (!ord) return t('trackOrder.statusWaiting')
 
     // Cancelled
     if (ord.status === 'cancelled') {
-      return `❌ This order was cancelled.${
-        ord.cancelReason ? ` Reason: ${ord.cancelReason}` : ''
-      }`
+      const suffix = ord.cancelReason
+        ? t('trackOrder.statusCancelledReason').replace(
+            '{reason}',
+            ord.cancelReason
+          )
+        : ''
+      return t('trackOrder.statusCancelled') + suffix
     }
 
     // Payment rejected
     if (ord.paymentStatus === 'rejected') {
-      return `❌ Payment rejected. ${
-        ord.paymentRejectReason ? `Reason: ${ord.paymentRejectReason}` : ''
-      }`
+      const suffix = ord.paymentRejectReason
+        ? t('trackOrder.statusPaymentRejectedReason').replace(
+            '{reason}',
+            ord.paymentRejectReason
+          )
+        : ''
+      return t('trackOrder.statusPaymentRejected') + suffix
     }
 
     // Online payment pending Admin verification
@@ -186,7 +197,7 @@ function TrackOrderPage() {
       ord.paymentStatus === 'pending' &&
       ord.status === 'pending'
     ) {
-      return '💳 Waiting for Admin to verify your payment...'
+      return t('trackOrder.statusWaitingAdminVerify')
     }
 
     // Payment verified but restaurant not yet accepted
@@ -195,37 +206,37 @@ function TrackOrderPage() {
       ord.paymentStatus === 'verified' &&
       ord.status === 'pending'
     ) {
-      return '⏳ Waiting for restaurant to accept your order...'
+      return t('trackOrder.statusWaitingRestaurant')
     }
 
     // COD pending
     if (ord.paymentMethod === 'cod' && ord.status === 'pending') {
-      return '⏳ Waiting for restaurant to accept your order...'
+      return t('trackOrder.statusWaitingRestaurant')
     }
 
     // Rider status flow
     if (ord.riderStatus === 'delivered')
-      return '✅ Your food has been delivered. Enjoy!'
+      return t('trackOrder.statusRiderDelivered')
     if (ord.riderStatus === 'going_to_customer')
-      return '🛵 Rider is on the way to you!'
+      return t('trackOrder.statusRiderGoingToCustomer')
     if (ord.riderStatus === 'picked_up')
-      return '📦 Food picked up. Heading to you!'
+      return t('trackOrder.statusRiderPickedUp')
     if (ord.riderStatus === 'arrived_at_restaurant')
-      return '📍 Rider arrived at restaurant.'
+      return t('trackOrder.statusRiderArrived')
     if (ord.riderStatus === 'going_to_restaurant')
-      return '🛵 Rider is going to the restaurant.'
+      return t('trackOrder.statusRiderGoingToRestaurant')
     if (ord.riderStatus === 'accepted')
-      return '👤 Rider assigned. Waiting for food pickup.'
+      return t('trackOrder.statusRiderAssigned')
 
     // Order status flow
     if (ord.status === 'delivered')
-      return '✅ Your food has been delivered. Enjoy!'
+      return t('trackOrder.statusOrderDelivered')
     if (ord.status === 'delivering')
-      return '🛵 Food is ready! Waiting for rider.'
+      return t('trackOrder.statusOrderDelivering')
     if (ord.status === 'preparing')
-      return '👨‍🍳 Restaurant is preparing your order...'
+      return t('trackOrder.statusOrderPreparing')
 
-    return '⏳ Processing your order...'
+    return t('trackOrder.statusProcessing')
   }
 
   const trackingStage = getTrackingStage(order)
@@ -246,7 +257,7 @@ function TrackOrderPage() {
       <div className="restaurants-page">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
-          <p>Loading your order...</p>
+          <p>{t('trackOrder.loading')}</p>
         </div>
       </div>
     )
@@ -257,14 +268,12 @@ function TrackOrderPage() {
     return (
       <div className="restaurants-page">
         <div className="restaurants-page-container">
-          <PageBackButton label="Back" fallback="/order-history" />
+          <PageBackButton label={t('common.back')} fallback="/order-history" />
 
           <div className="restaurant-empty-state">
             <div className="empty-icon">📦</div>
-            <h2>Order not found!</h2>
-            <p>
-              The order you're looking for doesn't exist or has been removed.
-            </p>
+            <h2>{t('trackOrder.notFound')}</h2>
+            <p>{t('trackOrder.notFoundDesc')}</p>
             <Link
               to="/order-history"
               className="checkout-button"
@@ -274,7 +283,7 @@ function TrackOrderPage() {
                 marginTop: '20px',
               }}
             >
-              Back to Orders
+              {t('trackOrder.backToOrders')}
             </Link>
           </div>
         </div>
@@ -300,13 +309,13 @@ function TrackOrderPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/order-history" />
+        <PageBackButton label={t('common.back')} fallback="/order-history" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">ORDER TRACKING</span>
-          <h1>Track Your Order</h1>
+          <span className="glass-section-label">{t('trackOrder.badge')}</span>
+          <h1>{t('trackOrder.title')}</h1>
           <p>
-            Order ID: <strong>{order.orderId}</strong>
+            {t('trackOrder.orderIdPrefix')} <strong>{order.orderId}</strong>
           </p>
         </div>
 
@@ -342,7 +351,7 @@ function TrackOrderPage() {
                       color: '#92400E',
                     }}
                   >
-                    Payment Pending Verification
+                    {t('trackOrder.paymentPendingTitle')}
                   </div>
                   <div
                     style={{
@@ -351,7 +360,7 @@ function TrackOrderPage() {
                       color: '#A16207',
                     }}
                   >
-                    Admin আপনার পেমেন্ট verify করছে
+                    {t('trackOrder.paymentPendingDesc')}
                   </div>
                 </div>
               </div>
@@ -368,20 +377,22 @@ function TrackOrderPage() {
               >
                 {order.paymentMethodUsed && (
                   <>
-                    <strong>Method:</strong> {order.paymentMethodUsed}
+                    <strong>{t('trackOrder.paymentPendingMethod')}</strong>{' '}
+                    {order.paymentMethodUsed}
                     <br />
                   </>
                 )}
                 {order.paymentTrxId && (
                   <>
-                    <strong>TrxID:</strong>{' '}
+                    <strong>{t('trackOrder.paymentPendingTrxId')}</strong>{' '}
                     <span style={{ fontFamily: 'monospace' }}>
                       {order.paymentTrxId}
                     </span>
                     <br />
                   </>
                 )}
-                <strong>Amount:</strong> ৳{order.total}
+                <strong>{t('trackOrder.paymentPendingAmount')}</strong> ৳
+                {order.total}
               </div>
               <div
                 style={{
@@ -392,7 +403,7 @@ function TrackOrderPage() {
                   textAlign: 'center',
                 }}
               >
-                ⏳ Admin verify করার পর restaurant আপনার order accept করবে
+                {t('trackOrder.paymentPendingNote')}
               </div>
             </div>
           )}
@@ -425,7 +436,7 @@ function TrackOrderPage() {
                       color: '#991B1B',
                     }}
                   >
-                    Payment Rejected
+                    {t('trackOrder.paymentRejectedTitle')}
                   </div>
                   <div
                     style={{
@@ -434,7 +445,7 @@ function TrackOrderPage() {
                       color: '#B91C1C',
                     }}
                   >
-                    আপনার পেমেন্ট verify করা হয়নি
+                    {t('trackOrder.paymentRejectedDesc')}
                   </div>
                 </div>
               </div>
@@ -449,7 +460,8 @@ function TrackOrderPage() {
                     fontWeight: 600,
                   }}
                 >
-                  <strong>কারণ:</strong> {order.paymentRejectReason}
+                  <strong>{t('trackOrder.paymentRejectedReason')}</strong>{' '}
+                  {order.paymentRejectReason}
                 </div>
               )}
               <div
@@ -461,7 +473,7 @@ function TrackOrderPage() {
                   textAlign: 'center',
                 }}
               >
-                💬 Support এ যোগাযোগ করুন অথবা নতুন order দিন
+                {t('trackOrder.paymentRejectedNote')}
               </div>
             </div>
           )}
@@ -488,7 +500,7 @@ function TrackOrderPage() {
                     color: '#166534',
                   }}
                 >
-                  Payment Verified
+                  {t('trackOrder.paymentVerifiedTitle')}
                 </div>
                 <div
                   style={{
@@ -511,8 +523,7 @@ function TrackOrderPage() {
               style={{
                 padding: '20px 24px',
                 borderRadius: '18px',
-                background:
-                  'linear-gradient(135deg, #DBEAFE, #BFDBFE)',
+                background: 'linear-gradient(135deg, #DBEAFE, #BFDBFE)',
                 border: '2px dashed #2563EB',
                 marginBottom: '20px',
                 textAlign: 'center',
@@ -528,7 +539,7 @@ function TrackOrderPage() {
                   marginBottom: '8px',
                 }}
               >
-                🔐 Your Delivery OTP
+                {t('trackOrder.otpLabel')}
               </div>
               <div
                 style={{
@@ -551,10 +562,16 @@ function TrackOrderPage() {
                   lineHeight: 1.5,
                 }}
               >
-                🛵 Rider কে food দেওয়ার আগে এই OTP টা বলুন
+                {t('trackOrder.otpDesc')}
                 <br />
-                <span style={{ fontSize: '11px', fontStyle: 'italic', opacity: 0.8 }}>
-                  Rider এই OTP দিয়ে delivery confirm করবে
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontStyle: 'italic',
+                    opacity: 0.8,
+                  }}
+                >
+                  {t('trackOrder.otpDesc2')}
                 </span>
               </div>
             </div>
@@ -575,33 +592,33 @@ function TrackOrderPage() {
           </div>
           <h1>
             {isPaymentPending
-              ? 'Verifying Payment...'
+              ? t('trackOrder.titleVerifying')
               : isPaymentRejected
-              ? 'Payment Rejected'
+              ? t('trackOrder.titleRejected')
               : trackingStage === 2
-              ? 'Delivered!'
+              ? t('trackOrder.titleDelivered')
               : trackingStage === 1
-              ? 'On The Way!'
-              : 'Preparing Your Food!'}
+              ? t('trackOrder.titleOnWay')
+              : t('trackOrder.titlePreparing')}
           </h1>
           <p>
-            From <strong>{order.restaurantName}</strong>
+            {t('trackOrder.fromLabel')} <strong>{order.restaurantName}</strong>
           </p>
 
           {/* MAP */}
           <div className="track-map-section">
-            <h2>📍 Live Map</h2>
+            <h2>{t('trackOrder.mapTitle')}</h2>
 
             {!isLoaded && !loadError && (
               <div className="map-loading-skeleton">
                 <div className="map-loading-spinner"></div>
-                <p>🗺️ Loading Map...</p>
+                <p>{t('trackOrder.mapLoading')}</p>
               </div>
             )}
 
             {loadError && (
               <div className="map-loading-skeleton error">
-                <p>⚠️ Failed to load map. Please refresh.</p>
+                <p>{t('trackOrder.mapLoadError')}</p>
               </div>
             )}
 
@@ -664,22 +681,25 @@ function TrackOrderPage() {
                 <div className="map-legend">
                   <div className="map-legend-item">
                     <span className="map-legend-icon">🏪</span>
-                    <span>Restaurant</span>
+                    <span>{t('trackOrder.mapLegendRestaurant')}</span>
                   </div>
                   <div className="map-legend-item">
                     <span className="map-legend-icon">🛵</span>
                     <span>
-                      Rider {riderLocation ? '(Live)' : '(Waiting...)'}
+                      {t('trackOrder.mapLegendRider')}{' '}
+                      {riderLocation
+                        ? t('trackOrder.mapLegendRiderLive')
+                        : t('trackOrder.mapLegendRiderWaiting')}
                     </span>
                   </div>
                   <div className="map-legend-item">
                     <span className="map-legend-icon">🏠</span>
-                    <span>Your Location</span>
+                    <span>{t('trackOrder.mapLegendYourLocation')}</span>
                   </div>
                 </div>
 
                 {!riderLocation && trackingStage >= 1 && (
-                  <p className="map-note">⏳ Waiting for rider location...</p>
+                  <p className="map-note">{t('trackOrder.mapWaitingLocation')}</p>
                 )}
               </>
             )}
@@ -687,7 +707,7 @@ function TrackOrderPage() {
 
           {/* TRACKING PROGRESS */}
           <div className="order-tracking-section">
-            <h2>Live Status</h2>
+            <h2>{t('trackOrder.liveStatus')}</h2>
 
             <div className="tracking-progress">
               <div
@@ -697,8 +717,8 @@ function TrackOrderPage() {
               >
                 <div className="tracking-icon">👨‍🍳</div>
                 <div className="tracking-text">
-                  <strong>Preparing</strong>
-                  <small>Restaurant</small>
+                  <strong>{t('trackOrder.stepPreparing')}</strong>
+                  <small>{t('trackOrder.stepPreparingDesc')}</small>
                 </div>
               </div>
               <div
@@ -713,8 +733,8 @@ function TrackOrderPage() {
               >
                 <div className="tracking-icon">🛵</div>
                 <div className="tracking-text">
-                  <strong>On the Way</strong>
-                  <small>Rider</small>
+                  <strong>{t('trackOrder.stepOnWay')}</strong>
+                  <small>{t('trackOrder.stepOnWayDesc')}</small>
                 </div>
               </div>
               <div
@@ -729,8 +749,8 @@ function TrackOrderPage() {
               >
                 <div className="tracking-icon">🏠</div>
                 <div className="tracking-text">
-                  <strong>Delivered</strong>
-                  <small>Enjoy!</small>
+                  <strong>{t('trackOrder.stepDelivered')}</strong>
+                  <small>{t('trackOrder.stepDeliveredDesc')}</small>
                 </div>
               </div>
             </div>
@@ -758,16 +778,21 @@ function TrackOrderPage() {
                 )}
               </div>
               <div className="rider-info">
-                <strong>Rider: {riderName}</strong>
+                <strong>
+                  {t('trackOrder.riderLabel')} {riderName}
+                </strong>
                 <small>
                   {riderRating != null && (
                     <span>
                       ⭐ {Number(riderRating).toFixed(1)}
-                      {riderTotal != null && ` (${riderTotal}+ deliveries)`}
+                      {riderTotal != null &&
+                        ` (${riderTotal}+ ${t('trackOrder.riderDeliveries')})`}
                     </span>
                   )}
                   {riderRating == null && riderPhone && `📞 ${riderPhone}`}
-                  {riderRating == null && !riderPhone && '⏳ Waiting for rider'}
+                  {riderRating == null &&
+                    !riderPhone &&
+                    t('trackOrder.riderWaiting')}
                 </small>
               </div>
               {riderPhone && (
@@ -775,7 +800,7 @@ function TrackOrderPage() {
                   className="call-rider-button"
                   onClick={() => (window.location.href = `tel:${riderPhone}`)}
                 >
-                  📞 Call
+                  {t('trackOrder.callBtn')}
                 </button>
               )}
             </div>
@@ -784,14 +809,14 @@ function TrackOrderPage() {
           {/* ORDER DETAILS */}
           <div className="track-order-details">
             <div className="track-detail-section">
-              <h3>🏪 Restaurant</h3>
+              <h3>{t('trackOrder.sectionRestaurant')}</h3>
               <div className="track-detail-row">
                 <span>{order.restaurantName}</span>
               </div>
             </div>
 
             <div className="track-detail-section">
-              <h3>📦 Items</h3>
+              <h3>{t('trackOrder.sectionItems')}</h3>
               {order.items?.map((item, idx) => (
                 <div className="track-detail-row" key={idx}>
                   <span>
@@ -803,7 +828,7 @@ function TrackOrderPage() {
             </div>
 
             <div className="track-detail-section">
-              <h3>📍 Delivery Address</h3>
+              <h3>{t('trackOrder.sectionAddress')}</h3>
               <div className="track-detail-row">
                 <span>{order.address}</span>
               </div>
@@ -812,38 +837,42 @@ function TrackOrderPage() {
               </div>
               {order.zoneName && (
                 <div className="track-detail-row">
-                  <span>🗺️ Zone</span>
+                  <span>{t('trackOrder.sectionZone')}</span>
                   <strong>{order.zoneName}</strong>
                 </div>
               )}
             </div>
 
             <div className="track-detail-section">
-              <h3>💰 Payment</h3>
+              <h3>{t('trackOrder.sectionPayment')}</h3>
               <div className="track-detail-row">
-                <span>Subtotal</span>
+                <span>{t('trackOrder.subtotal')}</span>
                 <strong>৳{order.subtotal}</strong>
               </div>
               <div className="track-detail-row">
-                <span>Delivery Fee</span>
+                <span>{t('trackOrder.deliveryFee')}</span>
                 <strong>৳{order.deliveryFee}</strong>
               </div>
               <div className="track-detail-row total-row">
-                <span>Total</span>
+                <span>{t('trackOrder.total')}</span>
                 <strong>৳{order.total}</strong>
               </div>
               <div
                 className="track-detail-row"
-                style={{ borderTop: '1px dashed var(--border)', paddingTop: '10px', marginTop: '8px' }}
+                style={{
+                  borderTop: '1px dashed var(--border)',
+                  paddingTop: '10px',
+                  marginTop: '8px',
+                }}
               >
-                <span>Method</span>
+                <span>{t('trackOrder.method')}</span>
                 <strong style={{ textTransform: 'uppercase' }}>
                   {order.paymentMethod || 'cod'}
                 </strong>
               </div>
               {isOnlinePayment && (
                 <div className="track-detail-row">
-                  <span>Payment Status</span>
+                  <span>{t('trackOrder.paymentStatus')}</span>
                   <strong
                     style={{
                       color: isPaymentVerified
@@ -867,7 +896,7 @@ function TrackOrderPage() {
               className="checkout-button"
               style={{ textDecoration: 'none' }}
             >
-              ← Back to Orders
+              {t('trackOrder.backToOrdersBtn')}
             </Link>
           </div>
         </div>

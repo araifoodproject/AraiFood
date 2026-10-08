@@ -1,3 +1,8 @@
+// ============================================================
+// src/pages/GamingPage.jsx
+// Bilingual (BN/EN)
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { db, auth } from '../firebase'
 import {
@@ -7,14 +12,15 @@ import {
   where,
   addDoc,
   serverTimestamp,
-  doc,
 } from 'firebase/firestore'
 import { toast } from 'react-toastify'
 import { Link, useNavigate } from 'react-router-dom'
 import PageBackButton from '../components/PageBackButton'
 import { Search, X, Copy, Check, ShoppingBag, Package } from 'lucide-react'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function GamingPage() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
 
   const [products, setProducts] = useState([])
@@ -79,8 +85,8 @@ function GamingPage() {
 
   // Current game settings
   const currentGame = gamingSettings[activeGame] || {}
-  const bkashNumber = currentGame.bkashNumber || 'Not set'
-  const nagadNumber = currentGame.nagadNumber || 'Not set'
+  const bkashNumber = currentGame.bkashNumber || t('gaming.notSet')
+  const nagadNumber = currentGame.nagadNumber || t('gaming.notSet')
   const gameDescription = currentGame.description || ''
   const gameLogo = currentGame.logo || ''
 
@@ -98,7 +104,7 @@ function GamingPage() {
   const copyNumber = (num) => {
     navigator.clipboard.writeText(num)
     setCopiedNumber(num)
-    toast.success('Number copied!', { autoClose: 1200 })
+    toast.success(t('gaming.toastNumberCopied'), { autoClose: 1200 })
     setTimeout(() => setCopiedNumber(null), 2000)
   }
 
@@ -131,17 +137,14 @@ function GamingPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('gaming.back')} fallback="/" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">ARAIFOOD GAMING</span>
+          <span className="glass-section-label">{t('gaming.badge')}</span>
           <h1>
-            Top-Up <span>Game Currency</span>
+            {t('gaming.heading1')} <span>{t('gaming.heading2')}</span>
           </h1>
-          <p>
-            Buy PUBG UC, Free Fire Diamonds, and more — instant top-up at the
-            best price!
-          </p>
+          <p>{t('gaming.subtitle')}</p>
         </div>
 
         {/* Current Game Info Banner */}
@@ -240,7 +243,7 @@ function GamingPage() {
                     marginBottom: '6px',
                   }}
                 >
-                  💳 bKash (Personal)
+                  {t('gaming.bkashLabel')}
                 </div>
                 <div
                   style={{
@@ -279,11 +282,11 @@ function GamingPage() {
                     >
                       {copiedNumber === currentGame.bkashNumber ? (
                         <>
-                          <Check size={11} /> Copied
+                          <Check size={11} /> {t('gaming.copied')}
                         </>
                       ) : (
                         <>
-                          <Copy size={11} /> Copy
+                          <Copy size={11} /> {t('gaming.copy')}
                         </>
                       )}
                     </button>
@@ -302,7 +305,7 @@ function GamingPage() {
                     marginBottom: '6px',
                   }}
                 >
-                  💰 Nagad (Personal)
+                  {t('gaming.nagadLabel')}
                 </div>
                 <div
                   style={{
@@ -341,11 +344,11 @@ function GamingPage() {
                     >
                       {copiedNumber === currentGame.nagadNumber ? (
                         <>
-                          <Check size={11} /> Copied
+                          <Check size={11} /> {t('gaming.copied')}
                         </>
                       ) : (
                         <>
-                          <Copy size={11} /> Copy
+                          <Copy size={11} /> {t('gaming.copy')}
                         </>
                       )}
                     </button>
@@ -363,9 +366,8 @@ function GamingPage() {
                   borderTop: '1px dashed var(--border)',
                 }}
               >
-                📌 <strong>How to order:</strong> Select a product → Enter your
-                Player ID → Send money to above number → Submit transaction ID.
-                Top-up within 5 minutes.
+                📌 <strong>{t('gaming.howToOrderTitle')}</strong>{' '}
+                {t('gaming.howToOrderText')}
               </div>
             </div>
           </div>
@@ -379,7 +381,7 @@ function GamingPage() {
             style={{ display: 'inline-flex' }}
           >
             <Package size={14} />
-            My Orders
+            {t('gaming.myOrders')}
             <span>→</span>
           </Link>
         </div>
@@ -472,7 +474,7 @@ function GamingPage() {
             <Search size={18} strokeWidth={2.2} />
             <input
               type="text"
-              placeholder="Search packs..."
+              placeholder={t('gaming.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -512,26 +514,26 @@ function GamingPage() {
         {loading ? (
           <div className="panel-loading">
             <div className="panel-loading-spinner"></div>
-            <p>Loading products...</p>
+            <p>{t('gaming.loading')}</p>
           </div>
         ) : games.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">🎮</div>
-            <h2>No products available yet</h2>
-            <p>Check back soon — we're adding new top-up packs!</p>
+            <h2>{t('gaming.emptyNoProducts')}</h2>
+            <p>{t('gaming.emptyNoProductsDesc')}</p>
             <Link
               to="/"
               className="checkout-button"
               style={{ textDecoration: 'none', display: 'inline-block' }}
             >
-              Back to Home
+              {t('gaming.backToHome')}
             </Link>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">🔍</div>
-            <h2>No packs found</h2>
-            <p>Try a different search.</p>
+            <h2>{t('gaming.emptyNoPacks')}</h2>
+            <p>{t('gaming.emptyNoPacksDesc')}</p>
           </div>
         ) : (
           <div
@@ -618,7 +620,7 @@ function GamingPage() {
                     }}
                   >
                     <ShoppingBag size={12} />
-                    Order Now
+                    {t('gaming.orderNow')}
                   </div>
                 </button>
               )
@@ -643,6 +645,7 @@ function GamingPage() {
 // ORDER MODAL
 // ============================================================
 function OrderModal({ product, gameSettings, onClose, user }) {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [playerId, setPlayerId] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('bkash')
@@ -652,38 +655,38 @@ function OrderModal({ product, gameSettings, onClose, user }) {
 
   const paymentNumber =
     paymentMethod === 'bkash'
-      ? gameSettings.bkashNumber || 'Not set'
-      : gameSettings.nagadNumber || 'Not set'
+      ? gameSettings.bkashNumber || t('gaming.notSet')
+      : gameSettings.nagadNumber || t('gaming.notSet')
 
   const copyNumber = () => {
-    if (paymentNumber === 'Not set') {
-      toast.error('Payment number not configured for this game')
+    if (paymentNumber === t('gaming.notSet')) {
+      toast.error(t('gaming.toastPaymentNotConfigured'))
       return
     }
     navigator.clipboard.writeText(paymentNumber)
     setCopiedNumber(paymentNumber)
-    toast.success('Number copied!', { autoClose: 1200 })
+    toast.success(t('gaming.toastNumberCopied'), { autoClose: 1200 })
     setTimeout(() => setCopiedNumber(null), 2000)
   }
 
   const handleSubmit = async () => {
     if (!user) {
-      toast.error('Please login to place an order')
+      toast.error(t('gaming.errLoginRequired'))
       setTimeout(() => {
         window.location.href = '/login'
       }, 1000)
       return
     }
     if (!playerId.trim()) {
-      toast.error('Please enter your Player ID')
+      toast.error(t('gaming.errPlayerId'))
       return
     }
     if (!transactionId.trim()) {
-      toast.error('Please enter the transaction ID')
+      toast.error(t('gaming.errTrxId'))
       return
     }
-    if (paymentNumber === 'Not set') {
-      toast.error('Payment number not set. Please contact support.')
+    if (paymentNumber === t('gaming.notSet')) {
+      toast.error(t('gaming.errPaymentNotSet'))
       return
     }
 
@@ -706,12 +709,14 @@ function OrderModal({ product, gameSettings, onClose, user }) {
         createdAt: serverTimestamp(),
       })
 
-      toast.success(`✅ Order ${orderId} placed! We'll top-up within 5 min.`)
+      toast.success(
+        t('gaming.successOrderPlaced').replace('{orderId}', orderId)
+      )
       onClose()
       navigate('/gaming-orders')
     } catch (err) {
       console.error(err)
-      toast.error('Failed to place order')
+      toast.error(t('gaming.errOrderFailed'))
     } finally {
       setPlacing(false)
     }
@@ -809,11 +814,14 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                 marginBottom: '8px',
               }}
             >
-              Step 1: Player ID
+              {t('gaming.modalStep1')}
             </div>
             <input
               type="text"
-              placeholder={`Enter your ${product.game} Player ID`}
+              placeholder={t('gaming.modalPlayerIdPlaceholder').replace(
+                '{game}',
+                product.game
+              )}
               value={playerId}
               onChange={(e) => setPlayerId(e.target.value)}
               style={{
@@ -842,7 +850,7 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                 marginBottom: '8px',
               }}
             >
-              Step 2: Send ৳{product.price} to
+              {t('gaming.modalStep2').replace('{price}', product.price)}
             </div>
 
             <div
@@ -876,7 +884,7 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                   transition: 'all 0.2s',
                 }}
               >
-                💳 bKash
+                {t('gaming.modalMethodBkash')}
               </button>
               <button
                 onClick={() => setPaymentMethod('nagad')}
@@ -901,7 +909,7 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                   transition: 'all 0.2s',
                 }}
               >
-                💰 Nagad
+                {t('gaming.modalMethodNagad')}
               </button>
             </div>
 
@@ -928,7 +936,10 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                     marginBottom: '3px',
                   }}
                 >
-                  {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} (Personal)
+                  {paymentMethod === 'bkash'
+                    ? t('gaming.modalMethodBkashLabel')
+                    : t('gaming.modalMethodNagadLabel')}{' '}
+                  {t('gaming.modalPersonal')}
                 </div>
                 <strong
                   style={{
@@ -936,7 +947,7 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                     fontSize: '18px',
                     fontWeight: 900,
                     color:
-                      paymentNumber === 'Not set'
+                      paymentNumber === t('gaming.notSet')
                         ? 'var(--text-tertiary)'
                         : 'var(--primary)',
                     letterSpacing: '0.5px',
@@ -947,21 +958,23 @@ function OrderModal({ product, gameSettings, onClose, user }) {
               </div>
               <button
                 onClick={copyNumber}
-                disabled={paymentNumber === 'Not set'}
+                disabled={paymentNumber === t('gaming.notSet')}
                 style={{
                   padding: '8px 14px',
                   borderRadius: '999px',
                   background:
-                    paymentNumber === 'Not set'
+                    paymentNumber === t('gaming.notSet')
                       ? 'var(--surface-soft)'
                       : 'var(--primary)',
                   color:
-                    paymentNumber === 'Not set'
+                    paymentNumber === t('gaming.notSet')
                       ? 'var(--text-tertiary)'
                       : '#FFFFFF',
                   border: 'none',
                   cursor:
-                    paymentNumber === 'Not set' ? 'not-allowed' : 'pointer',
+                    paymentNumber === t('gaming.notSet')
+                      ? 'not-allowed'
+                      : 'pointer',
                   fontSize: '12px',
                   fontWeight: 800,
                   display: 'flex',
@@ -972,11 +985,11 @@ function OrderModal({ product, gameSettings, onClose, user }) {
               >
                 {copiedNumber ? (
                   <>
-                    <Check size={13} /> Copied
+                    <Check size={13} /> {t('gaming.copied')}
                   </>
                 ) : (
                   <>
-                    <Copy size={13} /> Copy
+                    <Copy size={13} /> {t('gaming.copy')}
                   </>
                 )}
               </button>
@@ -994,11 +1007,11 @@ function OrderModal({ product, gameSettings, onClose, user }) {
                 marginBottom: '8px',
               }}
             >
-              Step 3: Transaction ID
+              {t('gaming.modalStep3')}
             </div>
             <input
               type="text"
-              placeholder="e.g., 9F7D2K4LX8 (from bKash/Nagad SMS)"
+              placeholder={t('gaming.modalTrxPlaceholder')}
               value={transactionId}
               onChange={(e) => setTransactionId(e.target.value)}
               style={{
@@ -1027,10 +1040,8 @@ function OrderModal({ product, gameSettings, onClose, user }) {
               fontWeight: 600,
               lineHeight: 1.5,
             }}
-          >
-            ⚡ Top-up within <strong>5 minutes</strong> after payment
-            confirmation.
-          </div>
+            dangerouslySetInnerHTML={{ __html: t('gaming.modalInfo') }}
+          />
 
           <button
             onClick={handleSubmit}
@@ -1056,7 +1067,12 @@ function OrderModal({ product, gameSettings, onClose, user }) {
             }}
           >
             <ShoppingBag size={18} />
-            {placing ? 'Placing Order...' : `Place Order — ৳${product.price}`}
+            {placing
+              ? t('gaming.modalPlacing')
+              : t('gaming.modalPlaceOrder').replace(
+                  '{price}',
+                  product.price
+                )}
           </button>
         </div>
       </div>

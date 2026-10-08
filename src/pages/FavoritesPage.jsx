@@ -1,11 +1,18 @@
+// ============================================================
+// src/pages/FavoritesPage.jsx
+// Bilingual (BN/EN)
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Star } from 'lucide-react'
 import { db } from '../firebase'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import PageBackButton from '../components/PageBackButton'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function FavoritesPage() {
+  const { t } = useLanguage()
   const [favoriteIds, setFavoriteIds] = useState([])
   const [allRestaurants, setAllRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -52,7 +59,7 @@ function FavoritesPage() {
       <div className="restaurants-page">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
-          <p>Loading favorites...</p>
+          <p>{t('favorites.loading')}</p>
         </div>
       </div>
     )
@@ -61,21 +68,22 @@ function FavoritesPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('common.back')} fallback="/" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">YOUR FAVORITES</span>
+          <span className="glass-section-label">{t('favorites.badge')}</span>
           <h1>
-            Your Favorite <span>Restaurants</span>
+            {t('favorites.heading1')}{' '}
+            <span>{t('favorites.heading2')}</span>
           </h1>
-          <p>Your personal list of beloved food spots in Araihazar.</p>
+          <p>{t('favorites.subtitle')}</p>
         </div>
 
         {favoriteRestaurants.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">❤️</div>
-            <h2>No favorites yet!</h2>
-            <p>Tap the heart icon on any restaurant to save it here.</p>
+            <h2>{t('favorites.empty')}</h2>
+            <p>{t('favorites.emptyDesc')}</p>
             <Link
               to="/restaurants"
               className="checkout-button"
@@ -85,7 +93,7 @@ function FavoritesPage() {
                 marginTop: '20px',
               }}
             >
-              Browse Restaurants
+              {t('favorites.browseRestaurants')}
             </Link>
           </div>
         ) : (
@@ -110,10 +118,14 @@ function FavoritesPage() {
                   )}
 
                   {restaurant.restaurantStatus === 'online' && (
-                    <div className="restaurant-badge online-badge">🟢 Open</div>
+                    <div className="restaurant-badge online-badge">
+                      {t('favorites.badgeOpen')}
+                    </div>
                   )}
                   {restaurant.restaurantStatus === 'busy' && (
-                    <div className="restaurant-badge busy-badge">🟡 Busy</div>
+                    <div className="restaurant-badge busy-badge">
+                      {t('favorites.badgeBusy')}
+                    </div>
                   )}
 
                   <div className="all-restaurant-rating">
@@ -135,7 +147,10 @@ function FavoritesPage() {
                       🕒 {restaurant.openingTime || '10:00'} -{' '}
                       {restaurant.closingTime || '22:00'}
                     </span>
-                    <span>📦 Min ৳{restaurant.minimumOrder || 100}</span>
+                    <span>
+                      {t('favorites.minLabel')} ৳
+                      {restaurant.minimumOrder || 100}
+                    </span>
                   </div>
 
                   <div className="favorite-actions">
@@ -145,15 +160,15 @@ function FavoritesPage() {
                         navigate(`/restaurant?id=${restaurant.firebaseId}`)
                       }
                     >
-                      <span>View Menu</span>
+                      <span>{t('favorites.viewMenu')}</span>
                       <span>→</span>
                     </button>
                     <button
                       className="remove-favorite-button"
                       onClick={() => removeFavorite(restaurant.firebaseId)}
-                      title="Remove from favorites"
+                      title={t('favorites.removeTooltip')}
                     >
-                      ❤️ Remove
+                      {t('favorites.remove')}
                     </button>
                   </div>
                 </div>

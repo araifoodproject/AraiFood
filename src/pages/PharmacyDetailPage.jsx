@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/PharmacyDetailPage.jsx
 // V2 — Debug-friendly version with detailed console logs
+// Bilingual (BN/EN)
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -17,23 +18,25 @@ import {
 } from 'firebase/firestore'
 import { Search, X } from 'lucide-react'
 import PageBackButton from '../components/PageBackButton'
+import { useLanguage } from '../i18n/LanguageContext'
 
 const CATEGORIES = [
-  { key: 'all', label: 'All', icon: '💊' },
-  { key: 'pain', label: 'Pain Relief', icon: '💊' },
-  { key: 'fever', label: 'Fever & Cold', icon: '🌡️' },
-  { key: 'diabetes', label: 'Diabetes', icon: '🩺' },
-  { key: 'antibiotics', label: 'Antibiotics', icon: '💉' },
-  { key: 'skin', label: 'Skin Care', icon: '🧴' },
-  { key: 'oral', label: 'Oral Care', icon: '🦷' },
-  { key: 'eye', label: 'Eye & Ear', icon: '👁️' },
-  { key: 'baby', label: 'Baby Care', icon: '🍼' },
-  { key: 'firstaid', label: 'First Aid', icon: '🩹' },
-  { key: 'vitamins', label: 'Vitamins', icon: '💪' },
-  { key: 'other', label: 'Other', icon: '🧪' },
+  { key: 'all', labelKey: 'pharmacyDetail.catAll', icon: '💊' },
+  { key: 'pain', labelKey: 'pharmacyDetail.catPain', icon: '💊' },
+  { key: 'fever', labelKey: 'pharmacyDetail.catFever', icon: '🌡️' },
+  { key: 'diabetes', labelKey: 'pharmacyDetail.catDiabetes', icon: '🩺' },
+  { key: 'antibiotics', labelKey: 'pharmacyDetail.catAntibiotics', icon: '💉' },
+  { key: 'skin', labelKey: 'pharmacyDetail.catSkin', icon: '🧴' },
+  { key: 'oral', labelKey: 'pharmacyDetail.catOral', icon: '🦷' },
+  { key: 'eye', labelKey: 'pharmacyDetail.catEye', icon: '👁️' },
+  { key: 'baby', labelKey: 'pharmacyDetail.catBaby', icon: '🍼' },
+  { key: 'firstaid', labelKey: 'pharmacyDetail.catFirstaid', icon: '🩹' },
+  { key: 'vitamins', labelKey: 'pharmacyDetail.catVitamins', icon: '💪' },
+  { key: 'other', labelKey: 'pharmacyDetail.catOther', icon: '🧪' },
 ]
 
 function PharmacyDetailPage() {
+  const { t } = useLanguage()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const pharmacyId = (searchParams.get('id') || '').trim()
@@ -58,7 +61,7 @@ function PharmacyDetailPage() {
     if (!pharmacyId) {
       console.log('🔴 No pharmacyId in URL')
       setLoading(false)
-      setError('No pharmacy ID provided')
+      setError(t('pharmacyDetail.noIdProvided'))
       return
     }
 
@@ -82,8 +85,8 @@ function PharmacyDetailPage() {
         } else {
           console.log('🔴 Pharmacy does NOT exist at path')
           setPharmacy(null)
-          setError('Pharmacy not found in database')
-          toast.error('Pharmacy not found!')
+          setError(t('pharmacyDetail.notFoundDesc'))
+          toast.error(t('pharmacyDetail.toastPharmacyNotFound'))
         }
         setLoading(false)
       },
@@ -97,6 +100,7 @@ function PharmacyDetailPage() {
       }
     )
     return () => unsub()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pharmacyId])
 
   // ============ LOAD MEDICINES ============
@@ -118,7 +122,9 @@ function PharmacyDetailPage() {
         }))
         console.log('🟢 Medicines found:', list.length)
         list.forEach((m) => {
-          console.log(`   → ${m.name} | available: ${m.available} | category: ${m.category}`)
+          console.log(
+            `   → ${m.name} | available: ${m.available} | category: ${m.category}`
+          )
         })
         setMedicines(list)
       },
@@ -163,7 +169,8 @@ function PharmacyDetailPage() {
     pharmacyLogo: pharmacy.logo || '',
     deliveryFee: pharmacy.deliveryFee || 0,
     minimumOrder: pharmacy.minimumOrder || 0,
-    deliveryTime: pharmacy.deliveryTime || '20-30 min',
+    deliveryTime:
+      pharmacy.deliveryTime || t('pharmacyDetail.defaultDeliveryTime'),
   })
 
   const addDirect = (med) => {
@@ -177,13 +184,21 @@ function PharmacyDetailPage() {
       : [...cartItems, buildCartItem(med)]
 
     saveCart(updated)
-    toast.success(`${med.name} added to cart!`, { autoClose: 1500 })
+    toast.success(
+      t('pharmacyDetail.toastAdded').replace('{name}', med.name),
+      { autoClose: 1500 }
+    )
   }
 
   const clearAndAdd = () => {
     if (!conflictMed) return
     saveCart([buildCartItem(conflictMed)])
-    toast.success(`Cart cleared! ${conflictMed.name} added.`)
+    toast.success(
+      t('pharmacyDetail.toastCartCleared').replace(
+        '{name}',
+        conflictMed.name
+      )
+    )
     setShowConflict(false)
     setConflictMed(null)
   }
@@ -223,7 +238,7 @@ function PharmacyDetailPage() {
   }, [medicines, category, search])
 
   const formatTime = (time24) => {
-    if (!time24) return '10 AM'
+    if (!time24) return t('pharmacyDetail.statusOpensDefault')
     try {
       const [h, m] = time24.split(':')
       const hour = parseInt(h)
@@ -231,7 +246,7 @@ function PharmacyDetailPage() {
       const displayHour = hour % 12 || 12
       return `${displayHour}${m === '00' ? '' : ':' + m} ${ampm}`
     } catch {
-      return '10 AM'
+      return t('pharmacyDetail.statusOpensDefault')
     }
   }
 
@@ -241,7 +256,7 @@ function PharmacyDetailPage() {
       <div className="restaurant-page">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
-          <p>Loading pharmacy...</p>
+          <p>{t('pharmacyDetail.loading')}</p>
         </div>
       </div>
     )
@@ -253,8 +268,8 @@ function PharmacyDetailPage() {
       <div className="restaurant-page">
         <div className="restaurant-empty-state">
           <div className="empty-icon">💊</div>
-          <h2>Pharmacy Not Found</h2>
-          <p>{error || "This pharmacy doesn't exist or has been removed."}</p>
+          <h2>{t('pharmacyDetail.notFoundTitle')}</h2>
+          <p>{error || t('pharmacyDetail.notFoundDesc')}</p>
           {pharmacyId && (
             <p
               style={{
@@ -267,11 +282,11 @@ function PharmacyDetailPage() {
                 margin: '8px auto 0',
               }}
             >
-              ID: {pharmacyId}
+              {t('pharmacyDetail.notFoundIdLabel')} {pharmacyId}
             </p>
           )}
           <button onClick={() => navigate('/pharmacy')}>
-            Browse Pharmacies
+            {t('pharmacyDetail.browsePharmacies')}
           </button>
         </div>
       </div>
@@ -284,7 +299,10 @@ function PharmacyDetailPage() {
 
   return (
     <div className="restaurant-page">
-      <PageBackButton label="Back" fallback="/pharmacy" />
+      <PageBackButton
+        label={t('pharmacy.back')}
+        fallback="/pharmacy"
+      />
 
       <div className="restaurant-page-header">
         <div className="restaurant-header-with-logo">
@@ -297,12 +315,17 @@ function PharmacyDetailPage() {
           </div>
           <div className="restaurant-header-info">
             <h1>{pharmacy.pharmacyName}</h1>
-            <p>📍 {pharmacy.address || 'Araihazar'}</p>
+            <p>
+              📍{' '}
+              {pharmacy.address || t('pharmacyDetail.defaultAddress')}
+            </p>
             <span>
               {pharmacy.rating != null &&
                 `⭐ ${Number(pharmacy.rating).toFixed(1)} • `}
-              🕐 {pharmacy.deliveryTime || '20-30 min'} • 🚚 ৳
-              {pharmacy.deliveryFee || 0}
+              🕐{' '}
+              {pharmacy.deliveryTime ||
+                t('pharmacyDetail.defaultDeliveryTime')}{' '}
+              • 🚚 ৳{pharmacy.deliveryFee || 0}
             </span>
           </div>
         </div>
@@ -314,16 +337,26 @@ function PharmacyDetailPage() {
             }`}
           ></span>
           {isOpen
-            ? 'Open Now'
-            : `Closed · Opens ${formatTime(pharmacy.openingTime)}`}
+            ? t('pharmacyDetail.statusOpenNow')
+            : t('pharmacyDetail.statusClosedOpens').replace(
+                '{time}',
+                formatTime(pharmacy.openingTime)
+              )}
         </div>
       </div>
 
       <div className="menu-section">
         <div className="menu-heading">
-          <span className="glass-section-label">MEDICINES</span>
-          <h2>Browse Medicines</h2>
-          <p>Choose from {medicines.length} items</p>
+          <span className="glass-section-label">
+            {t('pharmacyDetail.menuBadge')}
+          </span>
+          <h2>{t('pharmacyDetail.menuTitle')}</h2>
+          <p>
+            {t('pharmacyDetail.menuCount').replace(
+              '{n}',
+              medicines.length
+            )}
+          </p>
         </div>
 
         {/* Search */}
@@ -331,7 +364,7 @@ function PharmacyDetailPage() {
           <Search size={18} strokeWidth={2.2} />
           <input
             type="text"
-            placeholder="Search medicines, brand, generic..."
+            placeholder={t('pharmacyDetail.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -387,7 +420,7 @@ function PharmacyDetailPage() {
               }}
             >
               <span>{c.icon}</span>
-              {c.label}
+              {t(c.labelKey)}
             </button>
           ))}
         </div>
@@ -396,13 +429,13 @@ function PharmacyDetailPage() {
         {filtered.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">💊</div>
-            <h2>No medicines found</h2>
+            <h2>{t('pharmacyDetail.emptyTitle')}</h2>
             <p>
               {search || category !== 'all'
-                ? 'Try a different search or category'
+                ? t('pharmacyDetail.emptySearch')
                 : medicines.length === 0
-                ? 'This pharmacy hasn\'t added medicines yet'
-                : 'No available medicines'}
+                ? t('pharmacyDetail.emptyNoItems')
+                : t('pharmacyDetail.emptyNoAvailable')}
             </p>
           </div>
         ) : (
@@ -437,7 +470,7 @@ function PharmacyDetailPage() {
                         marginBottom: '8px',
                       }}
                     >
-                      ⚠️ Prescription Required
+                      {t('pharmacyDetail.prescriptionRequired')}
                     </div>
                   )}
                   <div className="food-bottom">
@@ -452,7 +485,7 @@ function PharmacyDetailPage() {
                       )}
                     </div>
                     <button onClick={() => checkConflict(m)}>
-                      + Add
+                      {t('pharmacyDetail.addBtn')}
                     </button>
                   </div>
                 </div>
@@ -505,13 +538,13 @@ function PharmacyDetailPage() {
         <div className="outside-area-modal">
           <div className="outside-area-modal-content">
             <div className="outside-area-icon">⚠️</div>
-            <h2>Clear Your Cart?</h2>
+            <h2>{t('pharmacyDetail.conflictTitle')}</h2>
             <p>
-              Your cart has medicines from{' '}
+              {t('pharmacyDetail.conflictFrom')}{' '}
               <strong>{cartItems[0]?.pharmacyName}</strong>.
               <br />
               <br />
-              Do you want to clear and add from{' '}
+              {t('pharmacyDetail.conflictAsk')}{' '}
               <strong>{pharmacy.pharmacyName}</strong>?
             </p>
             <div className="conflict-modal-buttons">
@@ -522,10 +555,10 @@ function PharmacyDetailPage() {
                   setConflictMed(null)
                 }}
               >
-                Cancel
+                {t('pharmacyDetail.conflictCancel')}
               </button>
               <button className="confirm-btn" onClick={clearAndAdd}>
-                Yes, Clear & Add
+                {t('pharmacyDetail.conflictConfirm')}
               </button>
             </div>
           </div>

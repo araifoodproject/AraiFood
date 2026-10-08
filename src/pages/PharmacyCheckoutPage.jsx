@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/PharmacyCheckoutPage.jsx
 // Pharmacy-specific checkout (separate from food)
+// Bilingual (BN/EN)
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -23,8 +24,10 @@ import {
 import { db, auth } from '../firebase'
 import { toast } from 'react-toastify'
 import { sendNotification } from '../utils/sendNotification'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function PharmacyCheckoutPage() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { settings } = useSettings()
 
@@ -66,7 +69,6 @@ function PharmacyCheckoutPage() {
     const savedZone = localStorage.getItem('deliveryZoneId')
     if (savedZone) setSelectedZoneId(savedZone)
 
-    // Load user data
     const loadUserData = async () => {
       if (auth.currentUser?.uid) {
         try {
@@ -109,7 +111,9 @@ function PharmacyCheckoutPage() {
           pharmacyName: cartItems[0].pharmacyName,
           pharmacyLogo: cartItems[0].pharmacyLogo || '',
           deliveryFee: cartItems[0].deliveryFee ?? null,
-          deliveryTime: cartItems[0].deliveryTime || '20-30 min',
+          deliveryTime:
+            cartItems[0].deliveryTime ||
+            t('pharmacyDetail.defaultDeliveryTime'),
         }
       : null
 
@@ -138,19 +142,19 @@ function PharmacyCheckoutPage() {
   // ============================================================
   const placeOrder = async () => {
     if (!fullName.trim()) {
-      toast.error('Please enter your full name.')
+      toast.error(t('pharmacyCheckout.errFullName'))
       return
     }
     if (!phone.trim()) {
-      toast.error('Please enter your phone number.')
+      toast.error(t('pharmacyCheckout.errPhone'))
       return
     }
     if (!address.trim()) {
-      toast.error('Please enter your delivery address.')
+      toast.error(t('pharmacyCheckout.errAddress'))
       return
     }
     if (!selectedZoneId) {
-      toast.error('📍 Please select your area / zone.')
+      toast.error(t('pharmacyCheckout.errZone'))
       const zoneSection = document.querySelector('.zone-selection-section')
       if (zoneSection) {
         zoneSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -158,7 +162,7 @@ function PharmacyCheckoutPage() {
       return
     }
     if (!mapPosition) {
-      toast.error('📍 Please drop a pin on the map for delivery location.')
+      toast.error(t('pharmacyCheckout.errMap'))
       const mapSection = document.querySelector('.map-selection-section')
       if (mapSection) {
         mapSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -166,11 +170,11 @@ function PharmacyCheckoutPage() {
       return
     }
     if (cartItems.length === 0) {
-      toast.error('Your cart is empty.')
+      toast.error(t('pharmacyCheckout.errCartEmpty'))
       return
     }
     if (paymentMethod === 'wallet' && walletBalance < total) {
-      toast.error('Insufficient wallet balance.')
+      toast.error(t('pharmacyCheckout.errWalletInsufficient'))
       return
     }
 
@@ -197,15 +201,13 @@ function PharmacyCheckoutPage() {
     try {
       await addDoc(collection(db, 'orders'), {
         orderId: newOrderId,
-        orderType: 'pharmacy', // ← distinguish from food orders
+        orderType: 'pharmacy',
         userId: auth.currentUser?.uid || 'guest',
         userEmail: auth.currentUser?.email || 'guest',
 
-        // Pharmacy info
         pharmacyId: pharmacy.pharmacyId,
         pharmacyName: pharmacy.pharmacyName,
         pharmacyLogo: pharmacy.pharmacyLogo,
-        // Also set restaurantId=pharmacyId for rider app compatibility
         restaurantId: pharmacy.pharmacyId,
         restaurantName: pharmacy.pharmacyName,
         restaurantLogo: pharmacy.pharmacyLogo,
@@ -255,7 +257,10 @@ function PharmacyCheckoutPage() {
               type: 'debit',
               amount: walletDiscount,
               date: new Date().toLocaleDateString(),
-              description: `Pharmacy order ${newOrderId}`,
+              description: t('pharmacyCheckout.txPharmacyOrder').replace(
+                '{orderId}',
+                newOrderId
+              ),
             })
           }
           if (paymentMethod === 'wallet') {
@@ -265,7 +270,10 @@ function PharmacyCheckoutPage() {
               type: 'debit',
               amount: total,
               date: new Date().toLocaleDateString(),
-              description: `Pharmacy full payment ${newOrderId}`,
+              description: t('pharmacyCheckout.txPharmacyFull').replace(
+                '{orderId}',
+                newOrderId
+              ),
             })
           }
 
@@ -281,7 +289,10 @@ function PharmacyCheckoutPage() {
               id: Date.now().toString() + '-phearned',
               amount: earnedPoints,
               date: new Date().toLocaleDateString(),
-              description: `Pharmacy order ${newOrderId}`,
+              description: t('pharmacyCheckout.txPharmacyOrder').replace(
+                '{orderId}',
+                newOrderId
+              ),
             }),
           })
 
@@ -294,15 +305,19 @@ function PharmacyCheckoutPage() {
       const customerId = auth.currentUser?.uid || 'guest'
       await sendNotification(
         customerId,
-        '💊 Pharmacy Order Placed!',
-        `Your order ${newOrderId} from ${pharmacy.pharmacyName} has been received.`,
+        t('pharmacyCheckout.notifCustomerTitle'),
+        t('pharmacyCheckout.notifCustomerBody')
+          .replace('{orderId}', newOrderId)
+          .replace('{pharmacy}', pharmacy.pharmacyName),
         'order',
         { orderId: newOrderId }
       )
       await sendNotification(
         'admin',
-        '🆕 New Pharmacy Order',
-        `${pharmacy.pharmacyName} — ৳${total}`,
+        t('pharmacyCheckout.notifAdminTitle'),
+        t('pharmacyCheckout.notifAdminBody')
+          .replace('{pharmacy}', pharmacy.pharmacyName)
+          .replace('{total}', total),
         'order',
         { orderId: newOrderId }
       )
@@ -328,10 +343,10 @@ function PharmacyCheckoutPage() {
       localStorage.removeItem('pharmacyCartItems')
       window.dispatchEvent(new Event('pharmacyCartUpdated'))
       window.scrollTo(0, 0)
-      toast.success('✅ Pharmacy order placed!')
+      toast.success(t('pharmacyCheckout.successToast'))
     } catch (err) {
       console.error('Order error:', err)
-      toast.error('Failed to place order')
+      toast.error(t('pharmacyCheckout.errorToast'))
     } finally {
       setPlacing(false)
     }
@@ -344,15 +359,22 @@ function PharmacyCheckoutPage() {
     return (
       <div className="checkout-page">
         <div className="order-success-container">
-          <PageBackButton label="Back to Home" fallback="/" />
+          <PageBackButton
+            label={t('pharmacyCheckout.backHome')}
+            fallback="/"
+          />
 
           <div className="order-success-icon">💊</div>
-          <h1>Order Placed Successfully!</h1>
+          <h1>{t('pharmacyCheckout.successTitle')}</h1>
           <p>
-            Your order <strong>{orderId}</strong> has been received.
+            {t('pharmacyCheckout.successDesc').replace(
+              '{orderId}',
+              orderId
+            )}
           </p>
           <p style={{ marginTop: '10px' }}>
-            From: <strong>{pharmacy?.pharmacyName}</strong>
+            {t('pharmacyCheckout.successFrom')}{' '}
+            <strong>{pharmacy?.pharmacyName}</strong>
           </p>
 
           <div className="order-success-buttons">
@@ -360,10 +382,10 @@ function PharmacyCheckoutPage() {
               to={`/track-order?id=${orderId}`}
               className="checkout-button"
             >
-              🛵 Track Order
+              {t('pharmacyCheckout.trackOrder')}
             </Link>
             <Link to="/" className="checkout-button">
-              Back to Home
+              {t('pharmacyCheckout.backHomeBtn')}
             </Link>
           </div>
         </div>
@@ -378,11 +400,17 @@ function PharmacyCheckoutPage() {
     return (
       <div className="checkout-page">
         <div className="checkout-container">
-          <PageBackButton label="Back" fallback="/pharmacy" />
-          <div className="restaurant-empty-state" style={{ marginTop: '40px' }}>
+          <PageBackButton
+            label={t('pharmacyCheckout.back')}
+            fallback="/pharmacy"
+          />
+          <div
+            className="restaurant-empty-state"
+            style={{ marginTop: '40px' }}
+          >
             <div className="empty-icon">💊</div>
-            <h2>Your pharmacy cart is empty</h2>
-            <p>Add medicines to continue</p>
+            <h2>{t('pharmacyCheckout.emptyTitle')}</h2>
+            <p>{t('pharmacyCheckout.emptyDesc')}</p>
             <Link
               to="/pharmacy"
               className="checkout-button"
@@ -392,7 +420,7 @@ function PharmacyCheckoutPage() {
                 marginTop: '20px',
               }}
             >
-              Browse Pharmacies
+              {t('pharmacyCheckout.browsePharmacies')}
             </Link>
           </div>
         </div>
@@ -407,11 +435,16 @@ function PharmacyCheckoutPage() {
     <div className="checkout-page">
       <div className="checkout-container">
         <div className="checkout-header">
-          <PageBackButton label="Back" fallback="/pharmacy" />
+          <PageBackButton
+            label={t('pharmacyCheckout.back')}
+            fallback="/pharmacy"
+          />
           <div className="checkout-title">
-            <span className="glass-section-label">PHARMACY CHECKOUT</span>
-            <h1>Complete Your Order</h1>
-            <p>Your medicines will be delivered to your doorstep.</p>
+            <span className="glass-section-label">
+              {t('pharmacyCheckout.badge')}
+            </span>
+            <h1>{t('pharmacyCheckout.title')}</h1>
+            <p>{t('pharmacyCheckout.subtitle')}</p>
           </div>
         </div>
 
@@ -421,26 +454,26 @@ function PharmacyCheckoutPage() {
             <div className="checkout-card-heading">
               <div className="checkout-icon">📍</div>
               <div>
-                <h2>Delivery Information</h2>
-                <p>Where should we deliver?</p>
+                <h2>{t('pharmacyCheckout.deliveryInfo')}</h2>
+                <p>{t('pharmacyCheckout.deliveryInfoDesc')}</p>
               </div>
             </div>
 
             <div className="form-group">
-              <label>Full Name</label>
+              <label>{t('pharmacyCheckout.fullName')}</label>
               <input
                 type="text"
-                placeholder="Enter your full name"
+                placeholder={t('pharmacyCheckout.fullNamePlaceholder')}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
               />
             </div>
 
             <div className="form-group">
-              <label>Phone Number</label>
+              <label>{t('pharmacyCheckout.phone')}</label>
               <input
                 type="tel"
-                placeholder="01XXXXXXXXX"
+                placeholder={t('pharmacyCheckout.phonePlaceholder')}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
@@ -456,9 +489,9 @@ function PharmacyCheckoutPage() {
                   margin: '0 0 10px',
                 }}
               >
-                📍 Select Your Area{' '}
+                {t('pharmacyCheckout.selectArea')}{' '}
                 <span style={{ color: '#DC2626', fontSize: '12px' }}>
-                  (Required)
+                  {t('pharmacyCheckout.required')}
                 </span>
               </h3>
               <select
@@ -480,10 +513,14 @@ function PharmacyCheckoutPage() {
                   boxSizing: 'border-box',
                 }}
               >
-                <option value="">— Select your area —</option>
+                <option value="">
+                  {t('pharmacyCheckout.selectAreaPlaceholder')}
+                </option>
                 {deliveryZones.map((z) => (
                   <option key={z.firebaseId} value={z.firebaseId}>
-                    {z.name} — ৳{z.deliveryFee} delivery
+                    {t('pharmacyCheckout.zoneOption')
+                      .replace('{name}', z.name)
+                      .replace('{fee}', z.deliveryFee)}
                   </option>
                 ))}
               </select>
@@ -500,15 +537,19 @@ function PharmacyCheckoutPage() {
                     fontWeight: 800,
                   }}
                 >
-                  ✅ {selectedZone.name} — Delivery ৳{selectedZone.deliveryFee}
+                  {t('pharmacyCheckout.zoneConfirmed')
+                    .replace('{name}', selectedZone.name)
+                    .replace('{fee}', selectedZone.deliveryFee)}
                 </p>
               )}
             </div>
 
             <div className="form-group">
-              <label>Delivery Address (Details)</label>
+              <label>{t('pharmacyCheckout.deliveryAddress')}</label>
               <textarea
-                placeholder="House, road, landmark..."
+                placeholder={t(
+                  'pharmacyCheckout.deliveryAddressPlaceholder'
+                )}
                 rows="3"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
@@ -525,16 +566,17 @@ function PharmacyCheckoutPage() {
                   margin: '0 0 10px',
                 }}
               >
-                🗺️ Drop Pin on Map{' '}
+                {t('pharmacyCheckout.dropPin')}{' '}
                 <span style={{ color: '#DC2626', fontSize: '12px' }}>
-                  (Required)
+                  {t('pharmacyCheckout.required')}
                 </span>
               </h3>
               <MapPicker position={mapPosition} setPosition={setMapPosition} />
               {mapPosition ? (
                 <p className="selected-location">
-                  ✅ Location set: {mapPosition.lat.toFixed(4)},{' '}
-                  {mapPosition.lng.toFixed(4)}
+                  {t('pharmacyCheckout.locationSet')
+                    .replace('{lat}', mapPosition.lat.toFixed(4))
+                    .replace('{lng}', mapPosition.lng.toFixed(4))}
                 </p>
               ) : (
                 <p
@@ -547,7 +589,7 @@ function PharmacyCheckoutPage() {
                     fontWeight: 700,
                   }}
                 >
-                  ⚠️ Please click on the map to set your delivery location
+                  {t('pharmacyCheckout.selectLocation')}
                 </p>
               )}
             </div>
@@ -558,13 +600,13 @@ function PharmacyCheckoutPage() {
                 checked={saveAddress}
                 onChange={(e) => setSaveAddress(e.target.checked)}
               />
-              <span>💾 Save this address for future orders</span>
+              <span>{t('pharmacyCheckout.saveAddress')}</span>
             </label>
 
             <div className="form-group">
-              <label>Order Note (Optional)</label>
+              <label>{t('pharmacyCheckout.orderNote')}</label>
               <textarea
-                placeholder="Special instructions..."
+                placeholder={t('pharmacyCheckout.orderNotePlaceholder')}
                 rows="3"
                 value={orderNote}
                 onChange={(e) => setOrderNote(e.target.value)}
@@ -573,7 +615,7 @@ function PharmacyCheckoutPage() {
 
             {/* Wallet / Points */}
             <div className="payment-rewards-section">
-              <h3>Use Rewards</h3>
+              <h3>{t('pharmacyCheckout.useRewards')}</h3>
               <div className="reward-options">
                 <label
                   className={`reward-option ${usingPoints ? 'active' : ''}`}
@@ -584,10 +626,17 @@ function PharmacyCheckoutPage() {
                     onChange={() => setUsingPoints(!usingPoints)}
                   />
                   <div>
-                    <strong>⭐ Use {loyaltyPoints} Points</strong>
+                    <strong>
+                      {t('pharmacyCheckout.usePoints').replace(
+                        '{points}',
+                        loyaltyPoints
+                      )}
+                    </strong>
                     <small>
-                      Get ৳{Math.min(loyaltyPoints / 10, subtotal).toFixed(0)}{' '}
-                      discount
+                      {t('pharmacyCheckout.usePointsDesc').replace(
+                        '{amount}',
+                        Math.min(loyaltyPoints / 10, subtotal).toFixed(0)
+                      )}
                     </small>
                   </div>
                 </label>
@@ -600,8 +649,13 @@ function PharmacyCheckoutPage() {
                     onChange={() => setUsingWallet(!usingWallet)}
                   />
                   <div>
-                    <strong>💳 Use ৳{walletBalance.toFixed(2)} Wallet</strong>
-                    <small>Pay from wallet</small>
+                    <strong>
+                      {t('pharmacyCheckout.useWallet').replace(
+                        '{amount}',
+                        walletBalance.toFixed(2)
+                      )}
+                    </strong>
+                    <small>{t('pharmacyCheckout.useWalletDesc')}</small>
                   </div>
                 </label>
               </div>
@@ -612,8 +666,8 @@ function PharmacyCheckoutPage() {
               <div className="payment-heading">
                 <div className="checkout-icon">💳</div>
                 <div>
-                  <h2>Payment Method</h2>
-                  <p>Choose how you want to pay.</p>
+                  <h2>{t('pharmacyCheckout.paymentMethod')}</h2>
+                  <p>{t('pharmacyCheckout.paymentMethodDesc')}</p>
                 </div>
               </div>
               <div className="payment-options">
@@ -628,8 +682,8 @@ function PharmacyCheckoutPage() {
                     checked={paymentMethod === 'cod'}
                     onChange={() => setPaymentMethod('cod')}
                   />
-                  <strong>💵 Cash on Delivery</strong>
-                  <small>Pay when medicines arrive</small>
+                  <strong>{t('pharmacyCheckout.cod')}</strong>
+                  <small>{t('pharmacyCheckout.codDesc')}</small>
                 </label>
                 <label
                   className={`payment-option ${
@@ -642,8 +696,8 @@ function PharmacyCheckoutPage() {
                     checked={paymentMethod === 'mobile'}
                     onChange={() => setPaymentMethod('mobile')}
                   />
-                  <strong>📱 Mobile Banking</strong>
-                  <small>bKash / Nagad / Rocket</small>
+                  <strong>{t('pharmacyCheckout.mobileBanking')}</strong>
+                  <small>{t('pharmacyCheckout.mobileBankingDesc')}</small>
                 </label>
                 <label
                   className={`payment-option ${
@@ -656,8 +710,13 @@ function PharmacyCheckoutPage() {
                     checked={paymentMethod === 'wallet'}
                     onChange={() => setPaymentMethod('wallet')}
                   />
-                  <strong>💳 Wallet Payment</strong>
-                  <small>Pay using ৳{walletBalance.toFixed(2)}</small>
+                  <strong>{t('pharmacyCheckout.walletPayment')}</strong>
+                  <small>
+                    {t('pharmacyCheckout.walletPaymentDesc').replace(
+                      '{amount}',
+                      walletBalance.toFixed(2)
+                    )}
+                  </small>
                 </label>
               </div>
             </div>
@@ -667,14 +726,18 @@ function PharmacyCheckoutPage() {
               onClick={placeOrder}
               disabled={placing}
             >
-              {placing ? 'Placing Order...' : 'Place Order →'}
+              {placing
+                ? t('pharmacyCheckout.placingOrder')
+                : t('pharmacyCheckout.placeOrder')}
             </button>
           </div>
 
           {/* RIGHT: SUMMARY */}
           <div className="checkout-summary checkout-card">
-            <span className="section-label">ORDER SUMMARY</span>
-            <h2>Your Medicines</h2>
+            <span className="section-label">
+              {t('pharmacyCheckout.orderSummary')}
+            </span>
+            <h2>{t('pharmacyCheckout.yourMedicines')}</h2>
 
             {pharmacy && (
               <div className="summary-restaurant">
@@ -688,7 +751,9 @@ function PharmacyCheckoutPage() {
                 <div>
                   <strong>{pharmacy.pharmacyName}</strong>
                   <small>
-                    Delivery: ৳{deliveryFee} · {pharmacy.deliveryTime}
+                    {t('pharmacyCheckout.summaryDelivery')
+                      .replace('{fee}', deliveryFee)
+                      .replace('{time}', pharmacy.deliveryTime)}
                   </small>
                 </div>
               </div>
@@ -707,7 +772,10 @@ function PharmacyCheckoutPage() {
                   marginBottom: '14px',
                 }}
               >
-                📍 Zone: {selectedZone.name}
+                {t('pharmacyCheckout.summaryZone').replace(
+                  '{name}',
+                  selectedZone.name
+                )}
               </div>
             )}
 
@@ -724,7 +792,12 @@ function PharmacyCheckoutPage() {
                     </div>
                     <div>
                       <span>{item.name}</span>
-                      <small>Quantity × {item.quantity}</small>
+                      <small>
+                        {t('pharmacyCheckout.quantityX').replace(
+                          '{n}',
+                          item.quantity
+                        )}
+                      </small>
                     </div>
                   </div>
                   <strong>৳{item.price * item.quantity}</strong>
@@ -735,35 +808,35 @@ function PharmacyCheckoutPage() {
             <div className="summary-divider"></div>
 
             <div className="summary-item">
-              <span>Subtotal</span>
+              <span>{t('pharmacyCheckout.subtotal')}</span>
               <strong>৳{subtotal}</strong>
             </div>
 
             <div className="summary-item">
-              <span>Delivery Fee</span>
+              <span>{t('pharmacyCheckout.deliveryFee')}</span>
               <strong>৳{deliveryFee}</strong>
             </div>
 
             {usingPoints && (
               <div className="summary-item discount-item">
-                <span>Points Discount</span>
+                <span>{t('pharmacyCheckout.pointsDiscount')}</span>
                 <strong>-৳{pointsDiscount}</strong>
               </div>
             )}
             {usingWallet && (
               <div className="summary-item discount-item">
-                <span>Wallet Discount</span>
+                <span>{t('pharmacyCheckout.walletDiscount')}</span>
                 <strong>-৳{walletDiscount}</strong>
               </div>
             )}
 
             <div className="summary-total">
-              <span>Total</span>
+              <span>{t('pharmacyCheckout.total')}</span>
               <strong>৳{total}</strong>
             </div>
 
             <div className="checkout-note">
-              🔒 Your order information is secure.
+              {t('pharmacyCheckout.secureNote')}
             </div>
           </div>
         </div>

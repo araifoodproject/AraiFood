@@ -1,94 +1,51 @@
 // ============================================================
 // src/pages/TermsPage.jsx
 // Terms & Privacy Policy
+// Bilingual (BN/EN)
 // ============================================================
 
 import { Link } from 'react-router-dom'
 import PageBackButton from '../components/PageBackButton'
 import useSettings from '../hooks/useSettings'
-import { Shield, FileText, Lock, UserCheck, CreditCard, AlertTriangle } from 'lucide-react'
+import {
+  Shield,
+  FileText,
+  Lock,
+  UserCheck,
+  CreditCard,
+  AlertTriangle,
+} from 'lucide-react'
+import { useLanguage } from '../i18n/LanguageContext'
 
-const SECTIONS = [
-  {
-    icon: FileText,
-    color: '#3B82F6',
-    title: '1. Acceptance of Terms',
-    body: 'By accessing or using AraiFood, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our platform. These terms apply to all users including customers, restaurants, riders, and pharmacies.',
-  },
-  {
-    icon: UserCheck,
-    color: '#10B981',
-    title: '2. User Accounts',
-    body: 'You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account. You must provide accurate and complete information when creating an account.',
-  },
-  {
-    icon: CreditCard,
-    color: '#F59E0B',
-    title: '3. Orders & Payments',
-    body: 'All orders are subject to acceptance by the restaurant. Prices are displayed in Bangladeshi Taka (৳). We accept Cash on Delivery, Mobile Banking (bKash/Nagad), and AraiWallet payments. Refunds are processed within 3-5 business days.',
-  },
-  {
-    icon: AlertTriangle,
-    color: '#DC2626',
-    title: '4. Cancellation & Refunds',
-    body: 'Orders can be cancelled for free before restaurant acceptance. Once accepted, cancellations may be subject to fees. Refunds for cancelled orders are processed automatically. If you receive incorrect or damaged items, contact support within 24 hours.',
-  },
-  {
-    icon: Lock,
-    color: '#8B5CF6',
-    title: '5. Privacy & Data',
-    body: 'We collect minimal personal data necessary to provide our service: name, phone, delivery address, and order history. We never sell your personal information to third parties. Your data is encrypted and stored securely on Firebase servers.',
-  },
-  {
-    icon: Shield,
-    color: '#EC4899',
-    title: '6. Delivery Policy',
-    body: 'Delivery times are estimates and may vary based on weather, traffic, and demand. We partner with independent riders who are not our employees. Delivery fees are calculated based on your zone and displayed at checkout.',
-  },
-  {
-    icon: FileText,
-    color: '#06B6D4',
-    title: '7. Restaurant & Partner Terms',
-    body: 'Restaurants are independent businesses. AraiFood acts as a platform connecting customers with restaurants and riders. We charge a commission on orders as agreed during onboarding. Partners must maintain required licenses and hygiene standards.',
-  },
-  {
-    icon: AlertTriangle,
-    color: '#F97316',
-    title: '8. Limitation of Liability',
-    body: 'AraiFood is not liable for any indirect, incidental, or consequential damages arising from your use of the platform. Our maximum liability is limited to the amount you paid for the specific order in question.',
-  },
-  {
-    icon: UserCheck,
-    color: '#059669',
-    title: '9. Changes to Terms',
-    body: 'We may update these Terms from time to time. Continued use of AraiFood after changes constitutes acceptance of new terms. We will notify users of significant changes via email or in-app notification.',
-  },
-  {
-    icon: FileText,
-    color: '#6B7280',
-    title: '10. Contact Information',
-    body: 'For questions about these Terms, contact us at hello@araifood.com or through the Contact page. Our legal team will respond within 3 business days.',
-  },
+const SECTIONS_META = [
+  { icon: FileText, color: '#3B82F6', titleKey: 'terms.s1.title', bodyKey: 'terms.s1.body' },
+  { icon: UserCheck, color: '#10B981', titleKey: 'terms.s2.title', bodyKey: 'terms.s2.body' },
+  { icon: CreditCard, color: '#F59E0B', titleKey: 'terms.s3.title', bodyKey: 'terms.s3.body' },
+  { icon: AlertTriangle, color: '#DC2626', titleKey: 'terms.s4.title', bodyKey: 'terms.s4.body' },
+  { icon: Lock, color: '#8B5CF6', titleKey: 'terms.s5.title', bodyKey: 'terms.s5.body' },
+  { icon: Shield, color: '#EC4899', titleKey: 'terms.s6.title', bodyKey: 'terms.s6.body' },
+  { icon: FileText, color: '#06B6D4', titleKey: 'terms.s7.title', bodyKey: 'terms.s7.body' },
+  { icon: AlertTriangle, color: '#F97316', titleKey: 'terms.s8.title', bodyKey: 'terms.s8.body' },
+  { icon: UserCheck, color: '#059669', titleKey: 'terms.s9.title', bodyKey: 'terms.s9.body' },
+  { icon: FileText, color: '#6B7280', titleKey: 'terms.s10.title', bodyKey: 'terms.s10.body' },
 ]
 
 function TermsPage() {
+  const { t } = useLanguage()
   const { settings } = useSettings()
   const siteName = settings.siteName || 'AraiFood'
 
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('terms.back')} fallback="/" />
 
         {/* Header */}
         <div className="restaurants-page-header">
-          <span className="glass-section-label">
-            LEGAL
-          </span>
-          <h1>Terms & Privacy Policy 📋</h1>
+          <span className="glass-section-label">{t('terms.badge')}</span>
+          <h1>{t('terms.title')}</h1>
           <p>
-            Please read these terms carefully before using {siteName}. They
-            explain your rights and responsibilities.
+            {t('terms.subtitle').replace('{siteName}', siteName)}
           </p>
           <div
             style={{
@@ -105,7 +62,8 @@ function TermsPage() {
               color: 'var(--text-tertiary)',
             }}
           >
-            📅 Last updated: {new Date().toLocaleDateString('en-GB', {
+            📅 {t('terms.lastUpdated')}{' '}
+            {new Date().toLocaleDateString('en-GB', {
               day: 'numeric',
               month: 'long',
               year: 'numeric',
@@ -126,8 +84,8 @@ function TermsPage() {
           <div className="account-section-title">
             <div className="account-section-icon">📑</div>
             <div>
-              <h3>Quick Navigation</h3>
-              <p>Jump to any section</p>
+              <h3>{t('terms.tocTitle')}</h3>
+              <p>{t('terms.tocSubtitle')}</p>
             </div>
           </div>
           <div
@@ -137,7 +95,7 @@ function TermsPage() {
               gap: '8px',
             }}
           >
-            {SECTIONS.map((s, idx) => (
+            {SECTIONS_META.map((s, idx) => (
               <a
                 key={idx}
                 href={`#section-${idx}`}
@@ -158,7 +116,7 @@ function TermsPage() {
                 <span style={{ color: s.color, fontWeight: 900 }}>
                   {idx + 1}
                 </span>
-                {s.title.replace(/^\d+\.\s/, '')}
+                {t(s.titleKey).replace(/^\d+\.\s/, '')}
               </a>
             ))}
           </div>
@@ -168,7 +126,7 @@ function TermsPage() {
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
-          {SECTIONS.map((s, idx) => {
+          {SECTIONS_META.map((s, idx) => {
             const Icon = s.icon
             return (
               <div
@@ -210,7 +168,7 @@ function TermsPage() {
                       paddingTop: '8px',
                     }}
                   >
-                    {s.title}
+                    {t(s.titleKey)}
                   </h2>
                 </div>
                 <p
@@ -223,7 +181,7 @@ function TermsPage() {
                     paddingLeft: '58px',
                   }}
                 >
-                  {s.body}
+                  {t(s.bodyKey)}
                 </p>
               </div>
             )
@@ -251,7 +209,7 @@ function TermsPage() {
               color: 'var(--text-primary)',
             }}
           >
-            Questions about our terms?
+            {t('terms.ctaTitle')}
           </h3>
           <p
             style={{
@@ -261,7 +219,7 @@ function TermsPage() {
               fontWeight: 500,
             }}
           >
-            We're happy to clarify anything. Reach out to our team anytime.
+            {t('terms.ctaSubtitle')}
           </p>
           <div
             style={{
@@ -284,7 +242,7 @@ function TermsPage() {
                 boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
               }}
             >
-              Contact Us →
+              {t('terms.ctaContact')}
             </Link>
             <Link
               to="/help"
@@ -299,7 +257,7 @@ function TermsPage() {
                 border: '1px solid var(--border-strong)',
               }}
             >
-              Help Center
+              {t('terms.ctaHelp')}
             </Link>
           </div>
         </div>

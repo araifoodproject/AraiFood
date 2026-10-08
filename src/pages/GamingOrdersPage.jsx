@@ -1,3 +1,8 @@
+// ============================================================
+// src/pages/GamingOrdersPage.jsx
+// Bilingual (BN/EN)
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { db, auth } from '../firebase'
@@ -6,8 +11,10 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import PageBackButton from '../components/PageBackButton'
 import { Copy, Check } from 'lucide-react'
 import { toast } from 'react-toastify'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function GamingOrdersPage() {
+  const { t } = useLanguage()
   const [user, setUser] = useState(null)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -43,32 +50,32 @@ function GamingOrdersPage() {
   const copyText = (text, key) => {
     navigator.clipboard.writeText(text)
     setCopied(key)
-    toast.success('Copied!', { autoClose: 1200 })
+    toast.success(t('gamingOrders.copiedToast'), { autoClose: 1200 })
     setTimeout(() => setCopied(null), 1500)
   }
 
   const getStatusBadge = (status) => {
     const map = {
       pending: {
-        label: 'Pending',
+        label: t('gamingOrders.statusPending'),
         color: '#f59e0b',
         bg: 'rgba(245,158,11,0.12)',
         icon: '⏳',
       },
       processing: {
-        label: 'Processing',
+        label: t('gamingOrders.statusProcessing'),
         color: '#3b82f6',
         bg: 'rgba(59,130,246,0.12)',
         icon: '⚙️',
       },
       delivered: {
-        label: 'Delivered',
+        label: t('gamingOrders.statusDelivered'),
         color: '#16a34a',
         bg: 'rgba(22,163,74,0.12)',
         icon: '✅',
       },
       cancelled: {
-        label: 'Cancelled',
+        label: t('gamingOrders.statusCancelled'),
         color: '#dc2626',
         bg: 'rgba(220,38,38,0.12)',
         icon: '❌',
@@ -78,7 +85,7 @@ function GamingOrdersPage() {
   }
 
   const formatDate = (ts) => {
-    if (!ts) return '—'
+    if (!ts) return t('gamingOrders.dateEmpty')
     const d = ts.toDate ? ts.toDate() : new Date(ts)
     return (
       d.toLocaleDateString() +
@@ -92,7 +99,7 @@ function GamingOrdersPage() {
       <div className="restaurants-page">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
-          <p>Loading your gaming orders...</p>
+          <p>{t('gamingOrders.loading')}</p>
         </div>
       </div>
     )
@@ -101,19 +108,21 @@ function GamingOrdersPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/gaming" />
+        <PageBackButton label={t('gamingOrders.back')} fallback="/gaming" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">GAMING ORDERS</span>
-          <h1>My Game Top-Ups</h1>
-          <p>Track your top-up orders and their status</p>
+          <span className="glass-section-label">
+            {t('gamingOrders.badge')}
+          </span>
+          <h1>{t('gamingOrders.title')}</h1>
+          <p>{t('gamingOrders.subtitle')}</p>
         </div>
 
         {!user ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">🔒</div>
-            <h2>Please Login</h2>
-            <p>Login to see your gaming order history</p>
+            <h2>{t('gamingOrders.pleaseLogin')}</h2>
+            <p>{t('gamingOrders.pleaseLoginDesc')}</p>
             <Link
               to="/login"
               className="checkout-button"
@@ -123,14 +132,14 @@ function GamingOrdersPage() {
                 marginTop: '20px',
               }}
             >
-              Login →
+              {t('gamingOrders.loginBtn')}
             </Link>
           </div>
         ) : orders.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">🎮</div>
-            <h2>No gaming orders yet</h2>
-            <p>Place your first top-up order and it will show here.</p>
+            <h2>{t('gamingOrders.empty')}</h2>
+            <p>{t('gamingOrders.emptyDesc')}</p>
             <Link
               to="/gaming"
               className="checkout-button"
@@ -140,7 +149,7 @@ function GamingOrdersPage() {
                 marginTop: '20px',
               }}
             >
-              Browse Games →
+              {t('gamingOrders.browseGames')}
             </Link>
           </div>
         ) : (
@@ -190,7 +199,7 @@ function GamingOrdersPage() {
                           marginBottom: '4px',
                         }}
                       >
-                        Order ID
+                        {t('gamingOrders.orderIdLabel')}
                       </div>
                       <strong
                         style={{
@@ -253,7 +262,7 @@ function GamingOrdersPage() {
                           marginBottom: '4px',
                         }}
                       >
-                        🎮 Game
+                        {t('gamingOrders.gameLabel')}
                       </div>
                       <strong
                         style={{
@@ -277,7 +286,7 @@ function GamingOrdersPage() {
                           marginBottom: '4px',
                         }}
                       >
-                        📦 Pack
+                        {t('gamingOrders.packLabel')}
                       </div>
                       <strong
                         style={{
@@ -301,7 +310,7 @@ function GamingOrdersPage() {
                           marginBottom: '4px',
                         }}
                       >
-                        💰 Price
+                        {t('gamingOrders.priceLabel')}
                       </div>
                       <strong
                         style={{
@@ -326,7 +335,7 @@ function GamingOrdersPage() {
                           marginBottom: '4px',
                         }}
                       >
-                        🆔 Player ID
+                        {t('gamingOrders.playerIdLabel')}
                       </div>
                       <div
                         style={{
@@ -388,11 +397,15 @@ function GamingOrdersPage() {
                     }}
                   >
                     <span>
-                      💳 {order.paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} →{' '}
+                      {t('gamingOrders.paymentInfo').replace(
+                        '{method}',
+                        order.paymentMethod === 'bkash' ? 'bKash' : 'Nagad'
+                      )}{' '}
                       <strong>{order.paymentNumber}</strong>
                     </span>
                     <span>
-                      🧾 TrxID → <strong>{order.transactionId}</strong>
+                      {t('gamingOrders.trxLabel')}{' '}
+                      <strong>{order.transactionId}</strong>
                     </span>
                   </div>
 
@@ -408,8 +421,7 @@ function GamingOrdersPage() {
                         fontWeight: 700,
                       }}
                     >
-                      ⏳ We're verifying your payment. Top-up usually completes
-                      within 5 minutes.
+                      {t('gamingOrders.pendingMsg')}
                     </div>
                   )}
                   {order.status === 'processing' && (
@@ -424,7 +436,7 @@ function GamingOrdersPage() {
                         fontWeight: 700,
                       }}
                     >
-                      ⚙️ Your top-up is being processed. Please wait.
+                      {t('gamingOrders.processingMsg')}
                     </div>
                   )}
                   {order.status === 'delivered' && (
@@ -439,7 +451,7 @@ function GamingOrdersPage() {
                         fontWeight: 700,
                       }}
                     >
-                      ✅ Top-up delivered! Check your game account.
+                      {t('gamingOrders.deliveredMsg')}
                     </div>
                   )}
                   {order.status === 'cancelled' && (
@@ -454,8 +466,12 @@ function GamingOrdersPage() {
                         fontWeight: 700,
                       }}
                     >
-                      ❌ This order was cancelled.
-                      {order.cancelReason && ` Reason: ${order.cancelReason}`}
+                      {t('gamingOrders.cancelledMsg')}
+                      {order.cancelReason &&
+                        t('gamingOrders.cancelledReason').replace(
+                          '{reason}',
+                          order.cancelReason
+                        )}
                     </div>
                   )}
                 </div>

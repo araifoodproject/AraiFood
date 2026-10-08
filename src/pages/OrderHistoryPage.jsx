@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/OrderHistoryPage.jsx
 // V3 — Premium redesign with filters, search, detail modal
+// Bilingual (BN/EN) — inline styles preserved
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -20,8 +21,11 @@ import {
 import { toast } from 'react-toastify'
 import { Star, X, Search, Eye } from 'lucide-react'
 import PageBackButton from '../components/PageBackButton'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function OrderHistoryPage() {
+  const { t } = useLanguage()
+
   const [user, setUser] = useState(null)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -95,7 +99,7 @@ function OrderHistoryPage() {
 
   // ============ HELPERS ============
   const formatDate = (timestamp) => {
-    if (!timestamp) return 'Just now'
+    if (!timestamp) return t('orderHistory.justNow')
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
     return (
       date.toLocaleDateString() +
@@ -107,38 +111,43 @@ function OrderHistoryPage() {
   const getStatusInfo = (status) => {
     switch (status) {
       case 'pending':
-        return { label: 'Pending', color: '#f59e0b', icon: '⏳', key: 'active' }
+        return {
+          label: t('orderHistory.statusPending'),
+          color: '#f59e0b',
+          icon: '⏳',
+          key: 'active',
+        }
       case 'preparing':
         return {
-          label: 'Preparing',
+          label: t('orderHistory.statusPreparing'),
           color: '#3b82f6',
           icon: '👨‍🍳',
           key: 'active',
         }
       case 'delivering':
         return {
-          label: 'On the Way',
+          label: t('orderHistory.statusDelivering'),
           color: '#13a89e',
           icon: '🛵',
           key: 'active',
         }
       case 'delivered':
         return {
-          label: 'Delivered',
+          label: t('orderHistory.statusDelivered'),
           color: '#16a34a',
           icon: '✅',
           key: 'delivered',
         }
       case 'cancelled':
         return {
-          label: 'Cancelled',
+          label: t('orderHistory.statusCancelled'),
           color: '#dc2626',
           icon: '❌',
           key: 'cancelled',
         }
       default:
         return {
-          label: status || 'Pending',
+          label: status || t('orderHistory.statusPending'),
           color: '#6b7280',
           icon: '📦',
           key: 'active',
@@ -207,14 +216,14 @@ function OrderHistoryPage() {
   const submitRating = async () => {
     if (!ratingOrder) return
     if (restaurantRating === 0) {
-      toast.error('Please rate the restaurant.')
+      toast.error(t('orderHistory.toastRateRestaurant'))
       return
     }
 
     setSubmitting(true)
     try {
       if (myReviews[ratingOrder.orderId]) {
-        toast.error('You already reviewed this order.')
+        toast.error(t('orderHistory.toastAlreadyReviewed'))
         setSubmitting(false)
         return
       }
@@ -246,11 +255,11 @@ function OrderHistoryPage() {
         await updateRiderAverageRating(ratingOrder.riderId)
       }
 
-      toast.success('⭐ Thanks for your review!')
+      toast.success(t('orderHistory.toastThanksReview'))
       closeRatingModal()
     } catch (err) {
       console.error('Rating submit error:', err)
-      toast.error('Failed to submit review. Please try again.')
+      toast.error(t('orderHistory.toastReviewFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -315,6 +324,22 @@ function OrderHistoryPage() {
     }
   }
 
+  const getRatingText = (value) => {
+    if (value === 5) return t('orderHistory.ratingExcellent')
+    if (value === 4) return t('orderHistory.ratingGood')
+    if (value === 3) return t('orderHistory.ratingOK')
+    if (value === 2) return t('orderHistory.ratingNotGreat')
+    return t('orderHistory.ratingTerrible')
+  }
+
+  const getRiderRatingText = (value) => {
+    if (value === 5) return t('orderHistory.riderAmazing')
+    if (value === 4) return t('orderHistory.riderGood')
+    if (value === 3) return t('orderHistory.riderOK')
+    if (value === 2) return t('orderHistory.riderNotGreat')
+    return t('orderHistory.riderBad')
+  }
+
   const renderRestaurantStars = () => (
     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
       {[1, 2, 3, 4, 5].map((i) => {
@@ -373,7 +398,7 @@ function OrderHistoryPage() {
       <div className="restaurants-page">
         <div className="panel-loading">
           <div className="panel-loading-spinner"></div>
-          <p>Loading your orders...</p>
+          <p>{t('orderHistory.loading')}</p>
         </div>
       </div>
     )
@@ -383,21 +408,22 @@ function OrderHistoryPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('checkout.back')} fallback="/" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">YOUR ORDERS</span>
+          <span className="glass-section-label">{t('orderHistory.badge')}</span>
           <h1>
-            Order <span>History</span>
+            {t('orderHistory.heading1')}{' '}
+            <span>{t('orderHistory.heading2')}</span>
           </h1>
-          <p>Track your orders, rate your experience, reorder favorites.</p>
+          <p>{t('orderHistory.subtitle')}</p>
         </div>
 
         {!user ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">🔒</div>
-            <h2>Please Login</h2>
-            <p>You need to login to see your order history.</p>
+            <h2>{t('orderHistory.pleaseLogin')}</h2>
+            <p>{t('orderHistory.pleaseLoginDesc')}</p>
             <Link
               to="/login"
               className="checkout-button"
@@ -407,14 +433,14 @@ function OrderHistoryPage() {
                 marginTop: '20px',
               }}
             >
-              Login →
+              {t('orderHistory.loginBtn')}
             </Link>
           </div>
         ) : orders.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">📦</div>
-            <h2>No orders yet!</h2>
-            <p>Place your first order to see it here.</p>
+            <h2>{t('orderHistory.noOrders')}</h2>
+            <p>{t('orderHistory.noOrdersDesc')}</p>
             <Link
               to="/restaurants"
               className="checkout-button"
@@ -424,7 +450,7 @@ function OrderHistoryPage() {
                 marginTop: '20px',
               }}
             >
-              Browse Restaurants
+              {t('orderHistory.browseRestaurants')}
             </Link>
           </div>
         ) : (
@@ -433,19 +459,19 @@ function OrderHistoryPage() {
             <div className="restaurant-page-stats">
               <div className="restaurant-stat">
                 <strong>{stats.total}</strong>
-                <span>Total Orders</span>
+                <span>{t('orderHistory.statTotal')}</span>
               </div>
               <div className="restaurant-stat">
                 <strong>{stats.active}</strong>
-                <span>Active</span>
+                <span>{t('orderHistory.statActive')}</span>
               </div>
               <div className="restaurant-stat">
                 <strong>{stats.delivered}</strong>
-                <span>Delivered</span>
+                <span>{t('orderHistory.statDelivered')}</span>
               </div>
               <div className="restaurant-stat">
                 <strong>৳{stats.totalSpent.toFixed(0)}</strong>
-                <span>Total Spent</span>
+                <span>{t('orderHistory.statSpent')}</span>
               </div>
             </div>
 
@@ -455,7 +481,7 @@ function OrderHistoryPage() {
                 <Search size={18} strokeWidth={2.2} />
                 <input
                   type="text"
-                  placeholder="Search by order ID or restaurant..."
+                  placeholder={t('orderHistory.searchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -472,10 +498,26 @@ function OrderHistoryPage() {
 
               <div className="restaurant-filter-row">
                 {[
-                  { value: 'all', label: 'All', icon: '📦' },
-                  { value: 'active', label: 'Active', icon: '⏳' },
-                  { value: 'delivered', label: 'Delivered', icon: '✅' },
-                  { value: 'cancelled', label: 'Cancelled', icon: '❌' },
+                  {
+                    value: 'all',
+                    label: t('orderHistory.filterAll'),
+                    icon: '📦',
+                  },
+                  {
+                    value: 'active',
+                    label: t('orderHistory.filterActive'),
+                    icon: '⏳',
+                  },
+                  {
+                    value: 'delivered',
+                    label: t('orderHistory.filterDelivered'),
+                    icon: '✅',
+                  },
+                  {
+                    value: 'cancelled',
+                    label: t('orderHistory.filterCancelled'),
+                    icon: '❌',
+                  },
                 ].map((f) => (
                   <button
                     key={f.value}
@@ -497,11 +539,11 @@ function OrderHistoryPage() {
             {filteredOrders.length === 0 ? (
               <div className="restaurant-empty-state">
                 <div className="empty-icon">🔍</div>
-                <h2>No orders found</h2>
+                <h2>{t('orderHistory.noFound')}</h2>
                 <p>
                   {search
-                    ? `No orders match "${search}"`
-                    : `No ${filter} orders`}
+                    ? `${t('orderHistory.noFoundSearch')} "${search}"`
+                    : t('orderHistory.noFoundFilter')}
                 </p>
                 <button
                   onClick={() => {
@@ -509,7 +551,7 @@ function OrderHistoryPage() {
                     setFilter('all')
                   }}
                 >
-                  Reset Filters
+                  {t('orderHistory.resetFilters')}
                 </button>
               </div>
             ) : (
@@ -520,19 +562,17 @@ function OrderHistoryPage() {
                   const canRate = order.status === 'delivered'
                   const isPharmacy = order.orderType === 'pharmacy'
                   const vendorName =
-                    order.restaurantName ||
-                    order.pharmacyName ||
-                    'Vendor'
+                    order.restaurantName || order.pharmacyName || 'Vendor'
 
                   return (
-                    <div
-                      className="order-history-card"
-                      key={order.firebaseId}
-                    >
+                    <div className="order-history-card" key={order.firebaseId}>
                       {/* Header */}
                       <div className="order-history-header">
                         <div>
-                          <strong>Order #{order.orderId}</strong>
+                          <strong>
+                            {t('orderHistory.orderLabel')}
+                            {order.orderId}
+                          </strong>
                           <small>{formatDate(order.createdAt)}</small>
                         </div>
                         <span
@@ -551,9 +591,7 @@ function OrderHistoryPage() {
                         <div className="order-history-logo">
                           {order.restaurantLogo || order.pharmacyLogo ? (
                             <img
-                              src={
-                                order.restaurantLogo || order.pharmacyLogo
-                              }
+                              src={order.restaurantLogo || order.pharmacyLogo}
                               alt={vendorName}
                             />
                           ) : (
@@ -563,9 +601,11 @@ function OrderHistoryPage() {
                         <div>
                           <strong>{vendorName}</strong>
                           <small>
-                            {order.items?.length || 0} item
-                            {(order.items?.length || 0) !== 1 ? 's' : ''}
-                            {isPharmacy && ' · 💊 Pharmacy'}
+                            {order.items?.length || 0}{' '}
+                            {(order.items?.length || 0) !== 1
+                              ? t('orderHistory.itemsLabel')
+                              : t('orderHistory.itemLabel')}
+                            {isPharmacy && ` · 💊 ${t('nav.pharmacy')}`}
                           </small>
                         </div>
                       </div>
@@ -591,15 +631,17 @@ function OrderHistoryPage() {
                               justifyContent: 'center',
                             }}
                           >
-                            + {order.items.length - 3} more item
-                            {order.items.length - 3 !== 1 ? 's' : ''}
+                            + {order.items.length - 3}{' '}
+                            {order.items.length - 3 !== 1
+                              ? t('orderHistory.moreItemsPlural')
+                              : t('orderHistory.moreItems')}
                           </div>
                         )}
                       </div>
 
                       {/* Total */}
                       <div className="order-history-total">
-                        <span>Total</span>
+                        <span>{t('orderHistory.totalLabel')}</span>
                         <strong>৳{order.total}</strong>
                       </div>
 
@@ -621,7 +663,7 @@ function OrderHistoryPage() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          ✅ You rated {review.rating}⭐
+                          ✅ {t('orderHistory.youRated')} {review.rating}⭐
                           {review.comment && (
                             <span
                               style={{
@@ -648,7 +690,7 @@ function OrderHistoryPage() {
                           }}
                         >
                           <Eye size={14} strokeWidth={2.4} />
-                          Details
+                          {t('orderHistory.detailsBtn')}
                         </button>
 
                         {canRate && !review && (
@@ -671,7 +713,7 @@ function OrderHistoryPage() {
                               gap: '6px',
                             }}
                           >
-                            ⭐ Rate Order
+                            ⭐ {t('orderHistory.rateBtn')}
                           </button>
                         )}
 
@@ -692,7 +734,7 @@ function OrderHistoryPage() {
                               gap: '6px',
                             }}
                           >
-                            ✅ Rated
+                            ✅ {t('orderHistory.ratedBtn')}
                           </button>
                         )}
 
@@ -702,7 +744,7 @@ function OrderHistoryPage() {
                               to={`/track-order?id=${order.orderId}`}
                               className="track-order-button"
                             >
-                              🛵 Track Order
+                              🛵 {t('orderHistory.trackBtn')}
                             </Link>
                           )}
                       </div>
@@ -749,7 +791,7 @@ function OrderHistoryPage() {
                     fontWeight: 800,
                   }}
                 >
-                  Rate Your Order
+                  {t('orderHistory.rateTitle')}
                 </h2>
                 <p
                   style={{
@@ -759,8 +801,8 @@ function OrderHistoryPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Order #{ratingOrder.orderId} ·{' '}
-                  {ratingOrder.restaurantName}
+                  {t('orderHistory.orderLabel')}
+                  {ratingOrder.orderId} · {ratingOrder.restaurantName}
                 </p>
               </div>
               <button
@@ -801,7 +843,7 @@ function OrderHistoryPage() {
                   marginBottom: '10px',
                 }}
               >
-                🏪 How was the food?
+                {t('orderHistory.rateFoodQ')}
               </div>
               {renderRestaurantStars()}
               {restaurantRating > 0 && (
@@ -813,15 +855,7 @@ function OrderHistoryPage() {
                     color: '#059669',
                   }}
                 >
-                  {restaurantRating === 5
-                    ? '😍 Excellent!'
-                    : restaurantRating === 4
-                    ? '😊 Good'
-                    : restaurantRating === 3
-                    ? '😐 OK'
-                    : restaurantRating === 2
-                    ? '😕 Not great'
-                    : '😞 Terrible'}
+                  {getRatingText(restaurantRating)}
                 </p>
               )}
             </div>
@@ -846,7 +880,7 @@ function OrderHistoryPage() {
                     marginBottom: '10px',
                   }}
                 >
-                  🛵 Rate your rider ({ratingOrder.riderName})
+                  {t('orderHistory.rateRiderQ')} ({ratingOrder.riderName})
                 </div>
                 {renderRiderStars()}
                 {riderRating > 0 && (
@@ -858,15 +892,7 @@ function OrderHistoryPage() {
                       color: '#059669',
                     }}
                   >
-                    {riderRating === 5
-                      ? '🌟 Amazing!'
-                      : riderRating === 4
-                      ? '👍 Good'
-                      : riderRating === 3
-                      ? '😐 OK'
-                      : riderRating === 2
-                      ? '👎 Not great'
-                      : '😞 Bad'}
+                    {getRiderRatingText(riderRating)}
                   </p>
                 )}
                 <p
@@ -877,7 +903,7 @@ function OrderHistoryPage() {
                     fontStyle: 'italic',
                   }}
                 >
-                  Optional — skip if you prefer
+                  {t('orderHistory.rateRiderOptional')}
                 </p>
               </div>
             )}
@@ -893,12 +919,12 @@ function OrderHistoryPage() {
                   marginBottom: '8px',
                 }}
               >
-                💬 Add a comment (optional)
+                {t('orderHistory.commentLabel')}
               </label>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Tell us about your experience..."
+                placeholder={t('orderHistory.commentPlaceholder')}
                 maxLength={500}
                 rows={3}
                 style={{
@@ -961,7 +987,9 @@ function OrderHistoryPage() {
                 gap: '8px',
               }}
             >
-              {submitting ? '⏳ Submitting...' : '⭐ Submit Review'}
+              {submitting
+                ? t('orderHistory.submitting')
+                : t('orderHistory.submitReview')}
             </button>
           </div>
         </div>
@@ -1007,7 +1035,8 @@ function OrderHistoryPage() {
                     fontWeight: 800,
                   }}
                 >
-                  Order #{detailOrder.orderId}
+                  {t('orderHistory.orderLabel')}
+                  {detailOrder.orderId}
                 </h2>
                 <p
                   style={{
@@ -1043,8 +1072,7 @@ function OrderHistoryPage() {
               style={{
                 padding: '14px 16px',
                 borderRadius: '14px',
-                background:
-                  getStatusInfo(detailOrder.status).color + '12',
+                background: getStatusInfo(detailOrder.status).color + '12',
                 border: `1px solid ${getStatusInfo(detailOrder.status).color}30`,
                 marginBottom: '16px',
                 display: 'flex',
@@ -1089,8 +1117,7 @@ function OrderHistoryPage() {
                   width: '44px',
                   height: '44px',
                   borderRadius: '12px',
-                  background:
-                    'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
+                  background: 'linear-gradient(135deg, #D1FAE5, #A7F3D0)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1113,9 +1140,7 @@ function OrderHistoryPage() {
                 )}
               </div>
               <div>
-                <strong
-                  style={{ fontSize: '14.5px', fontWeight: 800 }}
-                >
+                <strong style={{ fontSize: '14.5px', fontWeight: 800 }}>
                   {detailOrder.restaurantName}
                 </strong>
                 {detailOrder.zoneName && (
@@ -1144,7 +1169,7 @@ function OrderHistoryPage() {
                 margin: '16px 0 10px',
               }}
             >
-              📦 Items ({detailOrder.items?.length || 0})
+              {t('orderHistory.detailItems')} ({detailOrder.items?.length || 0})
             </h3>
             <div
               style={{
@@ -1188,7 +1213,7 @@ function OrderHistoryPage() {
                 margin: '16px 0 10px',
               }}
             >
-              📍 Delivery
+              {t('orderHistory.detailDelivery')}
             </h3>
             <div
               style={{
@@ -1228,7 +1253,7 @@ function OrderHistoryPage() {
                 margin: '16px 0 10px',
               }}
             >
-              💰 Payment
+              {t('orderHistory.detailPayment')}
             </h3>
             <div
               style={{
@@ -1241,19 +1266,15 @@ function OrderHistoryPage() {
                 fontSize: '13px',
               }}
             >
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between' }}
-              >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  Subtotal
+                  {t('orderHistory.detailSubtotal')}
                 </span>
                 <strong>৳{detailOrder.subtotal}</strong>
               </div>
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between' }}
-              >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  Delivery Fee
+                  {t('orderHistory.detailDeliveryFee')}
                 </span>
                 <strong>৳{detailOrder.deliveryFee}</strong>
               </div>
@@ -1265,7 +1286,10 @@ function OrderHistoryPage() {
                     color: '#059669',
                   }}
                 >
-                  <span>Coupon ({detailOrder.couponCode})</span>
+                  <span>
+                    {t('orderHistory.detailCoupon')} (
+                    {detailOrder.couponCode})
+                  </span>
                   <strong>-৳{detailOrder.couponDiscount}</strong>
                 </div>
               )}
@@ -1279,7 +1303,9 @@ function OrderHistoryPage() {
                   fontSize: '15px',
                 }}
               >
-                <span style={{ fontWeight: 800 }}>Total</span>
+                <span style={{ fontWeight: 800 }}>
+                  {t('orderHistory.detailTotal')}
+                </span>
                 <strong style={{ color: '#059669', fontSize: '17px' }}>
                   ৳{detailOrder.total}
                 </strong>
@@ -1293,7 +1319,7 @@ function OrderHistoryPage() {
                   fontWeight: 700,
                 }}
               >
-                <span>Payment Method</span>
+                <span>{t('orderHistory.detailPaymentMethod')}</span>
                 <span style={{ textTransform: 'uppercase' }}>
                   {detailOrder.paymentMethod || 'COD'}
                 </span>
@@ -1316,7 +1342,7 @@ function OrderHistoryPage() {
                     className="track-order-button"
                     style={{ flex: 1, justifyContent: 'center' }}
                   >
-                    🛵 Track Order
+                    🛵 {t('orderHistory.trackBtn')}
                   </Link>
                 )}
               {detailOrder.status === 'delivered' &&
@@ -1341,7 +1367,7 @@ function OrderHistoryPage() {
                       boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
                     }}
                   >
-                    ⭐ Rate Order
+                    ⭐ {t('orderHistory.rateBtn')}
                   </button>
                 )}
             </div>

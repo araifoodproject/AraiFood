@@ -1,6 +1,7 @@
 // ============================================================
 // src/pages/PharmacyPage.jsx
-// V3 — Debug-friendly version with console logs
+// V3 — Debug-friendly version
+// Bilingual (BN/EN)
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -9,8 +10,10 @@ import { db } from '../firebase'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { X } from 'lucide-react'
 import PageBackButton from '../components/PageBackButton'
+import { useLanguage } from '../i18n/LanguageContext'
 
 function PharmacyPage() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [allPharmacies, setAllPharmacies] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,7 +35,9 @@ function PharmacyPage() {
 
         console.log('🟢 Total pharmacies loaded:', list.length)
         list.forEach((p) => {
-          console.log(`   → ${p.pharmacyName} | status: "${p.status}" | status type: ${typeof p.status}`)
+          console.log(
+            `   → ${p.pharmacyName} | status: "${p.status}" | status type: ${typeof p.status}`
+          )
         })
 
         const approved = list.filter((p) => p.status === 'approved')
@@ -43,12 +48,13 @@ function PharmacyPage() {
       },
       (err) => {
         console.error('🔴 Pharmacy load error:', err)
-        setError(err.message || 'Failed to load pharmacies')
+        setError(err.message || t('pharmacy.errorGeneric'))
         setLoading(false)
       }
     )
 
     return () => unsub()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ============ CLIENT-SIDE FILTER ============
@@ -96,16 +102,15 @@ function PharmacyPage() {
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
-        <PageBackButton label="Back" fallback="/" />
+        <PageBackButton label={t('pharmacy.back')} fallback="/" />
 
         <div className="restaurants-page-header">
-          <span className="glass-section-label">ARAIFOOD PHARMACY</span>
+          <span className="glass-section-label">{t('pharmacy.badge')}</span>
           <h1>
-            Order <span>Medicines</span>
+            {t('pharmacy.heading1')}{' '}
+            <span>{t('pharmacy.heading2')}</span>
           </h1>
-          <p>
-            Get medicines and health essentials delivered to your doorstep.
-          </p>
+          <p>{t('pharmacy.subtitle')}</p>
         </div>
 
         {/* Stats */}
@@ -113,19 +118,19 @@ function PharmacyPage() {
           <div className="restaurant-page-stats">
             <div className="restaurant-stat">
               <strong>{stats.total}</strong>
-              <span>Pharmacies</span>
+              <span>{t('pharmacy.statTotal')}</span>
             </div>
             <div className="restaurant-stat">
               <strong>{stats.online}</strong>
-              <span>Open Now</span>
+              <span>{t('pharmacy.statOpen')}</span>
             </div>
             <div className="restaurant-stat">
-              <strong>24/7</strong>
-              <span>Emergency</span>
+              <strong>{t('pharmacy.statEmergencyValue')}</strong>
+              <span>{t('pharmacy.statEmergency')}</span>
             </div>
             <div className="restaurant-stat">
-              <strong>Fast</strong>
-              <span>Delivery</span>
+              <strong>{t('pharmacy.statDeliveryValue')}</strong>
+              <span>{t('pharmacy.statDelivery')}</span>
             </div>
           </div>
         )}
@@ -136,7 +141,7 @@ function PharmacyPage() {
             <span>🔍</span>
             <input
               type="text"
-              placeholder="Search pharmacies by name or area..."
+              placeholder={t('pharmacy.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -152,14 +157,14 @@ function PharmacyPage() {
           </div>
 
           <div className="restaurant-sort">
-            <label>Sort by:</label>
+            <label>{t('pharmacy.sortLabel')}</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
             >
-              <option value="rating">Top Rated</option>
-              <option value="delivery">Lowest Fee</option>
-              <option value="name">Name (A-Z)</option>
+              <option value="rating">{t('pharmacy.sortRating')}</option>
+              <option value="delivery">{t('pharmacy.sortDelivery')}</option>
+              <option value="name">{t('pharmacy.sortName')}</option>
             </select>
           </div>
         </div>
@@ -168,26 +173,29 @@ function PharmacyPage() {
         {loading ? (
           <div className="panel-loading">
             <div className="panel-loading-spinner"></div>
-            <p>Loading pharmacies...</p>
+            <p>{t('pharmacy.loading')}</p>
           </div>
         ) : error ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">⚠️</div>
-            <h2>Could not load pharmacies</h2>
+            <h2>{t('pharmacy.errorTitle')}</h2>
             <p>{error}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="restaurant-empty-state">
             <div className="empty-icon">💊</div>
-            <h2>No pharmacies found</h2>
+            <h2>{t('pharmacy.emptyTitle')}</h2>
             <p>
               {search
-                ? 'Try a different search term'
+                ? t('pharmacy.emptySearch')
                 : allPharmacies.length === 0
-                ? 'No pharmacies in database yet'
+                ? t('pharmacy.emptyDatabase')
                 : pharmacies.length === 0
-                ? `${allPharmacies.length} pharmacies total, none approved`
-                : 'Pharmacies will appear here soon'}
+                ? t('pharmacy.emptyNoneApproved').replace(
+                    '{n}',
+                    allPharmacies.length
+                  )
+                : t('pharmacy.emptySoon')}
             </p>
           </div>
         ) : (
@@ -219,7 +227,9 @@ function PharmacyPage() {
                         isOpen ? 'online-badge' : ''
                       }`}
                     >
-                      {isOpen ? '● Open' : '● Closed'}
+                      {isOpen
+                        ? t('pharmacy.badgeOpen')
+                        : t('pharmacy.badgeClosed')}
                     </div>
                     {p.rating != null && (
                       <div className="all-restaurant-rating">
@@ -237,14 +247,17 @@ function PharmacyPage() {
                       </span>
                     </div>
                     <p className="restaurant-cuisine">
-                      📍 {p.address || 'Araihazar'}
+                      📍 {p.address || t('pharmacy.defaultAddress')}
                     </p>
                     <div className="all-restaurant-meta">
-                      <span>🕐 {p.deliveryTime || '20-30 min'}</span>
-                      <span>💊 Medicines</span>
+                      <span>
+                        🕐{' '}
+                        {p.deliveryTime || t('pharmacy.defaultDeliveryTime')}
+                      </span>
+                      <span>{t('pharmacy.medicinesTag')}</span>
                     </div>
                     <button className="restaurant-menu-button">
-                      Browse Medicines →
+                      {t('pharmacy.browseMedicines')}
                     </button>
                   </div>
                 </div>

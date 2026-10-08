@@ -17158,4 +17158,1919 @@ header.aa-navbar-pill {
   .aa-nav-mobile-menu-btn {
     display: inline-flex;
   }
+}/* ============================================================
+   MOBILE RESPONSIVE FIX — APPENDED V1
+   Target: 1024px / 768px / 480px / 360px
+   Overrides all earlier rules for small screens
+   ============================================================ */
+
+/* ============================================================
+   1. GLOBAL TYPOGRAPHY — scale down on mobile
+   ============================================================ */
+@media (max-width: 768px) {
+  h1 { font-size: 28px !important; }
+  h2 { font-size: 22px !important; }
+  h3 { font-size: 18px !important; }
+  h4 { font-size: 15px !important; }
+  body { font-size: 14px !important; }
+}
+
+@media (max-width: 480px) {
+  h1 { font-size: 24px !important; }
+  h2 { font-size: 20px !important; }
+  h3 { font-size: 16px !important; }
+  body { font-size: 13.5px !important; }
+}
+
+/* ============================================================
+   2. RESTAURANTS-PAGE / GENERIC PAGE CONTAINERS
+   ============================================================ */
+@media (max-width: 768px) {
+  .restaurants-page,
+  .restaurant-page,
+  .cart-page,
+  .checkout-page,
+  .account-page {
+    padding: 24px 16px 40px !important;
+  }
+
+  .restaurants-page-header {
+    margin-bottom: 28px !important;
+  }
+
+  .restaurants-page-header h1 {
+    font-size: 28px !important;
+  }
+
+  .restaurants-page-header p {
+    font-size: 13.5px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .restaurants-page,
+  .restaurant-page,
+  .cart-page,
+  .checkout-page,
+  .account-page {
+    padding: 20px 12px 32px !important;
+  }
+
+  .restaurants-page-header h1 {
+    font-size: 24px !important;
+  }
+}
+
+/* ============================================================
+   3. CONTACT PAGE — grid collapse
+   ============================================================ */
+@media (max-width: 768px) {
+  .restaurants-page-container > div[style*="minmax"],
+  .restaurants-page-container > div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .restaurants-page-container > div[style*="repeat(auto-fit"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============================================================
+   4. HELP PAGE — FAQ items
+   ============================================================ */
+@media (max-width: 768px) {
+  .account-card > div[style*="repeat(auto-fit"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .account-card button[style*="padding"] + div,
+  .account-card > div[style*="flex-direction: column"] > div > div:last-child {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+    padding-bottom: 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-card > div[style*="padding: 36px"],
+  .account-card > div[style*="padding: 32px"] {
+    padding: 24px 16px !important;
+  }
+}
+
+/* ============================================================
+   5. TERMS PAGE — section padding fix
+   ============================================================ */
+@media (max-width: 768px) {
+  .account-card > p[style*="paddingLeft"],
+  .account-card > p[style*="padding-left"] {
+    padding-left: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.65 !important;
+  }
+
+  .account-card h2[style*="paddingTop"] {
+    padding-top: 4px !important;
+    font-size: 15px !important;
+    word-break: break-word !important;
+  }
+
+  .account-card > div[style*="minmax(200px"] {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
+}
+
+/* ============================================================
+   6. ABOUT / OFFERS PAGE (App.jsx inline)
+   ============================================================ */
+@media (max-width: 768px) {
+  .account-card {
+    padding: 22px 18px !important;
+  }
+
+  .account-card h2 {
+    font-size: 20px !important;
+    word-break: break-word !important;
+  }
+
+  .account-card h3 {
+    font-size: 16px !important;
+  }
+
+  .account-card p {
+    font-size: 13.5px !important;
+    line-height: 1.6 !important;
+    word-break: break-word !important;
+  }
+
+  .account-divider {
+    margin: 14px 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-card {
+    padding: 18px 14px !important;
+  }
+}
+
+/* ============================================================
+   7. CART PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .cart-page-layout {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .cart-page-header h1 {
+    font-size: 26px !important;
+  }
+
+  .cart-page-item {
+    flex-wrap: wrap !important;
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .cart-page-item-image {
+    width: 56px !important;
+    height: 56px !important;
+    min-width: 56px !important;
+    font-size: 26px !important;
+  }
+
+  .cart-page-item-info {
+    flex: 1 1 100% !important;
+  }
+
+  .cart-page-item-info h4 {
+    font-size: 13.5px !important;
+    white-space: normal !important;
+  }
+
+  .cart-page-item-total {
+    font-size: 15px !important;
+    margin-left: auto !important;
+    align-self: center !important;
+  }
+
+  .cart-page-qty {
+    align-self: flex-start !important;
+  }
+
+  .cart-page-item-remove {
+    align-self: flex-start !important;
+    margin-left: auto !important;
+  }
+
+  .cart-page-restaurant {
+    padding: 14px !important;
+    gap: 12px !important;
+  }
+
+  .cart-page-restaurant-logo {
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    font-size: 22px !important;
+  }
+
+  .cart-page-summary {
+    padding: 18px !important;
+  }
+
+  .cart-page-summary-total strong {
+    font-size: 20px !important;
+  }
+
+  .cart-page-item-count {
+    font-size: 11px !important;
+    padding: 5px 10px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .cart-page-header h1 {
+    font-size: 22px !important;
+  }
+
+  .cart-page-checkout-btn {
+    padding: 13px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* ============================================================
+   8. CHECKOUT PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .checkout-content {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .checkout-summary {
+    position: static !important;
+    order: -1 !important;
+  }
+
+  .checkout-card {
+    padding: 18px !important;
+    gap: 14px !important;
+  }
+
+  .checkout-title h1 {
+    font-size: 24px !important;
+  }
+
+  .checkout-title p {
+    font-size: 13.5px !important;
+  }
+
+  .checkout-card-heading h2 {
+    font-size: 16px !important;
+  }
+
+  .checkout-card .form-row,
+  .checkout-card > form > div[style*="grid-template-columns: 1fr 1fr"],
+  .checkout-card > div > div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .delivery-time-options,
+  .payment-options {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .reward-options {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .coupon-input-group {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .coupon-input-group input,
+  .coupon-input-group button {
+    width: 100% !important;
+  }
+
+  .summary-restaurant {
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .summary-restaurant-logo {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    font-size: 20px !important;
+  }
+
+  .summary-total strong {
+    font-size: 22px !important;
+  }
+
+  .place-order-button {
+    padding: 15px !important;
+    font-size: 14.5px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .checkout-card {
+    padding: 14px !important;
+  }
+
+  .checkout-title h1 {
+    font-size: 20px !important;
+  }
+
+  .summary-total strong {
+    font-size: 20px !important;
+  }
+}
+
+/* ============================================================
+   9. ORDER SUCCESS (Pharmacy + Food)
+   ============================================================ */
+@media (max-width: 768px) {
+  .order-success-container {
+    padding: 28px 18px !important;
+    margin: 24px auto !important;
+  }
+
+  .order-success-icon {
+    font-size: 60px !important;
+  }
+
+  .order-success-container h1 {
+    font-size: 22px !important;
+  }
+
+  .order-success-container p {
+    font-size: 14px !important;
+  }
+
+  .order-success-buttons {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .order-success-buttons > * {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .tracking-progress {
+    gap: 4px !important;
+    margin: 18px 0 !important;
+  }
+
+  .tracking-icon {
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 18px !important;
+  }
+
+  .tracking-text strong {
+    font-size: 11px !important;
+  }
+
+  .tracking-text small {
+    font-size: 9.5px !important;
+  }
+
+  .tracking-line {
+    margin-top: -24px !important;
+  }
+
+  .tracking-status-text {
+    font-size: 13px !important;
+    padding: 12px 16px !important;
+  }
+
+  .rider-profile-card {
+    padding: 14px !important;
+    gap: 10px !important;
+  }
+
+  .rider-avatar {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    font-size: 22px !important;
+  }
+
+  .rider-info strong {
+    font-size: 13px !important;
+  }
+
+  .call-rider-button {
+    padding: 8px 14px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* ============================================================
+   10. ORDER HISTORY
+   ============================================================ */
+@media (max-width: 768px) {
+  .order-history-card {
+    padding: 16px !important;
+    gap: 12px !important;
+  }
+
+  .order-history-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .order-status-badge {
+    align-self: flex-start !important;
+    font-size: 11.5px !important;
+    padding: 5px 12px !important;
+  }
+
+  .order-history-logo {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    font-size: 20px !important;
+  }
+
+  .order-history-restaurant strong {
+    font-size: 14px !important;
+  }
+
+  .order-history-items {
+    padding: 12px !important;
+  }
+
+  .history-item {
+    font-size: 13px !important;
+  }
+
+  .order-history-total strong {
+    font-size: 20px !important;
+  }
+
+  .order-history-actions {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .order-history-actions > * {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .restaurant-filter-row {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 6px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .restaurant-filter {
+    flex-shrink: 0 !important;
+  }
+
+  .restaurant-page-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .restaurant-stat strong {
+    font-size: 18px !important;
+  }
+
+  .restaurant-stat span {
+    font-size: 11.5px !important;
+  }
+
+  .outside-area-modal-content {
+    padding: 20px 16px !important;
+    border-radius: 18px !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .outside-area-modal-content h2 {
+    font-size: 17px !important;
+  }
+}
+
+/* ============================================================
+   11. TRACK ORDER PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .track-map-section h2 {
+    font-size: 17px !important;
+  }
+
+  .map-legend {
+    padding: 10px 14px !important;
+    gap: 12px !important;
+    border-radius: 14px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .map-legend-item {
+    font-size: 12px !important;
+  }
+
+  .track-order-details {
+    padding: 16px !important;
+    gap: 16px !important;
+  }
+
+  .track-detail-section h3 {
+    font-size: 14px !important;
+  }
+
+  .track-detail-row {
+    font-size: 13px !important;
+  }
+
+  .track-detail-row.total-row strong {
+    font-size: 18px !important;
+  }
+}
+
+/* ============================================================
+   12. FAVORITES PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .favorite-actions {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .favorite-actions .restaurant-menu-button,
+  .favorite-actions .remove-favorite-button {
+    width: 100% !important;
+  }
+}
+
+/* ============================================================
+   13. PHARMACY PAGES
+   ============================================================ */
+@media (max-width: 768px) {
+  .menu-section > div[style*="display: flex"] {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 6px !important;
+  }
+
+  .menu-section > div[style*="display: flex"] > button {
+    flex-shrink: 0 !important;
+  }
+
+  .food-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .food-card {
+    border-radius: 18px !important;
+  }
+
+  .food-image {
+    height: 120px !important;
+    font-size: 36px !important;
+  }
+
+  .food-info {
+    padding: 12px !important;
+    gap: 6px !important;
+  }
+
+  .food-info h3 {
+    font-size: 13.5px !important;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+  }
+
+  .food-info p {
+    font-size: 11px !important;
+    min-height: auto !important;
+  }
+
+  .food-price-box strong {
+    font-size: 15px !important;
+  }
+
+  .food-bottom button {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+
+  button[style*="position: fixed"][style*="bottom: 90px"] {
+    bottom: 80px !important;
+    right: 12px !important;
+    height: 50px !important;
+    padding: 0 16px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .food-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============================================================
+   14. GAMING PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .restaurants-page-container > div[style*="overflow-x: auto"] {
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .restaurants-page-container > div[style*="overflow-x: auto"] > button {
+    flex-shrink: 0 !important;
+  }
+
+  .admin-section > div[style*="display: grid"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .admin-section strong[style*="letterSpacing"] {
+    font-size: 15px !important;
+    word-break: break-all !important;
+  }
+
+  .restaurants-page-container > div[style*="minmax(180px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .outside-area-modal-content[style*="maxWidth: 520px"] {
+    max-width: calc(100vw - 20px) !important;
+    padding: 18px 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .restaurants-page-container > div[style*="minmax(180px"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============================================================
+   15. GAMING ORDERS PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .restaurants-page-container > div[style*="grid-template-columns"] > div > div[style*="minmax(180px"] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .restaurants-page-container div[style*="padding: 12px 14px"][style*="flex-wrap"] {
+    flex-direction: column !important;
+    gap: 6px !important;
+    align-items: flex-start !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .restaurants-page-container > div[style*="grid-template-columns"] > div > div[style*="minmax(180px"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============================================================
+   16. ACCOUNT PAGE
+   ============================================================ */
+@media (max-width: 768px) {
+  .account-page {
+    padding: 20px 14px 40px !important;
+  }
+
+  .account-header h1 {
+    font-size: 24px !important;
+  }
+
+  .account-header p {
+    font-size: 13.5px !important;
+  }
+
+  .account-header-top {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .account-card {
+    padding: 20px 16px !important;
+    gap: 18px !important;
+  }
+
+  .account-profile {
+    flex-direction: column !important;
+    text-align: center !important;
+    gap: 14px !important;
+  }
+
+  .account-avatar {
+    width: 72px !important;
+    height: 72px !important;
+    font-size: 32px !important;
+  }
+
+  .profile-main-info h2 {
+    font-size: 19px !important;
+  }
+
+  .profile-main-info p {
+    font-size: 13px !important;
+  }
+
+  .rewards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .reward-card {
+    padding: 14px 16px !important;
+  }
+
+  .reward-icon {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    font-size: 22px !important;
+  }
+
+  .reward-info strong {
+    font-size: 17px !important;
+  }
+
+  .account-info-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .account-actions {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .account-logout-button,
+  .account-home-button-large {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  .account-input-wrapper input,
+  .account-textarea-wrapper textarea {
+    padding: 12px 14px 12px 38px !important;
+    font-size: 13.5px !important;
+  }
+
+  .account-input-icon,
+  .account-textarea-icon {
+    left: 12px !important;
+    font-size: 14px !important;
+  }
+
+  .account-save-button {
+    padding: 13px !important;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-header h1 {
+    font-size: 21px !important;
+  }
+
+  .account-card {
+    padding: 16px 12px !important;
+  }
+}
+
+/* ============================================================
+   17. MODALS (outside-area-modal)
+   ============================================================ */
+@media (max-width: 768px) {
+  .outside-area-modal {
+    padding: 12px !important;
+    align-items: flex-end !important;
+  }
+
+  .outside-area-modal-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 22px 18px !important;
+    border-radius: 22px 22px 0 0 !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    animation: slideUpModal 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  .outside-area-icon {
+    font-size: 48px !important;
+  }
+
+  .outside-area-modal-content h2 {
+    font-size: 18px !important;
+  }
+
+  .outside-area-modal-content p {
+    font-size: 13.5px !important;
+  }
+
+  .conflict-modal-buttons {
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+
+  .conflict-modal-buttons .cancel-btn,
+  .conflict-modal-buttons .confirm-btn {
+    max-width: none !important;
+    width: 100% !important;
+    flex: none !important;
+    padding: 13px !important;
+  }
+
+  @keyframes slideUpModal {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+}
+
+/* ============================================================
+   18. FORM ELEMENTS — global mobile override
+   ============================================================ */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea,
+  .checkout-card .form-group input,
+  .checkout-card .form-group textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ============================================================
+   19. TAP TARGETS — minimum 44px for touch
+   ============================================================ */
+@media (max-width: 768px) {
+  button,
+  a[role="button"],
+  .checkout-button,
+  .login-submit-button,
+  .place-order-button,
+  .cart-page-checkout-btn,
+  .account-save-button,
+  .track-order-button {
+    min-height: 44px !important;
+  }
+}
+
+/* ============================================================
+   20. PAGE BACK BUTTON — larger tap target
+   ============================================================ */
+@media (max-width: 768px) {
+  .page-back-btn {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+    min-height: 40px !important;
+  }
+}
+
+/* ============================================================
+   END MOBILE RESPONSIVE FIX — PART 1
+   ============================================================ *//* ============================================================
+   ============================================================
+   MOBILE RESPONSIVE FIX — APPENDED V2 (FINAL)
+   Targets: Contact, Help, Terms, Account, Careers, Panels
+   Overrides inline styles from JSX (needs !important)
+   ============================================================
+   ============================================================ */
+
+/* ============================================================
+   1. CONTACT PAGE — Force 2-col layout → 1-col
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Main 2-col grid (info + form) → stack */
+  .restaurants-page-container > div[style*="gridTemplateColumns"][style*="1.4fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Fallback: any 2-col grid in page container */
+  .restaurants-page-container > div[style*="grid"][style*="1.4fr"],
+  .restaurants-page-container > div[style*="minmax(0, 1fr)"] {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* Form rows: "1fr 1fr" → single column */
+  .restaurants-page-container form > div[style*="gridTemplateColumns"][style*="1fr 1fr"],
+  .restaurants-page-container .account-card > form > div[style*="1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Any inline grid with 1fr 1fr inside page */
+  .restaurants-page-container div[style*="gridTemplateColumns: 1fr 1fr"],
+  .restaurants-page-container div[style*="gridTemplateColumns:'1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Contact info cards — small padding on mobile */
+@media (max-width: 480px) {
+  .restaurants-page-container a[href^="mailto"],
+  .restaurants-page-container a[href^="tel"],
+  .restaurants-page-container a[href*="google.com/maps"],
+  .restaurants-page-container div[style*="padding: 12px"] {
+    padding: 10px !important;
+  }
+
+  .restaurants-page-container .account-card {
+    padding: 18px 14px !important;
+  }
+}
+
+/* ============================================================
+   2. HELP PAGE — FAQ answer padding + contact cards
+   ============================================================ */
+@media (max-width: 768px) {
+  /* FAQ answer body — 70px padding-left → 18px on mobile */
+  .account-card div[style*="padding"][style*="70px"],
+  .account-card > div > div > div:last-child[style*="padding"] {
+    padding: 0 16px 16px 16px !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Quick contact cards grid (auto-fit 220px) — full width */
+  .account-card > div[style*="grid"][style*="220px"],
+  .restaurants-page-container > div[style*="minmax(220px"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* ContactCard (button/a) — reduce padding */
+  .account-card > a[style*="padding: 18px"],
+  .account-card > button[style*="padding: 18px"] {
+    padding: 14px !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* FAQ question button */
+  .account-card button[style*="padding: 16px 18px"] {
+    padding: 14px !important;
+    gap: 10px !important;
+  }
+
+  /* FAQ question icon — smaller */
+  .account-card button[style*="padding"] > div[style*="width: 38px"] {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  /* CTA section padding */
+  .account-card[style*="padding: 36px"],
+  .account-card[style*="padding: 32px"] {
+    padding: 22px 16px !important;
+  }
+}
+
+/* ============================================================
+   3. TERMS PAGE — Section body padding-left fix
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Terms body paragraph — 58px padding-left → 0 */
+  .account-card > p[style*="paddingLeft"],
+  .account-card > p[style*="padding-left"],
+  .account-card > p[style*="58px"] {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.65 !important;
+  }
+
+  /* Section header title paddingTop */
+  .account-card h2[style*="paddingTop"] {
+    padding-top: 4px !important;
+    font-size: 15px !important;
+    word-break: break-word !important;
+  }
+
+  /* Section icon smaller */
+  .account-card > div > div[style*="width: 44px"][style*="height: 44px"] {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  /* TOC grid (auto-fit 200px) — single column */
+  .account-card > div[style*="minmax(200px"] {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
+
+  /* TOC item padding */
+  .account-card > div > a[style*="padding: 8px 12px"] {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* ============================================================
+   4. ACCOUNT PAGE — Fix inline grid conflicts
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Stats grid — force 2-col even though inline says minmax(160px) */
+  .account-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Reward card padding */
+  .account-stats-grid .reward-card {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .account-stats-grid .reward-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    font-size: 18px !important;
+  }
+
+  .account-stats-grid .reward-info strong {
+    font-size: 15px !important;
+  }
+
+  .account-stats-grid .reward-info small {
+    font-size: 10px !important;
+  }
+
+  /* Quick actions grid (auto-fit 200px) */
+  .account-quick-actions {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Quick actions link padding */
+  .account-quick-actions > a {
+    padding: 14px 16px !important;
+    gap: 12px !important;
+  }
+
+  .account-quick-actions > a > div[style*="width: 46px"] {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 20px !important;
+  }
+
+  /* Logout/Home buttons — stack vertically */
+  .account-page > .account-container > div[style*="grid"][style*="minmax(200px"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Logout / Home button padding */
+  .account-page button[style*="padding: 16px 20px"] {
+    padding: 14px 18px !important;
+    font-size: 13.5px !important;
+  }
+
+  /* Zone badge + status row */
+  .profile-main-info > div[style*="flex"] {
+    gap: 8px !important;
+  }
+
+  /* Notification card — column */
+  .notification-card-inner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .notification-card-inner > div[style*="minWidth"] {
+    min-width: 0 !important;
+  }
+
+  /* Notification icon */
+  .notification-card-inner div[style*="width: 52px"] {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 20px !important;
+  }
+
+  /* Notification toggle button */
+  .notification-toggle-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Avatar photo upload buttons row */
+  .account-profile > div[style*="display: flex"]:last-child {
+    justify-content: center !important;
+  }
+
+  /* Sticky save bar */
+  .account-sticky-save-bar {
+    bottom: 12px !important;
+    padding: 12px !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .account-sticky-save-bar button {
+    width: 100% !important;
+  }
+
+  /* Account info items padding */
+  .account-info-item {
+    padding: 12px 14px !important;
+    gap: 10px !important;
+  }
+
+  .account-info-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    font-size: 16px !important;
+  }
+
+  /* Profile avatar */
+  .account-avatar {
+    width: 80px !important;
+    height: 80px !important;
+    font-size: 30px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .account-stats-grid {
+    gap: 6px !important;
+  }
+
+  .account-stats-grid .reward-card {
+    padding: 10px 8px !important;
+  }
+
+  .account-stats-grid .reward-info strong {
+    font-size: 14px !important;
+  }
+}
+
+/* ============================================================
+   5. CAREERS PAGE — Reduce card padding
+   ============================================================ */
+@media (max-width: 768px) {
+  .restaurants-page-container .account-card[style*="padding: 60px"],
+  .restaurants-page-container .account-card[style*="60px 32px"] {
+    padding: 32px 20px !important;
+  }
+
+  /* Icon circle smaller */
+  .restaurants-page-container .account-card div[style*="width: 88px"][style*="height: 88px"] {
+    width: 68px !important;
+    height: 68px !important;
+  }
+
+  .restaurants-page-container .account-card h2 {
+    font-size: 20px !important;
+  }
+
+  .restaurants-page-container .account-card p {
+    font-size: 13.5px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .restaurants-page-container .account-card[style*="padding: 60px"] {
+    padding: 24px 16px !important;
+  }
+}
+
+/* ============================================================
+   6. RESTAURANTS PAGE — Fix inline grid conflicts
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Dish grid — force proper responsive */
+  .glass-dish-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Category chip row — horizontal scroll */
+  .restaurants-page-container > div[style*="display: flex"][style*="gap: 10px"] {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 6px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .restaurants-page-container > div[style*="display: flex"][style*="gap: 10px"] > * {
+    flex-shrink: 0 !important;
+  }
+
+  /* Location notice banner — reduce minWidth */
+  .restaurants-page-container div[style*="minWidth: 180px"],
+  .restaurants-page-container div[style*="min-width: 180px"] {
+    min-width: 0 !important;
+  }
+
+  /* Filter row — horizontal scroll */
+  .restaurant-filter-row {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 6px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .restaurant-filter {
+    flex-shrink: 0 !important;
+  }
+
+  /* Sort row */
+  .restaurants-page-container > .restaurant-controls > div[style*="justify-content: space-between"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .restaurant-sort {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .restaurant-sort select {
+    flex: 1 !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .glass-dish-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ============================================================
+   7. RESTAURANT PANEL — Review padding fix
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Review comment — 56px padding-left → 0 */
+  .rest-v2-view div[style*="paddingLeft: 56px"],
+  .rest-v2-view p[style*="paddingLeft"] {
+    padding-left: 0 !important;
+    font-size: 13px !important;
+  }
+
+  /* Rider rating badge margin-left */
+  .rest-v2-view div[style*="marginLeft: 56px"] {
+    margin-left: 0 !important;
+  }
+
+  /* Avg number smaller */
+  .rest-v2-view div[style*="fontSize: 48px"] {
+    font-size: 36px !important;
+  }
+
+  /* Reviews summary card — stack */
+  .rest-v2-view > div[style*="display: flex"][style*="gap: 20px"] {
+    flex-direction: column !important;
+    gap: 14px !important;
+    padding: 16px !important;
+  }
+
+  /* Menu image preview — smaller */
+  .rest-v2-form-group > div[style*="maxWidth: 200px"] {
+    max-width: 100% !important;
+  }
+
+  /* Order header — align start */
+  .rest-v2-order-header > div[style*="flex"] {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Payment method label in order total */
+  .rest-v2-order-totals > div {
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ============================================================
+   8. RIDER PANEL — Cash tab font + spacing fix
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Cash tab big amounts — 32px → 26px */
+  .rider-v2-view div[style*="fontSize: 32px"] {
+    font-size: 26px !important;
+  }
+
+  /* Cash section cards — padding */
+  .rider-v2-view > div[style*="padding: 20px"][style*="borderRadius: 18px"] {
+    padding: 16px !important;
+  }
+
+  /* Cash section cards padding 16px */
+  .rider-v2-view div[style*="padding: 16px"][style*="borderRadius: 14px"] {
+    padding: 14px !important;
+  }
+
+  /* Send money modal */
+  .rider-v2 div[style*="maxWidth: 460px"] {
+    max-width: calc(100vw - 24px) !important;
+    padding: 20px 16px !important;
+  }
+
+  /* Send money modal — close button */
+  .rider-v2 div[style*="maxWidth: 460px"] > div {
+    padding: 16px !important;
+  }
+
+  /* Method buttons wrap */
+  .rider-v2 div[style*="flex-wrap: wrap"] {
+    gap: 6px !important;
+  }
+
+  /* Bottom nav compact */
+  .rider-v2-navbtn {
+    min-width: 56px !important;
+    padding: 7px 10px !important;
+    font-size: 9.5px !important;
+  }
+
+  .rider-v2-navbtn-icon {
+    font-size: 16px !important;
+  }
+}
+
+/* ============================================================
+   9. MODALS (Global) — Bottom sheet style on mobile
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Full-screen modals from bottom */
+  .outside-area-modal {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .outside-area-modal-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 92vh !important;
+    padding: 20px 16px !important;
+    border-radius: 22px 22px 0 0 !important;
+    margin: 0 !important;
+  }
+
+  .outside-area-modal-content h2 {
+    font-size: 18px !important;
+  }
+
+  .outside-area-modal-content p {
+    font-size: 13.5px !important;
+  }
+
+  /* Conflict modal buttons */
+  .conflict-modal-buttons {
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+
+  .conflict-modal-buttons .cancel-btn,
+  .conflict-modal-buttons .confirm-btn {
+    flex: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 48px !important;
+  }
+
+  /* Account add money modal */
+  .account-page div[style*="maxWidth: 520px"][style*="width: 100%"] {
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 22px 22px 0 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* ============================================================
+   10. GLOBAL FORM ELEMENTS — Prevent iOS zoom
+   ============================================================ */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ============================================================
+   11. GLOBAL TAP TARGETS — Minimum 44px
+   ============================================================ */
+@media (max-width: 768px) {
+  .checkout-button,
+  .login-submit-button,
+  .place-order-button,
+  .cart-page-checkout-btn,
+  .account-save-button,
+  .track-order-button,
+  .page-back-btn,
+  .aa-service-btn,
+  .account-primary-button,
+  .restaurant-menu-button,
+  .glass-dish-add,
+  .food-bottom button {
+    min-height: 44px !important;
+  }
+}
+
+/* ============================================================
+   12. FOOTER — Ensure proper stack
+   ============================================================ */
+@media (max-width: 640px) {
+  .aa-footer {
+    padding: 24px 18px 20px !important;
+    margin: 32px 12px 20px !important;
+    border-radius: 20px !important;
+  }
+
+  .aa-footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  .aa-footer-bottom {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+  }
+
+  .aa-footer-social {
+    justify-content: flex-start !important;
+  }
+
+  .aa-footer-apps {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+}
+
+/* ============================================================
+   13. NAVBAR MOBILE MENU — Improvements
+   ============================================================ */
+@media (max-width: 640px) {
+  .glass-mobile-menu {
+    width: 300px !important;
+    padding: 16px !important;
+  }
+
+  .glass-mobile-link {
+    padding: 12px 14px !important;
+    font-size: 14px !important;
+  }
+
+  .glass-mobile-title {
+    font-size: 18px !important;
+  }
+}
+
+/* ============================================================
+   14. TYPOGRAPHY POLISH — Small screens
+   ============================================================ */
+@media (max-width: 480px) {
+  /* Prevent overflow from long words */
+  h1, h2, h3, h4, h5, h6,
+  p, span, div, a, strong {
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+  }
+
+  /* Headings with highlight spans — prevent overflow */
+  .restaurants-page-header h1,
+  .checkout-title h1,
+  .cart-page-header h1,
+  .account-header h1 {
+    hyphens: auto !important;
+    -webkit-hyphens: auto !important;
+    word-break: break-word !important;
+  }
+}
+
+/* ============================================================
+   15. SCROLLABLE TABLES (Admin) — Horizontal scroll
+   ============================================================ */
+@media (max-width: 900px) {
+  .admin-main-content table,
+  .admin-main-content .data-table {
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+/* ============================================================
+   16. PHARMACY CART FLOATING BUTTON — Small screen
+   ============================================================ */
+@media (max-width: 480px) {
+  /* Floating cart button from pharmacy detail */
+  button[style*="position: fixed"][style*="bottom"][style*="right"] {
+    height: 48px !important;
+    min-width: 48px !important;
+    padding: 0 16px !important;
+    font-size: 13px !important;
+    bottom: 80px !important;
+    right: 12px !important;
+  }
+}
+
+/* ============================================================
+   17. SAFE AREA (iPhone X / Notch) — Padding
+   ============================================================ */
+@supports (padding: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    /* Ensure fixed bottom bars respect safe area */
+    .mobile-cart-bar,
+    .mobile-cart-checkout-bar,
+    .mobile-checkout-bar {
+      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Add bottom padding to page containers when bar is present */
+    .cart-page,
+    .checkout-page,
+    .restaurant-page {
+      padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+  }
+}
+
+/* ============================================================
+   18. LANGUAGE SWITCHER — Mobile friendly
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Desktop lang switcher hidden on mobile (already in CSS) */
+  .aa-nav-lang-desktop {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   19. ONESIGNAL / NOTIFICATION PROMPT — Mobile
+   ============================================================ */
+@media (max-width: 480px) {
+  /* OneSignal bell */
+  #onesignal-bell-container {
+    bottom: 100px !important;
+    right: 12px !important;
+  }
+}
+
+/* ============================================================
+   20. FIX — Very Small Phones (<=360px) — Global
+   ============================================================ */
+@media (max-width: 360px) {
+  /* Page containers */
+  .restaurants-page,
+  .checkout-page,
+  .cart-page,
+  .account-page,
+  .restaurant-page {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  /* Headings */
+  h1 {
+    font-size: 20px !important;
+  }
+
+  h2 {
+    font-size: 17px !important;
+  }
+
+  /* Buttons */
+  .checkout-button,
+  .login-submit-button,
+  .place-order-button,
+  .cart-page-checkout-btn {
+    font-size: 13.5px !important;
+    padding: 13px 16px !important;
+  }
+
+  /* Hide unnecessary elements on very small screens */
+  .cart-page-item-total {
+    display: none !important;
+  }
+
+  .aa-restaurant-meta span:nth-child(n+3) {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   END MOBILE RESPONSIVE FIX — PART 2 (FINAL)
+   ============================================================ *//* ============================================================
+   DARK MODE FIX — PartnerCTA Card Text Visibility
+   Own a Restaurant? / Want to be a Rider? / Own a Pharmacy?
+   ============================================================ */
+
+/* ---- Restaurant Card (সবুজ) ---- */
+.aa-partner-card.restaurant {
+  background: linear-gradient(135deg, #dcfce7 0%, #d1fae5 100%) !important;
+  color: #14532d !important;
+}
+
+.aa-partner-card.restaurant .aa-partner-title {
+  color: #14532d !important;
+  font-weight: 700 !important;
+}
+
+.aa-partner-card.restaurant .aa-partner-sub {
+  color: #166534 !important;
+}
+
+.aa-partner-card.restaurant .aa-partner-desc {
+  color: #15803d !important;
+}
+
+.aa-partner-card.restaurant .aa-partner-icon-circle {
+  background: #16a34a !important;
+  color: #ffffff !important;
+}
+
+/* ---- Rider Card (নীল) ---- */
+.aa-partner-card.rider {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+  color: #1e3a8a !important;
+}
+
+.aa-partner-card.rider .aa-partner-title {
+  color: #1e3a8a !important;
+  font-weight: 700 !important;
+}
+
+.aa-partner-card.rider .aa-partner-sub {
+  color: #1e40af !important;
+}
+
+.aa-partner-card.rider .aa-partner-desc {
+  color: #1d4ed8 !important;
+}
+
+.aa-partner-card.rider .aa-partner-icon-circle {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* ---- ডার্ক মোডেও একই রঙ থাকবে (সাদা হবে না) ---- */
+@media (prefers-color-scheme: dark) {
+  .aa-partner-card.restaurant {
+    background: linear-gradient(135deg, #dcfce7 0%, #d1fae5 100%) !important;
+  }
+
+  .aa-partner-card.restaurant .aa-partner-title {
+    color: #14532d !important;
+  }
+
+  .aa-partner-card.restaurant .aa-partner-sub {
+    color: #166534 !important;
+  }
+
+  .aa-partner-card.restaurant .aa-partner-desc {
+    color: #15803d !important;
+  }
+
+  .aa-partner-card.rider {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+  }
+
+  .aa-partner-card.rider .aa-partner-title {
+    color: #1e3a8a !important;
+  }
+
+  .aa-partner-card.rider .aa-partner-sub {
+    color: #1e40af !important;
+  }
+
+  .aa-partner-card.rider .aa-partner-desc {
+    color: #1d4ed8 !important;
+  }
+}
+
+/* ---- ডার্ক মোড বাটন ফিক্স ---- */
+.aa-partner-btn {
+  color: #ffffff !important;
+}
+
+.aa-partner-card.restaurant .aa-partner-btn {
+  background: #16a34a !important;
+  color: #ffffff !important;
+}
+
+.aa-partner-card.rider .aa-partner-btn {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}/* ============================================================
+   HELP BUTTON FIX — টেক্সট স্পষ্ট করা
+   ============================================================ */
+
+/* আপনার Help বাটনের class name এখানে বসান */
+.help-btn,
+.aa-help-btn,
+button.help,
+a.help-btn {
+  background: #0d9488 !important;   /* গাঢ় teal */
+  color: #ffffff !important;         /* সাদা টেক্সট */
+  font-weight: 600 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;  /* টেক্সট স্পষ্ট দেখানোর জন্য */
+}
+
+.help-btn:hover,
+.aa-help-btn:hover {
+  background: #0f766e !important;
+}/* ============================================================
+   MOBILE FIX — aa-toggle-switch + aa-help-btn
+   Footer.jsx (AraiWallet) — V6
+   ============================================================ */
+
+/* ---------- TOGGLE SWITCH (সব স্ক্রিনে ঠিক থাকবে) ---------- */
+
+.aa-toggle-switch {
+  position: relative !important;
+  display: inline-block !important;
+  width: 48px !important;
+  height: 26px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  min-height: 26px !important;
+  max-height: 26px !important;
+  border-radius: 999px !important;
+  background-color: #334155 !important;   /* OFF অবস্থায় গাঢ় ধূসর */
+  border: none !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  transition: background-color 0.3s ease !important;
+  flex-shrink: 0 !important;
+  vertical-align: middle !important;
+  overflow: visible !important;
+}
+
+/* Toggle ON থাকলে ব্যাকগ্রাউন্ড সবুজ */
+.aa-toggle-switch.on {
+  background-color: #10b981 !important;
+}
+
+/* Thumb — সাদা বৃত্ত */
+.aa-toggle-switch::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 3px !important;
+  left: 3px !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  background-color: #ffffff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35) !important;
+  transition: transform 0.3s ease !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ON হলে thumb ডান দিকে যাবে */
+.aa-toggle-switch.on::before {
+  transform: translateX(22px) !important;
+  left: 3px !important;
+}
+
+/* ---------- DARK TOGGLE ROW ---------- */
+
+.aa-dark-toggle-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 10px 12px !important;
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  border-radius: 999px !important;
+  margin: 8px 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* ---------- HELP BUTTON — টেক্সট স্পষ্ট ---------- */
+
+.aa-help-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+  padding: 10px 16px !important;
+  background-color: #0d9488 !important;      /* গাঢ় teal */
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  text-decoration: none !important;
+  border-radius: 999px !important;
+  border: 1px solid #0f766e !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+  transition: background-color 0.2s ease !important;
+  box-sizing: border-box !important;
+  margin-top: 8px !important;
+}
+
+.aa-help-btn:hover {
+  background-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+/* Help বাটনের ভেতরের আইকন ও টেক্সট */
+.aa-help-btn svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  flex-shrink: 0 !important;
+}
+
+/* ---------- MOBILE SPECIFIC ---------- */
+
+@media (max-width: 768px) {
+  .aa-toggle-switch {
+    width: 44px !important;
+    height: 24px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+  }
+
+  .aa-toggle-switch::before {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    max-width: 18px !important;
+    min-height: 18px !important;
+    max-height: 18px !important;
+    top: 3px !important;
+    left: 3px !important;
+  }
+
+  .aa-toggle-switch.on::before {
+    transform: translateX(20px) !important;
+  }
+
+  .aa-help-btn {
+    font-size: 13px !important;
+    padding: 10px 14px !important;
+  }
 }

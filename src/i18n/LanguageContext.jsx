@@ -4,10 +4,11 @@
 // - Bangla (bn) / English (en) toggle
 // - localStorage persist
 // - Auto-update <html lang="..."> attribute
+// V2 — Uses split modules via ./index instead of ./translations
 // ============================================================
 
 import { createContext, useContext, useState, useEffect } from 'react'
-import { translations, getTranslation } from './translations'
+import { translations, getTranslation } from './index'
 
 const LanguageContext = createContext(null)
 

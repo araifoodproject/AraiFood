@@ -1,6 +1,6 @@
 // ============================================================
 // src/App.jsx
-// V11 — Language Provider wrapped (Bilingual: BN/EN)
+// V12 — About + Offers translated (Bilingual BN/EN)
 // ============================================================
 
 import { useState, useEffect, lazy, Suspense } from 'react'
@@ -14,8 +14,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 
 import useSettings from './hooks/useSettings'
 
-// ✅ Language Provider
-import { LanguageProvider } from './i18n/LanguageContext'
+// ✅ Language Provider + hook
+import { LanguageProvider, useLanguage } from './i18n/LanguageContext'
 
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -208,14 +208,18 @@ function HomePage() {
 }
 
 function OffersPage() {
+  const { t } = useLanguage()
   const { settings } = useSettings()
+  const siteName = settings.siteName || 'AraiFood'
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
         <div className="restaurants-page-header">
-          <span className="glass-section-label">{(settings.siteName || 'ARAIFOOD').toUpperCase()} OFFERS</span>
-          <h1>Special Offers</h1>
-          <p>Enjoy delicious food with special offers from restaurants around Araihazar.</p>
+          <span className="glass-section-label">
+            {t('offers.badge').replace('{siteName}', siteName.toUpperCase())}
+          </span>
+          <h1>{t('offers.title')}</h1>
+          <p>{t('offers.subtitle')}</p>
         </div>
       </div>
     </div>
@@ -223,31 +227,49 @@ function OffersPage() {
 }
 
 function AboutPage() {
+  const { t } = useLanguage()
   const { settings } = useSettings()
   const siteName = settings.siteName || 'AraiFood'
   return (
     <div className="restaurants-page">
       <div className="restaurants-page-container">
         <div className="restaurants-page-header">
-          <span className="glass-section-label">ABOUT {(siteName || 'ARAIFOOD').toUpperCase()}</span>
-          <h1>About {siteName}</h1>
-          <p>Your local food delivery platform for Araihazar.</p>
+          <span className="glass-section-label">
+            {t('about.badge').replace('{siteName}', siteName.toUpperCase())}
+          </span>
+          <h1>{t('about.title').replace('{siteName}', siteName)}</h1>
+          <p>{t('about.subtitle')}</p>
         </div>
         <div className="account-card">
-          <h2>Bringing Araihazar's Food Closer</h2>
-          <p>{siteName} is a local food delivery platform created to make it easier for people around Araihazar to discover restaurants and order delicious food from their favourite local food spots.</p>
-          <p>From biryani and traditional Bangladeshi meals to burgers, pizza, snacks and refreshing drinks, {siteName} brings local restaurants together in one convenient place.</p>
+          <h2>{t('about.section1Title')}</h2>
+          <p>{t('about.section1P1').replace('{siteName}', siteName)}</p>
+          <p>{t('about.section1P2').replace('{siteName}', siteName)}</p>
           <div className="account-divider"></div>
-          <h3>Why {siteName}?</h3>
-          <p>🍛 Discover local restaurants</p>
-          <p>🚴 Convenient food delivery</p>
-          <p>⭐ Find highly-rated food spots</p>
-          <p>❤️ Support local businesses</p>
+          <h3>{t('about.whyTitle').replace('{siteName}', siteName)}</h3>
+          <p>{t('about.why1')}</p>
+          <p>{t('about.why2')}</p>
+          <p>{t('about.why3')}</p>
+          <p>{t('about.why4')}</p>
           <div className="account-divider"></div>
-          <h3>Get in Touch</h3>
-          <p>📧 {settings.contactEmail}</p>
-          <p>📞 {settings.contactPhone}</p>
-          <p>📍 {settings.address}</p>
+          <h3>{t('about.contactTitle')}</h3>
+          <p>
+            {t('about.contactEmail').replace(
+              '{email}',
+              settings.contactEmail || 'hello@araifood.com'
+            )}
+          </p>
+          <p>
+            {t('about.contactPhone').replace(
+              '{phone}',
+              settings.contactPhone || '+880 1700-000000'
+            )}
+          </p>
+          <p>
+            {t('about.contactAddress').replace(
+              '{address}',
+              settings.address || 'Araihazar, Narayanganj'
+            )}
+          </p>
         </div>
       </div>
     </div>
