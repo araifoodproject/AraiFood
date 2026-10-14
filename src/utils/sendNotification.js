@@ -63,8 +63,8 @@ export const sendPushNotification = async ({
     headings: { en: title },
     contents: { en: body },
     url: url,
-    chrome_web_icon: `${window.location.origin}/araifood-logo.png`,
-    chrome_web_badge: `${window.location.origin}/araifood-logo.png`,
+    chrome_web_icon: `${window.location.origin}/araifood-logo-transparent.png`,
+    chrome_web_badge: `${window.location.origin}/araifood-logo-transparent.png`,
   }
 
   if (userIds && userIds.length > 0) {

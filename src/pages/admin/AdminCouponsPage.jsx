@@ -1110,7 +1110,7 @@ function AdminCouponsPage() {
                     }}
                   >
                     <img
-                      src="/araifood-logo.png"
+                      src="/araifood-logo-transparent.png"
                       alt=""
                       style={{
                         width: '100%',

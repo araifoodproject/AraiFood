@@ -94,7 +94,7 @@ function Navbar() {
         <div className="aa-navbar-pill-inner">
           <Link to="/" className="aa-nav-logo">
             <img
-              src="/araifood-logo.png"
+              src="/araifood-logo-transparent.png"
               alt={settings.siteName || 'AraiFood'}
             />
             <div className="aa-nav-logo-text">

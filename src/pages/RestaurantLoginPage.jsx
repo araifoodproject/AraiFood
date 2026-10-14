@@ -71,7 +71,7 @@ function RestaurantLoginPage() {
 
       <div className="premium-login-card">
         <div className="premium-login-logo">
-          <img src="/araifood-logo.png" alt="AraiFood Logo" className="premium-logo-image" />
+          <img src="/araifood-logo-transparent.png" alt="AraiFood Logo" className="premium-logo-image" />
           <h1>RESTAURANT LOGIN</h1>
           <p>Partner With Us</p>
         </div>

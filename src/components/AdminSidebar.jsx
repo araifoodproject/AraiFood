@@ -431,7 +431,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
         <div className="admin-sidebar-header">
           <Link to="/admin" className="admin-sidebar-brand">
             <div className="admin-sidebar-logo">
-              <img src="/araifood-logo.png" alt="AraiFood" />
+              <img src="/araifood-logo-transparent.png" alt="AraiFood" />
             </div>
             {!collapsed && (
               <div className="admin-sidebar-brand-text">

@@ -199,7 +199,7 @@ function Footer() {
         <div className="aa-footer-brand">
           <Link to="/" className="aa-footer-brand-logo">
             <img
-              src="/araifood-logo.png"
+              src="/araifood-logo-transparent.png"
               alt={settings.siteName || 'AraiFood'}
             />
             <span className="aa-footer-brand-title">

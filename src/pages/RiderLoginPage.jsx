@@ -72,7 +72,7 @@ function RiderLoginPage() {
 
       <div className="premium-login-card">
         <div className="premium-login-logo">
-          <img src="/araifood-logo.png" alt="AraiFood Logo" className="premium-logo-image" />
+          <img src="/araifood-logo-transparent.png" alt="AraiFood Logo" className="premium-logo-image" />
           <h1>RIDER LOGIN</h1>
           <p>Delivery Partner Portal</p>
         </div>

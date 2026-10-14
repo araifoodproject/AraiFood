@@ -1935,7 +1935,7 @@ function PreviewCard({ title, body, imageUrl }) {
             }}
           >
             <img
-              src="/araifood-logo.png"
+              src="/araifood-logo-transparent.png"
               alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />

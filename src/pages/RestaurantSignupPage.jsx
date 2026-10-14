@@ -155,7 +155,7 @@ function RestaurantSignupPage() {
       <div className="premium-login-card restaurant-signup-card">
         <div className="premium-login-logo">
           <img
-            src="/araifood-logo.png"
+            src="/araifood-logo-transparent.png"
             alt="AraiFood Logo"
             className="premium-logo-image"
           />
